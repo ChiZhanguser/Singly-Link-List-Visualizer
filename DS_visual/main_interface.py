@@ -6,14 +6,15 @@ from stack.stack_visual import StackVisualizer
 from binary_tree.linked_storage.linked_storage_visual import BinaryTreeVisualizer
 from binary_tree.bst.bst_visual import BSTVisualizer
 from binary_tree.huffman_tree.huffman_visual import HuffmanVisualizer
+from avl.avl_visual import AVLVisualizer
 
 class MainInterface:
     def __init__(self, root):
         self.window = root
         self.window.title("数据结构可视化工具")
         self.window.geometry("600x500")
-        self.window.maxsize(1000, 800)
-        self.window.minsize(600, 500)
+        self.window.maxsize(1200, 1000)
+        self.window.minsize(800, 700)
         self.window.config(bg="lightblue")
         
         # 标题
@@ -64,6 +65,11 @@ class MainInterface:
         huffman_btn = Button(button_frame, text="Huffman树", font=("Arial",14), width=15, height=2, bg="brown", fg="white",
                      command=self.open_huffman)
         huffman_btn.grid(row=2, column=1, padx=20, pady=10)
+        
+        # AVL
+        avl_btn = Button(button_frame, text="AVL (平衡二叉树)", font=("Arial",14), width=15, height=2, bg="#8E44AD", fg="white", command=self.open_avl)
+        avl_btn.grid(row=3, column=0, padx=20, pady=10)
+
         
         # 版权信息
         copyright_label = Label(self.window, text="© 张驰的数据结构可视化工具", 
@@ -132,6 +138,13 @@ class MainInterface:
         win.geometry("1350x730")
         HuffmanVisualizer(win)
         win.mainloop()
+    def open_avl(self):
+        self.window.destroy()
+        avl_window = Tk()
+        avl_window.title("AVL 可视化")
+        avl_window.geometry("1350x730")
+        AVLVisualizer(avl_window)
+        avl_window.mainloop()
 
 if __name__ == '__main__':
     window = Tk()

@@ -258,7 +258,7 @@ class HuffmanVisualizer:
         self._tree_highlight(idx)
 
         # highlight nodes
-        self._highlight_node(a, "yellow")
+        self._highlight_node(a, "yellow")  
         self._highlight_node(b, "yellow")
 
         # target position
