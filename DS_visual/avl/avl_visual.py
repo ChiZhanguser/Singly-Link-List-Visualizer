@@ -3,6 +3,8 @@ from tkinter import *
 from tkinter import messagebox
 from typing import Dict, Tuple, List, Optional
 from avl.avl_model import AVLModel, AVLNode, clone_tree
+import storage as storage
+from tkinter import filedialog
 
 class AVLVisualizer:
     def __init__(self, root):
@@ -42,8 +44,13 @@ class AVLVisualizer:
         Button(frame, text="Insert (动画)", bg="#2E8B57", fg="white", command=self.start_insert_animated).pack(side=LEFT, padx=6)
         Button(frame, text="清空", bg="#FFB74D", command=self.clear_canvas).pack(side=LEFT, padx=6)
         Button(frame, text="返回主界面", bg="#6EA8FE", fg="white", command=self.back_to_main).pack(side=LEFT, padx=6)
+        Button(frame, text="保存", bg="#6C9EFF", command=self.save_structure).pack(side=LEFT, padx=6)
+        Button(frame, text="打开", bg="#6C9EFF", command=self.load_structure).pack(side=LEFT, padx=6)
+
 
         self.status_id = None
+
+  
 
     def draw_instructions(self):
         self.canvas.delete("all")
@@ -408,6 +415,21 @@ class AVLVisualizer:
         main_window = Tk()
         app = MainInterface(main_window)
         main_window.mainloop()
+    def save_structure(self):
+        root = self.model.root
+        ok = storage.save_tree_to_file(root)
+        if ok:
+            self.update_status("保存成功")
+    
+    def load_structure(self):
+        tree_dict = storage.load_tree_from_file()
+        if not tree_dict:
+            return
+        from avl.avl_model import AVLNode as AVLNodeClass 
+        newroot = storage.tree_dict_to_nodes(tree_dict, AVLNodeClass)
+        self.model.root = newroot
+        self.draw_tree_from_root(clone_tree(self.model.root))
+        self.update_status("已经从文件加载并恢复结构")
 
 if __name__ == '__main__':
     w = Tk()

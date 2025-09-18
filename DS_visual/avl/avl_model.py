@@ -2,6 +2,7 @@
 from typing import Any, Optional, List, Tuple, Dict
 import copy
 
+
 class AVLNode:
     def __init__(self, val: Any):
         self.val = val
