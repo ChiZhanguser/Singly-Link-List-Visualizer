@@ -1,7 +1,7 @@
 # DS_visual/binary_tree/binary_tree_visual.py
 from tkinter import *
 from tkinter import messagebox
-from DS_visual.binary_tree.linked_storage.linked_storage_model import BinaryTreeModel, TreeNode
+from binary_tree.linked_storage.linked_storage_model import BinaryTreeModel, TreeNode
 from typing import Dict, Tuple, List, Optional
 
 class BinaryTreeVisualizer:

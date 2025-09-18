@@ -1,6 +1,7 @@
 # DS_visual/binary_tree/bst_visual.py
 from tkinter import *
 from tkinter import messagebox
+from tkinter import Toplevel
 from typing import Dict, Tuple, List, Optional
 from binary_tree.bst.bst_model import BSTModel, TreeNode
 
@@ -37,6 +38,9 @@ class BSTVisualizer:
         self.input_var = StringVar()
         self.create_controls()
         self.draw_instructions()
+        
+        self.window = master
+        
 
     def create_controls(self):
         frame = Frame(self.window, bg="#F7F9FB")
