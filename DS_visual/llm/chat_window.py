@@ -1,4 +1,4 @@
-# chat_window.py（带回车发送与 Shift+Enter 换行支持）
+# chat_window.py
 import threading
 import time
 from tkinter import Toplevel, Frame, Text, Button, END
@@ -11,7 +11,7 @@ class ChatWindow:
     def __init__(self, parent):
         self.parent = parent
         try:
-            self.client = DoubaoClient()  # 可能抛出错误（没设置 KEY）
+            self.client = DoubaoClient()  # 从环境变量读取 key/url/model
         except Exception as e:
             messagebox.showerror("配置错误", str(e))
             return
@@ -32,12 +32,9 @@ class ChatWindow:
         self.send_btn = Button(bottom, text="发送", width=10, command=self._on_send)
         self.send_btn.pack(side='right')
 
-        # ---- 关键：绑定按键事件 ----
-        # Enter -> 发送（并阻止插入换行）
+        # 绑定回车发送（Enter 发送, Shift+Enter 换行, Ctrl+Enter 也发送）
         self.entry.bind("<Return>", self._on_entry_return)
-        # Shift+Enter -> 在文本中插入换行（保留换行功能）
         self.entry.bind("<Shift-Return>", self._on_shift_enter)
-        # Ctrl+Enter -> 也发送（适合中文输入法场景）
         self.entry.bind("<Control-Return>", self._on_entry_return)
 
     def _append_message(self, who: str, text: str):
@@ -53,42 +50,61 @@ class ChatWindow:
         if not user_text:
             return
         self.entry.delete("1.0", END)
+        # 显示用户消息
         self._append_message("你", user_text)
-        self.send_btn.config(state='disabled')
-        threading.Thread(target=self._worker, args=(user_text,), daemon=True).start()
 
-    def _worker(self, user_text: str):
+        # 在开始流时先插入“豆包”头（空回答），后续流式追加文本
+        self.msg_area.config(state='normal')
+        timestamp = time.strftime("%H:%M:%S")
+        self.msg_area.insert('end', f"豆包 [{timestamp}]:\n")
+        self.msg_area.config(state='disabled')
+
+        self.send_btn.config(state='disabled')
+        threading.Thread(target=self._worker_stream, args=(user_text,), daemon=True).start()
+
+    def _worker_stream(self, user_text: str):
+        """
+        流式版本：逐片段更新 UI。若服务不支持流式，会回退到一次性结果。
+        """
         try:
-            reply = self.client.send_message(user_text)
+            # timeout_read=None 表示使用 client 的默认 read 超时（如果在环境变量设置为 "None" 则表示不限时）
+            for chunk in self.client.send_message_stream(user_text, stream=True, timeout_read=None):
+                # 回到主线程追加片段
+                self.win.after(0, lambda c=chunk: self._append_stream(c))
+            # 流结束后确保换行（把一个空行追加），并恢复按钮
+            self.win.after(0, lambda: self._finish_stream())
         except Exception as e:
-            reply = f"调用失败：{e}"
-        # 回到主线程更新 UI
-        self.win.after(0, lambda: self._on_reply(reply))
+            # 出错时把错误信息展示出来并恢复按钮
+            self.win.after(0, lambda: self._on_reply(f"调用失败：{e}"))
+            self.win.after(0, lambda: self.send_btn.config(state='normal'))
+
+    def _append_stream(self, text_fragment: str):
+        # 追加片段（不添加 who/timestamp，因为已在发送前插入头）
+        self.msg_area.config(state='normal')
+        self.msg_area.insert('end', text_fragment)
+        self.msg_area.see('end')
+        self.msg_area.config(state='disabled')
+
+    def _finish_stream(self):
+        self.msg_area.config(state='normal')
+        self.msg_area.insert('end', "\n\n")
+        self.msg_area.see('end')
+        self.msg_area.config(state='disabled')
+        self.send_btn.config(state='normal')
 
     def _on_reply(self, reply_text: str):
+        # 传统一次性回复显示（回退场景）
         self._append_message("豆包", reply_text)
         self.send_btn.config(state='normal')
 
-    # ---- 键盘事件处理函数 ----
+    # 键盘事件处理
     def _on_entry_return(self, event):
-        """
-        处理 Enter / Ctrl+Enter：触发发送。
-        返回 "break" 阻止 Text 默认插入换行。
-        """
-        # 如果按钮被禁用（正在发送），忽略输入
         if str(self.send_btn['state']) == 'disabled':
             return "break"
-        # 触发发送
         self._on_send()
-        # 阻止事件继续传播（防止插入换行）
         return "break"
 
     def _on_shift_enter(self, event):
-        """
-        处理 Shift+Enter：在光标位置插入换行符并将焦点放回输入框。
-        返回 "break" 防止默认行为（有些平台会重复插入）。
-        """
         self.entry.insert("insert", "\n")
-        # 将光标移动到插入点（可选）
         self.entry.see("insert")
         return "break"
