@@ -11,17 +11,21 @@ class DoubaoClient:
     def __init__(self, api_key: str = None, api_base: str = None, model: str = None, timeout: int = 30):
         self.api_key = api_key or os.environ.get("DOUBAO_API_KEY")
         self.api_base = api_base or os.environ.get("DOUBAO_API_BASE")
-        self.model = model or os.environ.get("DOUBAO_MODEL", "")
+        self.model = model or os.environ.get("DOUBAO_MODEL", "doubao-seed-1-6-250615")
         self.timeout = timeout
         if not self.api_key:
             # 运行时抛出，调用方可以捕获并显示提示
             raise RuntimeError("环境变量 DOUBAO_API_KEY 未设置")
 
     def _url(self) -> str:
+        # 优先使用完整调用地址
+        env_url = os.environ.get("DOUBAO_API_URL")
+        if env_url:
+            return env_url
         if self.api_base:
-            return self.api_base.rstrip("/") + "/v1/chat/completions"
-        # 占位，替换为你控制台给出的实际 endpoint
-        return "https://api.doubao.example/v1/chat/completions"
+            return self.api_base.rstrip("/") + "/api/v3/chat/completions"
+        raise RuntimeError("未配置 DOUBAO_API_URL 或 DOUBAO_API_BASE")
+
 
     def send_message(self, text: str) -> str:
         headers = {
