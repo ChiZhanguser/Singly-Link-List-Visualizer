@@ -10,28 +10,14 @@ class AVLVisualizer:
     def __init__(self, root):
         self.window = root
         self.window.title("AVL 可视化（增强旋转动画）")
-        self.window.config(bg="#EAF5FF")
+        self.window.config(bg="#F7F9FB")
         self.canvas_w = 1200
         self.canvas_h = 560
-
-        # 顶部渐变
-        self.header = Canvas(self.window, height=90, bd=0, highlightthickness=0)
-        self.header.pack(fill=X)
-        self._draw_header_gradient(self.header, 90, "#3a8dde", "#70b7ff")
-        self.header.create_text(40, 32, anchor='w', text="AVL树动态演示", font=("Helvetica", 26, "bold"), fill="#062A4A")
-        self.header.create_text(40, 62, anchor='w', text="平衡二叉树 • 动画旋转 • 路径高亮 • 交互体验", font=("Helvetica", 12), fill="#EAF6FF")
-
-        # 主卡片区（带阴影）
-        shadow = Frame(self.window, bg="#d7e9ff")
-        shadow.place(relx=0.5, y=90, anchor='n', relwidth=0.92, height=610)
-        card = Frame(self.window, bg="white", bd=0, highlightthickness=0)
-        card.place(relx=0.5, y=88, anchor='n', relwidth=0.92, height=606)
-
-        # 画布区
-        self.canvas = Canvas(card, bg="#F8FBFF", width=self.canvas_w, height=self.canvas_h, bd=0, highlightthickness=0)
-        self.canvas.pack(padx=10, pady=(18,8))
+        self.canvas = Canvas(self.window, bg="white", width=self.canvas_w, height=self.canvas_h, bd=6, relief=RAISED)
+        self.canvas.pack(padx=10, pady=8)
 
         self.model = AVLModel()
+        # node_vis: key -> dict (key is like "val" or "val#k" in a snapshot)
         self.node_vis: Dict[str, Dict] = {}
         self.animating = False
 
@@ -43,57 +29,24 @@ class AVLVisualizer:
 
         # controls
         self.input_var = StringVar()
-        self.create_controls(card)
+        self.create_controls()
         self.draw_instructions()
 
-    def _draw_header_gradient(self, canvas, h, c1, c2):
-        canvas.delete("grad")
-        width = canvas.winfo_width() or 1200
-        steps = 40
-        for i in range(steps):
-            t = i / (steps - 1)
-            r1, g1, b1 = int(c1[1:3],16), int(c1[3:5],16), int(c1[5:7],16)
-            r2, g2, b2 = int(c2[1:3],16), int(c2[3:5],16), int(c2[5:7],16)
-            r = int(r1 + (r2 - r1) * t)
-            g = int(g1 + (g2 - g1) * t)
-            b = int(b1 + (b2 - b1) * t)
-            color = f'#{r:02x}{g:02x}{b:02x}'
-            y0 = int(i * (h / steps))
-            y1 = int((i+1) * (h / steps))
-            canvas.create_rectangle(0, y0, width, y1, outline=color, fill=color, tags="grad")
-
-
-    def create_controls(self, parent):
-        frame = Frame(parent, bg="#F7F4F8")
+    def create_controls(self):
+        frame = Frame(self.window, bg="#F7F4F8")
         frame.pack(pady=(0,6), fill=X)
 
-        Label(frame, text="输入（逗号分隔）:", bg="#F7F4F8", font=("微软雅黑",12)).pack(side=LEFT, padx=8)
-        entry = Entry(frame, textvariable=self.input_var, width=32, font=("微软雅黑",12), bd=2, relief=GROOVE)
-        entry.pack(side=LEFT, padx=8)
+        Label(frame, text="输入（按插入顺序，逗号分隔）:", bg="#F7F4F8", font=("Arial",11)).pack(side=LEFT, padx=6)
+        entry = Entry(frame, textvariable=self.input_var, width=44, font=("Arial",11))
+        entry.pack(side=LEFT, padx=6)
         entry.insert(0, "1,2,3")
 
-        def style_btn(btn, color):
-            btn.config(font=("微软雅黑",12,"bold"), bd=0, relief="flat", bg=color, fg="white", activebackground="#eaf6ff", cursor="hand2")
+        Button(frame, text="Insert (动画)", bg="#2E8B57", fg="white", command=self.start_insert_animated).pack(side=LEFT, padx=6)
+        Button(frame, text="清空", bg="#FFB74D", command=self.clear_canvas).pack(side=LEFT, padx=6)
+        Button(frame, text="返回主界面", bg="#6EA8FE", fg="white", command=self.back_to_main).pack(side=LEFT, padx=6)
+        Button(frame, text="保存", bg="#6C9EFF", command=self.save_structure).pack(side=LEFT, padx=6)
+        Button(frame, text="打开", bg="#6C9EFF", command=self.load_structure).pack(side=LEFT, padx=6)
 
-        btn_insert = Button(frame, text="插入动画", command=self.start_insert_animated)
-        style_btn(btn_insert, "#2E8B57")
-        btn_insert.pack(side=LEFT, padx=8)
-
-        btn_clear = Button(frame, text="清空", command=self.clear_canvas)
-        style_btn(btn_clear, "#FFB74D")
-        btn_clear.pack(side=LEFT, padx=8)
-
-        btn_back = Button(frame, text="返回主界面", command=self.back_to_main)
-        style_btn(btn_back, "#6EA8FE")
-        btn_back.pack(side=LEFT, padx=8)
-
-        btn_save = Button(frame, text="保存", command=self.save_structure)
-        style_btn(btn_save, "#6C9EFF")
-        btn_save.pack(side=LEFT, padx=8)
-
-        btn_load = Button(frame, text="打开", command=self.load_structure)
-        style_btn(btn_load, "#6C9EFF")
-        btn_load.pack(side=LEFT, padx=8)
 
         self.status_id = None
 
@@ -102,14 +55,14 @@ class AVLVisualizer:
     def draw_instructions(self):
         self.canvas.delete("all")
         self.node_vis.clear()
-        self.canvas.create_text(18, 18, anchor="nw", text="🌟 AVL插入演示：路径高亮 + 动画旋转 + 节点平滑移动", font=("微软雅黑",13,"bold"), fill="#3a8dde")
-        self.status_id = self.canvas.create_text(self.canvas_w - 18, 18, anchor="ne", text="", font=("微软雅黑",12,"bold"), fill="#2ecc71")
+        self.canvas.create_text(12, 12, anchor="nw", text="AVL 插入演示：展示插入路径并精确动画显示旋转（节点从旧坐标平滑移动到新坐标）", font=("Arial",11))
+        self.status_id = self.canvas.create_text(self.canvas_w - 12, 12, anchor="ne", text="", font=("Arial",11,"bold"), fill="darkgreen")
 
     def update_status(self, txt: str):
         if self.status_id:
             self.canvas.itemconfig(self.status_id, text=txt)
         else:
-            self.status_id = self.canvas.create_text(self.canvas_w - 18, 18, anchor="ne", text=txt, font=("微软雅黑",12,"bold"), fill="#2ecc71")
+            self.status_id = self.canvas.create_text(self.canvas_w - 12, 12, anchor="ne", text=txt, font=("Arial",11,"bold"), fill="darkgreen")
 
     # ---------- small helper to draw edge ----------
     def _draw_connection(self, cx, cy, tx, ty):
@@ -162,13 +115,16 @@ class AVLVisualizer:
         return res
 
     def draw_tree_from_root(self, root: Optional[AVLNode]):
+        """Draw the given snapshot root onto canvas. Build node_vis mapping keyed by 'val' or 'val#k'."""
         self.canvas.delete("all")
         self.draw_instructions()
         if root is None:
-            self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text="空树", font=("微软雅黑",20,"bold"), fill="#b2bec3")
+            self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text="空树", font=("Arial",18), fill="gray")
             return
 
         pos = self.compute_positions_for_root(root)
+
+        # build inorder_nodes to generate stable duplicate keys and node->key mapping
         inorder_nodes: List[AVLNode] = []
         def inorder_collect(n: Optional[AVLNode]):
             if not n:
@@ -177,6 +133,8 @@ class AVLVisualizer:
             inorder_nodes.append(n)
             inorder_collect(n.right)
         inorder_collect(root)
+
+        # map node -> key
         node_to_key: Dict[AVLNode, str] = {}
         counts: Dict[str,int] = {}
         for node in inorder_nodes:
@@ -208,12 +166,11 @@ class AVLVisualizer:
         for node, key in node_to_key.items():
             cx, cy = pos[key]
             left = cx - self.node_w/2; top = cy - self.node_h/2; right = cx + self.node_w/2; bottom = cy + self.node_h/2
-            # 圆角矩形节点
-            rect = self.canvas.create_oval(left, top, right, bottom, fill="#EAF6FF", outline="#3a8dde", width=3)
-            txt = self.canvas.create_text(cx, cy, text=str(node.val), font=("微软雅黑",14,"bold"), fill="#2d3436")
-            # 节点阴影
-            shadow = self.canvas.create_oval(left+4, top+4, right+4, bottom+4, fill="#d7e9ff", outline="", width=0)
-            self.canvas.tag_lower(shadow, rect)
+            rect = self.canvas.create_rectangle(left, top, right, bottom, fill="#F0F8FF", outline="black", width=2)
+            x1 = left + 28; x2 = x1 + 64
+            self.canvas.create_line(x1, top, x1, bottom, width=1)
+            self.canvas.create_line(x2, top, x2, bottom, width=1)
+            txt = self.canvas.create_text((x1+x2)/2, (top+bottom)/2, text=str(node.val), font=("Arial",12,"bold"))
             self.node_vis[key] = {'rect':rect, 'text':txt, 'cx':cx, 'cy':cy, 'val':str(node.val)}
 
     # ---------- main insertion animation flow ----------

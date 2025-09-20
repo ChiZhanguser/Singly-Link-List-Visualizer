@@ -9,6 +9,7 @@ from binary_tree.bst.bst_visual import BSTVisualizer
 from binary_tree.huffman_tree.huffman_visual import HuffmanVisualizer
 from avl.avl_visual import AVLVisualizer
 import math
+from llm.chat_window import ChatWindow
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -99,7 +100,7 @@ class MainInterface:
         top_frame.grid(row=0, column=0, sticky="ew", padx=24, pady=(20, 10))
         subtitle = Label(top_frame, text="选择可视化模块", font=("Helvetica", 16, "bold"), bg="white", fg="#0b3a66")
         subtitle.grid(row=0, column=0, sticky="w")
-        desc = Label(top_frame, text="点击下面的按钮进入对应数据结构的交互演示。支持键盘/鼠标交互（若有）。",
+        desc = Label(top_frame, text="点击下面的按钮进入对应数据结构的交互演示。支持键盘/鼠标交互。",
                      font=("Helvetica", 10), bg="white", fg="#4d6b88")
         desc.grid(row=1, column=0, sticky="w", pady=(6, 0))
 
@@ -141,7 +142,17 @@ class MainInterface:
         self.window.bind("<Key-1>", lambda e: self.open_linked_list())
         self.window.bind("<Key-2>", lambda e: self.open_sequence_list())
         self.window.bind("<Key-3>", lambda e: self.open_stack())
-
+        
+        chat_btn = Button(self.header, text="🤖 聊天", font=("Helvetica", 10, "bold"),
+                  bg="#1FA2FF", fg="white", bd=0, relief='flat', cursor="hand2",
+                  command=lambda: ChatWindow(self.window))
+        chat_btn.place(relx=0.95, y=28, anchor='ne', width=90, height=36)
+        try:
+            self._attach_hover_effect(chat_btn, "#1FA2FF")
+            ToolTip(chat_btn, "与豆包模型聊天")
+        except Exception:
+            pass
+  
     def _draw_header_gradient(self, canvas, h, c1, c2):
         # 清除旧图形
         canvas.delete("grad")
