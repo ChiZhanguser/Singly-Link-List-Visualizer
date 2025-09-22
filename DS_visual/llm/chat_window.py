@@ -175,6 +175,7 @@ class ChatWindow:
         user_text = self.entry.get("1.0", END).strip()
         if not user_text:
             return
+        self._last_user_text = user_text
         # clear input
         self.entry.delete("1.0", END)
         # add user bubble
@@ -250,64 +251,133 @@ class ChatWindow:
             self.win.after(0, lambda: assistant_var.set(f"调用失败：{e}"))
         finally:
             self.win.after(0, self._finish_stream)
-    
+    def _chinese_num_to_int(self, s: str):
+        """简单中文数字到整数（支持 0-99 的常见写法：零 一 二 三 ... 十 二十三 等）"""
+        s = s.strip()
+        if not s:
+            return None
+        # 先尝试直接转 int
+        try:
+            return int(s)
+        except Exception:
+            pass
+        # 简单映射
+        digits = {"零":0,"一":1,"二":2,"两":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9}
+        if all(ch in digits or ch=="十" for ch in s):
+            if "十" in s:
+                parts = s.split("十")
+                if parts[0] == "":  # 十, 十三
+                    tens = 1
+                else:
+                    tens = digits.get(parts[0], 0)
+                ones = 0
+                if len(parts) > 1 and parts[1] != "":
+                    ones = digits.get(parts[1], 0)
+                return tens*10 + ones
+            else:
+                # 纯个位中文
+                return digits.get(s, None)
+        return None
+
+    def _parse_with_model_and_dispatch(self, user_text: str, model_text: str):
+        """
+        让模型返回一个结构化意图（优先 function_call），并把返回的 args 校验后 dispatch。
+        返回 dispatch 的结果字典或 None。
+        """
+        functions = get_function_schemas()  # 保持和你现有 schema 一致
+        # 构造指令：让模型只返回 function_call（或 JSON）并包含明确字段
+        prompt = (
+            "你的任务：从下面用户输入或模型文本中抽取一个对数据结构的操作（仅当确实需要演示时）。"
+            "如果应触发可视化，请**只**以 function_call 的形式返回（不要返回额外自然语言）。"
+            "如果不能明确抽取出数值/索引，请不要执行，返回空；字段要求如下：\n"
+            "- function name: one of linked_list_create, linked_list_insert_last, linked_list_insert_first, linked_list_insert_at, linked_list_delete_first, linked_list_delete_last, stack_push, stack_pop\n"
+            "- arguments: JSON 对象，例如 {\"value\": 2} 或 {\"index\": 1, \"value\": 2} 或 {\"values\":[1,2,3]}\n\n"
+            f"用户原文：'''{user_text}'''\n模型原文（供参考）：'''{model_text}'''\n\n"
+            "注意：数值必须为阿拉伯数字（例如 2），如果文本里有中文数字（如“二”或“十”）你可以转换为阿拉伯数字，"
+            "否则不要把非数字词（例如“位置”）当作数值返回。"
+        )
+        try:
+            resp = self.client.send_message_with_functions(prompt, functions=functions, timeout_read=None)
+        except Exception as e:
+            print("模型解析失败：", e)
+            return None
+
+        # 如果模型以 function_call 返回，resp 格式与你现有代码一致
+        if resp.get("type") == "function_call":
+            name = resp.get("name")
+            args = resp.get("arguments") or {}
+            # 严格校验 args：把 value/index 转为 int（或 fail）
+            if "value" in args:
+                raw = args["value"]
+                # 有时候模型可能返回 "位置" 之类，先尝试数字转换
+                try:
+                    val_int = int(raw)
+                except Exception:
+                    # 尝试中文数字转换
+                    val_int = self._chinese_num_to_int(str(raw))
+                if val_int is None:
+                    # 尝试从 user_text 里寻找第一个数字
+                    m = re.search(r"([+-]?\d+)", user_text)
+                    if m:
+                        val_int = int(m.group(1))
+                if val_int is None:
+                    # 无法拿到数字 -> 不执行，返回 None 表示解析失败
+                    print("模型解析得到非数值 value，且无法从用户文本回退到数字：", raw)
+                    return {"ok": False, "message": "无法解析出合法的数值（value）。请明确要插入的数字。"}
+                args["value"] = val_int
+            if "index" in args:
+                rawi = args["index"]
+                try:
+                    idx = int(rawi)
+                except Exception:
+                    idx = self._chinese_num_to_int(str(rawi))
+                if idx is None:
+                    m2 = re.search(r"第\s*(\d+)", user_text)
+                    if m2:
+                        idx = int(m2.group(1))
+                if idx is None:
+                    print("无法解析 index：", rawi)
+                    return {"ok": False, "message": "无法解析出合法的位置索引（index）。"}
+                args["index"] = idx
+
+            # 最后把结构化调用 dispatch（你的 function_dispatcher 会把任务调度到 UI 线程）
+            print("模型解析并调度：", name, args)
+            return function_dispatcher.dispatch(name, args)
+
+        # 如果模型没以 function_call 返回，可以尝试把模型文本再送入解析（或直接返回 None）
+        return None
+
     def __parse_and_dispatch_from_text(self, text: str):
         """
-        改进版本地解析器（基于正则），尝试把自然语言映射为 function_call 并 dispatch。
-        返回 dispatcher 的返回值 dict 或 None（表示无法解析）。
-        修复点：
-         - 把各种匹配逻辑独立开，不再依赖一个强制匹配多个值的正则（原实现导致单值命令被忽略）
-         - 支持单值插入/删除，支持批量创建（[1,2,3] / 1,2,3 / 1 2 3）
+        组合策略：本地快速规则优先（提升响应速度），规则失败则把解析交给模型（更泛化）。
+        返回 dispatcher 的返回值 dict 或 None。
         """
         if not text or not isinstance(text, str):
             return None
-        s = text.strip()
 
-        # --- 1) 批量创建（优先）: 匹配 [1,2,3] 或 1,2,3 或 1 2 3 （允许只有1个元素也能创建）
-        list_match = re.search(r"\[?\s*([0-9A-Za-z\u4e00-\u9fff\-\_]+(?:[,\s]+[0-9A-Za-z\u4e00-\u9fff\-\_]+)*)\s*\]?", s)
-        if list_match and re.search(r"(创建|构建|批量|初始化|生成|建立).*(链表|单链表|list)", s):
-            group = list_match.group(1)
-            vals = re.split(r"[,\s]+", group.strip())
-            return function_dispatcher.dispatch("linked_list_create", {"values": [str(v) for v in vals]})
+        # 优先尝试基于用户最后输入的快速解析（简单规则）
+        last_user = getattr(self, "_last_user_text", "") or ""
+        s = last_user.strip() or text.strip()
 
-        # --- 2) 在尾部插入（不用依赖 list_match）
-        m_tail = re.search(r"(?:尾部|末尾|尾端|后面).{0,6}插入[:：]?\s*([0-9A-Za-z\u4e00-\u9fff\-\_]+)", s)
-        if not m_tail:
-            m_tail = re.search(r"插入[:：]?\s*([0-9A-Za-z\u4e00-\u9fff\-\_]+).{0,6}(?:尾部|末尾|后面)", s)
-        if m_tail:
-            val = m_tail.group(1)
-            return function_dispatcher.dispatch("linked_list_insert_last", {"value": str(val)})
+        # 本地简单数字优先策略（避免把“位置”等词当作数据）
+        m_num_after_insert = re.search(r"(?:在.*插入|插入|insert).*?([+-]?\d+)", s)
+        if m_num_after_insert:
+            val = m_num_after_insert.group(1)
+            # 判定头/尾关键词
+            if re.search(r"(头部|首位|开头)", s):
+                return function_dispatcher.dispatch("linked_list_insert_first", {"value": int(val)})
+            if re.search(r"(尾部|末尾|尾端|后面|最后)", s):
+                return function_dispatcher.dispatch("linked_list_insert_last", {"value": int(val)})
+            return function_dispatcher.dispatch("linked_list_insert_last", {"value": int(val)})
 
-        # --- 3) 在头部插入
-        m_head = re.search(r"(?:头部|首位|开头).{0,6}插入[:：]?\s*([0-9A-Za-z\u4e00-\u9fff\-\_]+)", s)
-        if not m_head:
-            m_head = re.search(r"插入[:：]?\s*([0-9A-Za-z\u4e00-\u9fff\-\_]+).{0,6}(?:头部|首位|开头)", s)
-        if m_head:
-            val = m_head.group(1)
-            return function_dispatcher.dispatch("linked_list_insert_first", {"value": str(val)})
+        # 匹配 “第 N 位 插入 X”（把 model text 也考虑进去）
+        m_pos_val = re.search(r"第\s*(\d+)\s*(?:个|位|位置).*?插入.*?(?:值为)?[:：]?\s*([+-]?\d+)", last_user + " " + text)
+        if m_pos_val:
+            idx = int(m_pos_val.group(1)); val = int(m_pos_val.group(2))
+            return function_dispatcher.dispatch("linked_list_insert_at", {"index": idx, "value": val})
 
-        # --- 4) 删除首 / 删除头
-        if re.search(r"(删除|移除).{0,6}(首|头|第一个|第 1 个|第1个)", s):
-            return function_dispatcher.dispatch("linked_list_delete_first", {})
-
-        # --- 5) 删除尾
-        if re.search(r"(删除|移除).{0,6}(尾|最后|末尾|尾部)", s):
-            return function_dispatcher.dispatch("linked_list_delete_last", {})
-
-        # --- 6) 栈 push（入栈/压栈）
-        m_push = re.search(r"(?:push|入栈|压栈)[:：]?\s*([0-9A-Za-z\u4e00-\u9fff\-\_]+)", s)
-        if not m_push:
-            m_push = re.search(r"(?:push)\s+([0-9A-Za-z\u4e00-\u9fff\-\_]+)", s)
-        if m_push:
-            val = m_push.group(1)
-            return function_dispatcher.dispatch("stack_push", {"value": str(val)})
-
-        # --- 7) 栈 pop（出栈/弹出）
-        if re.search(r"\b(pop|出栈|弹出)\b", s):
-            return function_dispatcher.dispatch("stack_pop", {})
-
-        # 无法解析
-        return None
+        # 本地快速规则都未命中 -> 交给模型做语义解析并严格校验
+        return self._parse_with_model_and_dispatch(last_user, text)
 
 
     def _on_entry_return(self, event):

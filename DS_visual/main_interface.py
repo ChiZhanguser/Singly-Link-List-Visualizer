@@ -205,8 +205,8 @@ class MainInterface:
         linked_list_window.mainloop()
     
     def open_sequence_list(self):
-        self.window.destroy()
-        sequence_list_window = Tk()
+        # self.window.destroy()
+        sequence_list_window = Toplevel(self.window)
         sequence_list_window.title("顺序表可视化")
         sequence_list_window.geometry("1350x730")
         sequence_list_window.maxsize(1350, 730)
@@ -215,8 +215,8 @@ class MainInterface:
         sequence_list_window.mainloop()
 
     def open_stack(self):
-        self.window.destroy()
-        stack_window = Tk()
+        # self.window.destroy()
+        stack_window = Toplevel(self.window)
         stack_window.title("栈可视化")
         stack_window.geometry("1350x730")
         stack_window.maxsize(1350, 730)
@@ -225,8 +225,8 @@ class MainInterface:
         stack_window.mainloop()
 
     def open_binary_tree(self):
-        self.window.destroy()
-        binary_tree_window = Tk()
+        # self.window.destroy()
+        binary_tree_window = Toplevel(self.window)
         binary_tree_window.title("二叉树可视化")
         binary_tree_window.geometry("1350x730")
         binary_tree_window.maxsize(1350, 730)
@@ -235,8 +235,8 @@ class MainInterface:
         binary_tree_window.mainloop()
 
     def open_bst(self):
-        self.window.destroy()
-        bst_window = Tk()
+        # self.window.destroy()
+        bst_window = Toplevel(self.window)
         bst_window.title("二叉搜索树可视化")
         bst_window.geometry("1350x730")
         bst_window.maxsize(1350, 730)
@@ -245,16 +245,16 @@ class MainInterface:
         bst_window.mainloop()
 
     def open_huffman(self):
-        self.window.destroy()
-        win = Tk()
-        win.title("Huffman 可视化")
-        win.geometry("1350x730")
-        HuffmanVisualizer(win)
-        win.mainloop()
+        # self.window.destroy()
+        huffman_window = Toplevel(self.window)
+        huffman_window.title("Huffman 可视化")
+        huffman_window.geometry("1350x730")
+        HuffmanVisualizer(huffman_window)
+        huffman_window.mainloop()
 
     def open_avl(self):
-        self.window.destroy()
-        avl_window = Tk()
+        # self.window.destroy()
+        avl_window = Toplevel(self.window)
         avl_window.title("AVL 可视化")
         avl_window.geometry("1350x730")
         AVLVisualizer(avl_window)
