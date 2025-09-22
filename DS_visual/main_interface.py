@@ -10,6 +10,7 @@ from binary_tree.huffman_tree.huffman_visual import HuffmanVisualizer
 from avl.avl_visual import AVLVisualizer
 import math
 from llm.chat_window import ChatWindow
+from llm.function_dispatcher import register_visualizer
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -193,15 +194,16 @@ class MainInterface:
 
     # 以下函数保持不变，直接打开对应可视化窗口
     def open_linked_list(self):
-        self.window.destroy()
-        linked_list_window = Tk()
+        # self.window.destroy()
+        linked_list_window = Toplevel(self.window)  
         linked_list_window.title("单链表可视化")
         linked_list_window.geometry("1350x730")
         linked_list_window.maxsize(1350, 730)
         linked_list_window.minsize(1350, 730)
-        LinkList(linked_list_window)
+        ll = LinkList(linked_list_window)
+        register_visualizer("linked_list", ll)
         linked_list_window.mainloop()
-
+    
     def open_sequence_list(self):
         self.window.destroy()
         sequence_list_window = Tk()

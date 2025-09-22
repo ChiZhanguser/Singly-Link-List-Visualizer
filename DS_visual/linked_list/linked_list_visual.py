@@ -3,7 +3,7 @@ from tkinter import messagebox
 import time
 from linked_list.linked_list_model import LinkedListModel
 
-class LinkList: # One and only class of that project
+class LinkList: 
     def __init__(self,root):
         self.window = root
         # 保留窗口背景为浅色（可改），画布背景使用渐变绘制
