@@ -450,12 +450,10 @@ class StackVisualizer:
             pass
     
     def back_to_main(self):
-        # 返回主界面
+        if self.animating:
+            messagebox.showinfo("提示", "正在动画构建，无法返回")
+            return
         self.window.destroy()
-        from main_interface import MainInterface
-        main_window = Tk()
-        app = MainInterface(main_window)
-        main_window.mainloop()
 
 if __name__ == '__main__':
     window = Tk()

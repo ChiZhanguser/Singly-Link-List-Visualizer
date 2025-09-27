@@ -451,10 +451,6 @@ class SequenceListVisualizer:
     def back_to_main(self):
         # 返回主界面
         self.window.destroy()
-        from main_interface import MainInterface
-        main_window = Tk()
-        app = MainInterface(main_window)
-        main_window.mainloop()
 
 if __name__ == '__main__':
     window = Tk()

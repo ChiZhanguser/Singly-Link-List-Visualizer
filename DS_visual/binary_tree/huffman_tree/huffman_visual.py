@@ -403,11 +403,7 @@ class HuffmanVisualizer:
             messagebox.showinfo("提示", "动画进行中，无法返回")
             return
         self.window.destroy()
-        from main_interface import MainInterface
-        main_window = Tk()
-        app = MainInterface(main_window)
-        main_window.mainloop()
-
+        
 if __name__ == '__main__':
     w = Tk()
     w.title("Huffman 构建可视化")

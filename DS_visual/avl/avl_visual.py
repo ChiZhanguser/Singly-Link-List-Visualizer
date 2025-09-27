@@ -407,14 +407,8 @@ class AVLVisualizer:
         self.update_status("已清空")
 
     def back_to_main(self):
-        if self.animating:
-            messagebox.showinfo("提示", "动画进行中，无法返回")
-            return
-        self.window.destroy()
-        from main_interface import MainInterface
-        main_window = Tk()
-        app = MainInterface(main_window)
-        main_window.mainloop()
+        self.window.destroy()   
+
     def save_structure(self):
         root = self.model.root
         ok = storage.save_tree_to_file(root)

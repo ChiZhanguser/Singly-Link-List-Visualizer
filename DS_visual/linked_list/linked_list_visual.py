@@ -108,47 +108,6 @@ class LinkList:
         # 新增：批量创建 UI
         self.make_batch_create_ui()
 
-    def _reset_animation_positions(self):
-        # temp 指针与主节点起始位置，确保每次插入从相同位置开始
-        self.temp_label_x = 40
-        self.temp_label_y = 150
-        self.temp_pointer_left = 50
-        self.temp_pointer_up = 180
-        self.pointing_line_temp_left = 65
-        self.pointing_line_temp_up = 195
-
-        # 主节点起始位置（插入新节点的起点）
-        self.main_node_left = 25
-        self.main_node_up = 120
-
-        # 数据区起始位置
-        self.data_left = 30
-        self.data_up = 150
-
-        # 标签位置
-        self.data_label_x = 30
-        self.data_label_y = 122
-
-        # value/next 起始位置
-        self.value_set_x = 40
-        self.value_set_y = 160
-
-        # start 指针位置（不动就保留）
-        self.start_left = 50
-        self.start_up = 380
-    
-    def _enable_buttons_and_finish(self, final_message="批量创建完成"):
-        try:
-            self.insert_at_last.config(state=NORMAL)
-            self.insert_at_beg.config(state=NORMAL)
-            self.delete_at_last.config(state=NORMAL)
-            self.delete_at_first.config(state=NORMAL)
-            self.insert_after_node.config(state=NORMAL)
-            self.delete_particular_node.config(state=NORMAL)
-            self.information.config(text=final_message)
-        except Exception:
-            pass
-    
 
     def draw_gradient(self, canvas, width, height, start_color="#000000", end_color="#FFFFFF", steps=100):
         """
@@ -215,11 +174,7 @@ class LinkList:
     def back_to_main(self):
     # 返回主界面
         self.window.destroy()
-        from main_interface import MainInterface
-        main_window = Tk()
-        app = MainInterface(main_window)
-        main_window.mainloop()
-
+        
     # Make some buttons to give instruction to program
     def make_btn(self):
         self.insert_at_beg = Button(self.window,text="Insert first",bg="black",fg="red",
@@ -546,19 +501,20 @@ class LinkList:
         except:
             pass
 
-
+    # 新增：核心——从 CSV 字符串创建链表（对外触发）
     def create_list_from_string(self):
         txt = self.batch_entry_var.get()
         if not txt or not txt.strip():
             messagebox.showerror("Error", "请输入以逗号分隔的值，例如：1,2,3")
             return
 
+        # 解析字符串（按逗号分割，去掉多余空格，忽略空项）
         parts = [p.strip() for p in txt.split(',') if p.strip() != ""]
         if not parts:
             messagebox.showerror("Error", "未解析到有效元素")
             return
 
-        # 禁用按钮，防止同时操作；我们会在最后统一恢复
+        # 禁用按钮，防止并发操作
         self.insert_at_last.config(state=DISABLED)
         self.insert_at_beg.config(state=DISABLED)
         self.delete_at_last.config(state=DISABLED)
@@ -566,20 +522,184 @@ class LinkList:
         self.insert_after_node.config(state=DISABLED)
         self.delete_particular_node.config(state=DISABLED)
 
-        # 异步按顺序调度每个插入，以避免动画/状态互相干扰
-        delay_ms = 650  # 每个插入间隔（ms），如果动画较慢可以增大到 800-900
-        for i, val in enumerate(parts):
-            # 使用闭包绑定当前 val
-            self.window.after(i * delay_ms, lambda v=val: self.programmatic_insert_last(v))
+        # 顺序插入每个元素（模拟 insert_last 动画）
+        for val in parts:
+            # 为了复用已有节点动画逻辑，我们直接用 programmatic 插入
+            self.programmatic_insert_last(val)
 
-        # 在最后一个插入之后再恢复按钮状态
-        total_delay = len(parts) * delay_ms + 200
-        self.window.after(total_delay, lambda: self._enable_buttons_and_finish("批量创建完成"))
-
+        # 恢复按钮
+        self.insert_at_last.config(state=NORMAL)
+        self.insert_at_beg.config(state=NORMAL)
+        self.delete_at_last.config(state=NORMAL)
+        self.delete_at_first.config(state=NORMAL)
+        self.insert_after_node.config(state=NORMAL)
+        self.delete_particular_node.config(state=NORMAL)
+        self.information.config(text="批量创建完成")
 
     # 新增：程序化地执行 "insert last" 的可视化（不依赖手动 Entry）
     # 逻辑参考：make_main_container_with_node_value_set_and_next_arrow_creation + insert_node（仅 insert_last 路径）
-    
+    def programmatic_insert_last(self, value):
+        try:
+            # 在顶部创建节点的可视化元素（与 make_node_with_label 相同的起始布局）
+            # 临时用到同一套位置属性（与手动插入一致）
+            self.new_node_label = Label(self.canvas_make, text="New node", font=("Arial", 13, "bold"), bg="chocolate", fg="green")
+            self.new_node_label.place(x=30, y=90)
+
+            # 使用当前的 data_left/data_up 等位置绘制矩形（与手动流程一致）
+            self.data = self.canvas_make.create_rectangle(self.data_left, self.data_up, self.data_left+40, self.data_up+30, outline="green", fill="yellow", width=3)
+            self.data_label = Label(self.canvas_make, text="data", font=("Arial", 13, "bold"), bg="chocolate", fg="green")
+            self.data_label.place(x=self.data_label_x, y=self.data_label_y)
+
+            self.next = self.canvas_make.create_rectangle(self.data_left+50, self.data_up, self.data_left+50+40, self.data_up+30, outline="green", fill="yellow", width=3)
+            self.next_label = Label(self.canvas_make, text="next", font=("Arial", 13, "bold"), bg="chocolate", fg="green")
+            self.next_label.place(x=self.data_label_x+50, y=self.data_label_y)
+
+            self.main_container_node = self.canvas_make.create_rectangle(self.main_node_left, self.main_node_up, self.main_node_left + 100, self.main_node_up + 65, outline="brown", width=3)
+
+            # value label（直接使用传入的 value）
+            self.value_set = Label(self.canvas_make, text=str(value), font=("Arial", 10, "bold"), fg="green", bg="yellow")
+            self.value_set.place(x=self.data_left + 8, y=self.data_up + 3)
+
+            # arrow & next_set
+            self.arrow = self.canvas_make.create_line(self.data_left+50 + 25, self.data_up + 15, self.data_left+50 + 65, self.data_up + 15, width=4)
+            self.next_set = Label(self.canvas_make, text="NULL", font=("Arial", 15, "bold"), fg="green", bg="chocolate")
+            self.next_set.place(x=self.data_left+50 + 52, y=self.data_up + 3)
+
+            # --- 垂直下落动画（与 insert_node 中的一段类似） ---
+            self.start_initial_point_null.place_forget()  # 去掉 start 指向 NULL 的显示（若存在）
+            while self.main_node_up + 65 < 320:
+                # 删除并重建以模拟移动（沿用原逻辑）
+                self.canvas_make.delete(self.main_container_node, self.data, self.next, self.arrow)
+                self.next_label.place_forget(); self.data_label.place_forget()
+                self.value_set.place_forget()
+                self.next_set.place_forget()
+
+                self.main_node_up += 10
+                self.data_up += 10
+                self.data_label_y += 10
+
+                self.main_container_node = self.canvas_make.create_rectangle(self.main_node_left, self.main_node_up, self.main_node_left+100, self.main_node_up+65, outline="brown", width=3)
+                self.data = self.canvas_make.create_rectangle(self.data_left, self.data_up, self.data_left+40, self.data_up+30, outline="green", fill="yellow", width=3)
+                self.next = self.canvas_make.create_rectangle(self.data_left+50, self.data_up, self.data_left+50+ 40, self.data_up+30, outline="green", fill="yellow", width=3)
+                self.next_label.place(x=self.data_label_x+50, y=self.data_label_y)
+                self.data_label.place(x=self.data_label_x, y=self.data_label_y)
+                self.value_set.place(x=self.data_left + 8, y=self.data_up + 3)
+                self.arrow = self.canvas_make.create_line(self.data_left+50 + 25, self.data_up + 15, self.data_left+50 + 65, self.data_up + 15, width=4)
+                self.next_set.place(x=self.data_left+50 + 52, y=self.data_up + 2)
+
+                time.sleep(0.04)
+                self.window.update()
+
+            # --- 如果已有节点，则让 temp 指针遍历至最后一个节点 ---
+            if len(self.linked_list_data_next_store) > 1:
+                self.next_set.place_forget()  # 新节点的 NULL 临时隐藏（和原逻辑一致）
+                self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
+                self.pointing_line_temp = self.canvas_make.create_line(self.pointing_line_temp_left, self.pointing_line_temp_up, self.pointing_line_temp_left, self.pointing_line_temp_up + 65, width=2)
+
+                goto = len(self.linked_list_position) - 2  # 与插入到尾部一致
+                # 移动 temp 指针直到对准 penultimate（用于之后水平移动）
+                while self.temp_label_x < self.linked_list_position[goto][4] + 100 + 20:
+                    self.temp_label.place_forget()
+                    self.canvas_make.delete(self.pointing_line_temp, self.temp_pointer)
+
+                    self.temp_label_x += 10
+                    self.pointing_line_temp_left += 10
+                    self.temp_pointer_left += 10
+
+                    self.temp_pointer = self.canvas_make.create_rectangle(self.temp_pointer_left, self.temp_pointer_up,
+                                                                          self.temp_pointer_left + 30, self.temp_pointer_up + 30, fill="blue",
+                                                                          outline="black", width=3)
+                    self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
+                    self.pointing_line_temp = self.canvas_make.create_line(self.pointing_line_temp_left, self.pointing_line_temp_up, self.pointing_line_temp_left, self.pointing_line_temp_up + 65, width=2)
+
+                    time.sleep(0.05)
+                    self.window.update()
+
+            # --- 水平移动至目标位置（接入链表末尾） ---
+            if len(self.linked_list_data_next_store) > 0:
+                # 删除上一个节点的 "NULL" label（按原逻辑）
+                self.linked_list_data_next_store[len(self.linked_list_data_next_store) - 1].pop().place_forget()
+
+                while self.main_node_left < self.linked_list_position[len(self.linked_list_position)-1][4] + 100 + 20:
+                    self.canvas_make.delete(self.main_container_node, self.data, self.next, self.arrow)
+                    self.next_label.place_forget(); self.data_label.place_forget()
+                    self.value_set.place_forget()
+                    self.next_set.place_forget()
+
+                    self.main_node_left += 10
+                    self.data_left += 10
+                    self.data_label_x += 10
+
+                    self.main_container_node = self.canvas_make.create_rectangle(self.main_node_left, self.main_node_up, self.main_node_left+100, self.main_node_up+65, outline="brown", width=3)
+                    self.data = self.canvas_make.create_rectangle(self.data_left, self.data_up, self.data_left+40, self.data_up+30, outline="green", fill="yellow", width=3)
+                    self.next = self.canvas_make.create_rectangle(self.data_left+50, self.data_up, self.data_left+50+ 40, self.data_up+30, outline="green", fill="yellow", width=3)
+                    self.next_label.place(x=self.data_label_x+50, y=self.data_label_y)
+                    self.data_label.place(x=self.data_label_x, y=self.data_label_y)
+                    self.value_set.place(x=self.data_left + 8, y=self.data_up + 3)
+                    self.arrow = self.canvas_make.create_line(self.data_left+50 + 25, self.data_up + 15, self.data_left+50 + 65, self.data_up + 15, width=4)
+                    self.next_set.place(x=self.data_left+50 + 52, y=self.data_up + 2)
+
+                    self.information.config(text="New node added to the last node")
+                    time.sleep(0.04)
+                    self.window.update()
+
+            # --- 存储 widget 与位置（与 reset_with_store 中的存储结构一致） ---
+            temp_label = []
+            temp_label.append(self.data_label)
+            temp_label.append(self.next_label)
+            self.linked_list_canvas_small_widget_label.append(temp_label)
+
+            temp_block_number = []; temp_block_number.append(self.data); temp_block_number.append(self.next); temp_block_number.append(self.main_container_node)
+            self.linked_list_canvas_small_widget.append(temp_block_number)
+
+            temp_block_location = []
+            temp_block_location.append(self.data_left); temp_block_location.append(self.data_up)
+            temp_block_location.append(self.data_left+50); temp_block_location.append(self.data_up)
+            temp_block_location.append(self.main_node_left); temp_block_location.append(self.main_node_up)
+            self.linked_list_position.append(temp_block_location)
+
+            # 清理 temp 指针显示
+            self.temp_label.place_forget()
+            self.canvas_make.delete(self.pointing_line_temp, self.temp_pointer)
+            self.temp_label_x = 40
+            self.pointing_line_temp_left = 65
+            self.temp_pointer_left = 50
+
+            # 把数据保存到 model / node_value_store，并模拟原 reset_with_store 的其余工作
+            self.node_value_store.append(str(value))
+            temp = []
+            temp.append(self.value_set)
+            temp.append(self.arrow)
+            temp.append(self.next_set)
+            self.linked_list_data_next_store.append(temp)
+
+            # data and next label reset
+            self.value_set = None
+            self.next_set = None
+
+            #Initialize of location of data next label and main block/node（重置为初始值，保证下一个插入从顶部开始）
+            self.value_set_x = 40
+            self.value_set_y = 160
+
+            self.start_left = 50
+            self.start_up = 380
+
+            self.data_left = 30
+            self.data_up = 150
+
+            self.main_node_left = 25
+            self.main_node_up = 120
+
+            self.data_label_x = 30
+            self.data_label_y = 122
+
+            # 为了和手动插入的行为一致，如果是第一个节点需要在 start 处去掉 NULL 显示
+            if len(self.linked_list_data_next_store) == 1:
+                self.start_initial_point_null.place_forget()
+
+        except Exception as e:
+            print("programmatic_insert_last error:", e)
+            pass
 
     def reset_with_store(self,take_notation): # Reset coordinate and store value,arrow and next label
         #Node value store only in that list

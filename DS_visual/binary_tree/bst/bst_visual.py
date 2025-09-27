@@ -39,9 +39,6 @@ class BSTVisualizer:
         self.create_controls()
         self.draw_instructions()
         
-        self.window = master
-        
-
     def create_controls(self):
         frame = Frame(self.window, bg="#F7F9FB")
         frame.pack(pady=8, fill=X)
@@ -463,11 +460,7 @@ class BSTVisualizer:
             messagebox.showinfo("提示", "正在动画，不能返回")
             return
         self.window.destroy()
-        from main_interface import MainInterface
-        main_window = Tk()
-        app = MainInterface(main_window)
-        main_window.mainloop()
-
+        
 if __name__ == '__main__':
     w = Tk()
     w.title("BST 可视化")

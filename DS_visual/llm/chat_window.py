@@ -248,7 +248,7 @@ class ChatWindow:
             # 最后兜底：没有 function_call 也没有本地解析到
             self.win.after(0, lambda: assistant_var.set(assistant_var.get() + "\n\n（未检测到可执行操作；未触发可视化）"))
         except Exception as e:
-            self.win.after(0, lambda: assistant_var.set(f"调用失败：{e}"))
+            self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n注: 没有进行函数调用"))
         finally:
             self.win.after(0, self._finish_stream)
     def _chinese_num_to_int(self, s: str):
