@@ -2,6 +2,12 @@
 from tkinter import *
 from tkinter import messagebox
 from stack.stack_model import StackModel
+import json
+import os
+from datetime import datetime
+import storage as storage
+from tkinter import filedialog
+
 
 class StackVisualizer:
     def __init__(self, root):
@@ -96,6 +102,134 @@ class StackVisualizer:
         self.batch_build_btn = Button(button_frame, text="开始批量构建", font=("Arial", 12),
                                       command=self.start_batch_build)
         self.batch_build_btn.grid(row=1, column=3, padx=10, pady=6)
+        
+        Button(button_frame, text="保存栈", font=("Arial", 14), width=15, height=2, bg="#6C9EFF", fg="white",
+               command=self.save_structure).grid(row=0, column=4, padx=20, pady=8)
+        Button(button_frame, text="打开栈", font=("Arial", 14), width=15, height=2, bg="#6C9EFF", fg="white",
+               command=self.load_structure).grid(row=0, column=5, padx=20, pady=8)
+    
+        # ---------- 保存/打开 helpers for StackVisualizer ----------
+    def _ensure_stack_folder(self):
+        """
+        （仅用于当你需要直接使用文件对话框默认目录时）
+        返回 storage.py 所在目录下的 save/stack 路径（并确保存在）。
+        （本实现实际上使用 storage.save_list_to_file/load_list_from_file 来弹窗和保存，
+         但此函数保留以备后用）
+        """
+        try:
+            base_dir = os.path.dirname(os.path.abspath(storage.__file__))
+            default_dir = os.path.join(base_dir, "save", "stack")
+            os.makedirs(default_dir, exist_ok=True)
+            return default_dir
+        except Exception:
+            # 兜底：当前脚本目录下的 save/stack
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            default_dir = os.path.join(base_dir, "..", "save", "stack")
+            default_dir = os.path.normpath(default_dir)
+            os.makedirs(default_dir, exist_ok=True)
+            return default_dir
+    def save_structure(self):
+        """
+        直接在 StackVisualizer 里弹出保存文件对话框，初始目录固定为 save/stack（storage.ensure_save_subdir）。
+        这样可以保证默认目录不是 save/linked_list。
+        """
+        try:
+            data = list(self.model.data) if hasattr(self.model, "data") else []
+            meta = {"capacity": self.capacity, "top": getattr(self.model, "top", len(data) - 1)}
+
+            if len(data) == 0:
+                if not messagebox.askyesno("确认", "当前栈为空，是否仍然保存一个空栈文件？"):
+                    return
+
+            # 强制使用 stack 的默认目录（不再调用 storage.save_list_to_file）
+            default_dir = storage.ensure_save_subdir("stack") if hasattr(storage, "ensure_save_subdir") else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "save", "stack")
+            os.makedirs(default_dir, exist_ok=True)
+            default_name = f"stack_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+            filepath = filedialog.asksaveasfilename(
+                initialdir=default_dir,
+                initialfile=default_name,
+                defaultextension=".json",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                title="保存栈到文件"
+            )
+            if not filepath:
+                return
+
+            payload = {"type": "stack", "data": data, "metadata": meta}
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+
+            messagebox.showinfo("成功", f"栈已保存到：\n{filepath}")
+        except Exception as e:
+            print("save_structure error:", e)
+            messagebox.showerror("错误", f"保存失败：{e}")
+
+
+    def load_structure(self):
+        """
+        直接在 StackVisualizer 里弹出打开对话框，初始目录固定为 save/stack（storage.ensure_save_subdir）。
+        读取后快速恢复（无动画）。
+        """
+        try:
+            default_dir = storage.ensure_save_subdir("stack") if hasattr(storage, "ensure_save_subdir") else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "save", "stack")
+            os.makedirs(default_dir, exist_ok=True)
+
+            filepath = filedialog.askopenfilename(
+                initialdir=default_dir,
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                title="从文件加载栈"
+            )
+            if not filepath:
+                return
+
+            with open(filepath, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+
+            # 支持两种格式：{type:stack, data:[...]} 或直接 list
+            if isinstance(loaded, dict) and "data" in loaded:
+                data_list = loaded.get("data", [])
+            elif isinstance(loaded, list):
+                data_list = loaded
+            else:
+                messagebox.showerror("错误", "文件格式不被识别（需为 list 或包含 data 字段的 dict）")
+                return
+
+            if not isinstance(data_list, list):
+                messagebox.showerror("错误", "读取的数据不是列表")
+                return
+
+            # 容量检查：扩容或截断
+            if len(data_list) > self.capacity:
+                ans = messagebox.askyesno(
+                    "容量不足",
+                    f"要加载的文件包含 {len(data_list)} 个元素，当前 capacity = {self.capacity}。\n"
+                    "选择【是】以扩容并完整加载；选择【否】则只加载前 capacity 个元素。"
+                )
+                if ans:
+                    self.capacity = len(data_list)
+                    self.model = StackModel(self.capacity)
+                else:
+                    data_list = data_list[:self.capacity]
+
+            # 直接赋值或兜底 push
+            try:
+                self.model.data = list(data_list)
+                self.model.top = len(self.model.data) - 1
+            except Exception:
+                self.model = StackModel(self.capacity)
+                for v in data_list:
+                    if not self.model.push(v):
+                        break
+
+            self.update_display()
+            messagebox.showinfo("成功", f"已加载 {len(self.model.data)} 个元素到栈")
+
+        except Exception as e:
+            print("load_structure error:", e)
+            messagebox.showerror("错误", f"加载失败：{e}")
+
+
     
     def prepare_push(self):
         if self.animating:

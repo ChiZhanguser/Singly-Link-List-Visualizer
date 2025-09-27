@@ -7,6 +7,16 @@ from tkinter import filedialog
 import os
 from datetime import datetime
 
+
+def ensure_save_subdir(subdir: str) -> str:
+    """
+    确保 storage.py 同目录下的 save/<subdir> 文件夹存在，返回该目录的绝对路径。
+    例如: ensure_save_subdir('stack') -> .../save/stack
+    """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    target = os.path.join(base_dir, "save", subdir)
+    os.makedirs(target, exist_ok=True)
+    return target
 # ---------- helpers for tree -> dict and dict -> tree ----------
 def tree_to_dict(root) -> Dict[str, Any]:
     """

@@ -1,0 +1,12 @@
+{
+  "type": "stack",
+  "data": [
+    "1",
+    "2",
+    "3"
+  ],
+  "metadata": {
+    "capacity": 10,
+    "top": 2
+  }
+}

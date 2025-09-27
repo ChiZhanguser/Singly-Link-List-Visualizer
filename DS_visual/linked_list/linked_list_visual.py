@@ -368,7 +368,6 @@ class LinkList:
                                command=self.load_structure)
         self.load_btn.place(x=900, y=650)
 
-    # 新增：批量创建的 UI（输入 CSV 并创建）
     def make_batch_create_ui(self):
         label = Label(self.window, text="批量创建（以逗号分隔）", font=("Arial", 12, "bold"), bg="lightgray")
         label.place(x=20, y=610)
