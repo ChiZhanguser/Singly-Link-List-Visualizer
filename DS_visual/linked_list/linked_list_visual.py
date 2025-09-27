@@ -2,6 +2,7 @@ from tkinter import *
 from tkinter import messagebox
 import time
 from linked_list.linked_list_model import LinkedListModel
+import storage as storage
 
 class LinkList: 
     def __init__(self,root):
@@ -107,6 +108,151 @@ class LinkList:
         self.make_start_with_other()
         # 新增：批量创建 UI
         self.make_batch_create_ui()
+        
+        
+
+    def save_structure(self):
+        node_values = self.node_value_store  # 从可视化模型读取值列表
+        if not node_values:
+            messagebox.showinfo("提示", "链表为空，无需保存")
+            return
+        success = storage.save_linked_list_to_file(node_values)
+        if success:
+            messagebox.showinfo("成功", "链表结构已保存")
+        else:
+            messagebox.showerror("错误", "保存失败")
+            
+        # ---------- 新增：清空当前可视化（移除 canvas 上的所有节点与内部列表） ----------
+    def clear_visualization(self):
+        # 删除 canvas 中保存的图形与 label
+        try:
+            # 清除 linked_list_data_next_store (value label, arrow, next_set)
+            for entry in self.linked_list_data_next_store:
+                # entry === [value_label, arrow_id, next_label]
+                try:
+                    if entry and entry[0]:
+                        entry[0].place_forget()
+                except Exception:
+                    pass
+                try:
+                    if entry and entry[1]:
+                        self.canvas_make.delete(entry[1])
+                except Exception:
+                    pass
+                try:
+                    if entry and entry[2]:
+                        entry[2].place_forget()
+                except Exception:
+                    pass
+            self.linked_list_data_next_store.clear()
+
+            # 清除 canvas 小部件组
+            for widgets in self.linked_list_canvas_small_widget:
+                for wid in widgets:
+                    try:
+                        self.canvas_make.delete(wid)
+                    except Exception:
+                        try:
+                            wid.place_forget()
+                        except Exception:
+                            pass
+            self.linked_list_canvas_small_widget.clear()
+
+            # 清除小部件 label 列表
+            for labels in self.linked_list_canvas_small_widget_label:
+                for lab in labels:
+                    try:
+                        lab.place_forget()
+                    except Exception:
+                        pass
+            self.linked_list_canvas_small_widget_label.clear()
+
+            # 清除位置记录
+            self.linked_list_position.clear()
+
+            # 清除 node_value_store（model 也应清）
+            self.node_value_store.clear()
+            if hasattr(self.model, "node_value_store"):
+                try:
+                    self.model.node_value_store.clear()
+                except Exception:
+                    pass
+
+            # 重置 start 显示
+            try:
+                self.start_initial_point_null.place(x=40, y=300)
+            except Exception:
+                pass
+
+            # reset internal placement variables to initial defaults (与 __init__ 的初始值一致)
+            self.temp_label_x = 40
+            self.temp_label_y = 150
+            self.pointing_line_temp_left = 65
+            self.pointing_line_temp_up = 195
+            self.temp_pointer_left = 50
+            self.temp_pointer_up = 180
+
+            self.main_node_left = 25
+            self.main_node_up = 120
+            self.data_left = 30
+            self.data_up = 150
+            self.data_label_x = 30
+            self.data_label_y = 122
+
+            self.information.config(text="已清空当前可视化")
+            self.window.update()
+        except Exception as e:
+            print("clear_visualization error:", e)
+            pass
+    
+        # ---------- 新增：加载链表（从文件加载并重建可视化） ----------
+    def load_structure(self):
+        # 从 storage 读取数据（会弹出文件选择对话框）
+        loaded = storage.load_linked_list_from_file()
+        if loaded is None:
+            # 用户取消或出错
+            return
+        if not isinstance(loaded, list) or len(loaded) == 0:
+            messagebox.showerror("错误", "未从文件中读取到有效链表数据")
+            return
+
+        # 清空当前可视化（避免和加载的节点冲突）
+        self.clear_visualization()
+
+        # 禁用按钮，避免加载过程中被打断
+        self.insert_at_last.config(state=DISABLED)
+        self.insert_at_beg.config(state=DISABLED)
+        self.delete_at_last.config(state=DISABLED)
+        self.delete_at_first.config(state=DISABLED)
+        self.insert_after_node.config(state=DISABLED)
+        self.delete_particular_node.config(state=DISABLED)
+        self.save_btn.config(state=DISABLED)
+        self.load_btn.config(state=DISABLED)
+
+        # 逐个插入（使用已有的 programmatic_insert_last，使得视觉行为一致）
+        try:
+            for val in loaded:
+                # programmatic_insert_last 内部会把值追加到 self.node_value_store 与 linked_list_data_next_store
+                self.programmatic_insert_last(val)
+                # small pause to keep UI responsive (programmatic_insert_last 有自己的 time.sleep)
+                self.window.update()
+        except Exception as e:
+            print("load_structure error during insert:", e)
+            messagebox.showerror("错误", f"加载时出错：{e}")
+
+        # 恢复按钮
+        self.insert_at_last.config(state=NORMAL)
+        self.insert_at_beg.config(state=NORMAL)
+        self.delete_at_last.config(state=NORMAL)
+        self.delete_at_first.config(state=NORMAL)
+        self.insert_after_node.config(state=NORMAL)
+        self.delete_particular_node.config(state=NORMAL)
+        self.save_btn.config(state=NORMAL)
+        self.load_btn.config(state=NORMAL)
+
+        self.information.config(text="加载完成")
+        messagebox.showinfo("成功", "链表已从文件加载并重建可视化")
+
 
 
     def draw_gradient(self, canvas, width, height, start_color="#000000", end_color="#FFFFFF", steps=100):
@@ -211,6 +357,16 @@ class LinkList:
                               font=("Arial", 15, "bold"), relief=RAISED, bd=10,
                               command=self.back_to_main)
         self.back_to_main_btn.place(x=1090, y=600)
+        
+        self.save_btn = Button(self.window, text="保存链表", bg="darkgreen", fg="white",
+                               font=("Arial", 12, "bold"), relief=RAISED, bd=6,
+                               command=self.save_structure)
+        self.save_btn.place(x=900, y=600)
+        
+        self.load_btn = Button(self.window, text="打开链表", bg="#6C9EFF", fg="white",
+                               font=("Arial", 12, "bold"), relief=RAISED, bd=6,
+                               command=self.load_structure)
+        self.load_btn.place(x=900, y=650)
 
     # 新增：批量创建的 UI（输入 CSV 并创建）
     def make_batch_create_ui(self):

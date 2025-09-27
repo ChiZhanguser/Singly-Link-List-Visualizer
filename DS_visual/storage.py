@@ -2,8 +2,10 @@
 # 通用保存/加载工具（JSON），支持二叉树(保存节点图) 与 线性结构（数组）
 
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from tkinter import filedialog
+import os
+from datetime import datetime
 
 # ---------- helpers for tree -> dict and dict -> tree ----------
 def tree_to_dict(root) -> Dict[str, Any]:
@@ -148,6 +150,83 @@ def tree_dict_to_nodes(tree_dict, NodeClass):
             id_to_obj[right_id].parent = node if hasattr(id_to_obj[right_id], "parent") else None
     root_id = tree_dict.get("root")
     return id_to_obj.get(root_id)
+
+def _ensure_default_folder():
+    """确保默认保存/打开目录存在，返回绝对路径"""
+    base_dir = os.path.dirname(os.path.abspath(__file__))  # storage.py 所在目录
+    default_dir = os.path.join(base_dir, "save", "linked_list")
+    os.makedirs(default_dir, exist_ok=True)
+    return default_dir
+
+def save_linked_list_to_file(node_values: List, filepath: Optional[str] = None) -> bool:
+    """
+    保存单链表数据到文件。
+    node_values: 链表节点的值列表（按顺序）
+    如果 filepath 为 None，会弹出保存对话框，初始目录为 save/linked_list，默认文件名 linked_list_YYYYmmdd_HHMMSS.json
+    """
+    default_dir = _ensure_default_folder()
+
+    if filepath is None:
+        default_name = f"linked_list_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        filepath = filedialog.asksaveasfilename(
+            initialdir=default_dir,
+            initialfile=default_name,
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="保存链表到文件"
+        )
+        if not filepath:
+            return False
+
+    linked_list_data = {
+        "type": "linked_list",
+        "data": node_values,
+        "metadata": {
+            "length": len(node_values),
+            "structure": "singly_linked_list"
+        }
+    }
+
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(linked_list_data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"保存链表时出错: {e}")
+        return False
+
+def load_linked_list_from_file(filepath: Optional[str] = None) -> Optional[List]:
+    """
+    从文件加载链表数据（返回节点值列表），如果失败返回 None。
+    如果 filepath 为 None，会弹出打开对话框，初始目录为 save/linked_list。
+    """
+    default_dir = _ensure_default_folder()
+
+    if filepath is None:
+        filepath = filedialog.askopenfilename(
+            initialdir=default_dir,
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="从文件加载链表"
+        )
+        if not filepath:
+            return None
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            obj = json.load(f)
+
+        if not obj:
+            return None
+
+        if obj.get("type") == "linked_list":
+            return obj.get("data", [])
+        else:
+            # 兼容旧格式：如果文件就是一个 list
+            return obj if isinstance(obj, list) else None
+
+    except Exception as e:
+        print(f"加载链表时出错: {e}")
+        return None
 
 # --------- example usage comments ----------
 # 在 AVL/ BST visualizer 中，你可以：

@@ -1,0 +1,11 @@
+{
+  "type": "linked_list",
+  "data": [
+    "1",
+    "2"
+  ],
+  "metadata": {
+    "length": 2,
+    "structure": "singly_linked_list"
+  }
+}
