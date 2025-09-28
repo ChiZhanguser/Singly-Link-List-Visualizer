@@ -110,12 +110,6 @@ class StackVisualizer:
     
         # ---------- 保存/打开 helpers for StackVisualizer ----------
     def _ensure_stack_folder(self):
-        """
-        （仅用于当你需要直接使用文件对话框默认目录时）
-        返回 storage.py 所在目录下的 save/stack 路径（并确保存在）。
-        （本实现实际上使用 storage.save_list_to_file/load_list_from_file 来弹窗和保存，
-         但此函数保留以备后用）
-        """
         try:
             base_dir = os.path.dirname(os.path.abspath(storage.__file__))
             default_dir = os.path.join(base_dir, "save", "stack")
@@ -141,7 +135,6 @@ class StackVisualizer:
                 if not messagebox.askyesno("确认", "当前栈为空，是否仍然保存一个空栈文件？"):
                     return
 
-            # 强制使用 stack 的默认目录（不再调用 storage.save_list_to_file）
             default_dir = storage.ensure_save_subdir("stack") if hasattr(storage, "ensure_save_subdir") else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "save", "stack")
             os.makedirs(default_dir, exist_ok=True)
             default_name = f"stack_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"

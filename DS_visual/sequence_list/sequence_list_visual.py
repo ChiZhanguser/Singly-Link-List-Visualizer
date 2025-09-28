@@ -1,7 +1,12 @@
 from tkinter import *
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 import time
 from sequence_list.sequence_list_model import SequenceListModel
+import os
+import storage as storage
+import json
+from datetime import datetime
+
 
 class SequenceListVisualizer:
     def __init__(self, root):
@@ -11,7 +16,7 @@ class SequenceListVisualizer:
         self.canvas.pack()
         
         self.model = SequenceListModel()
-        self.data_store = self.model.data
+        # 注意：data_store 改为 property（见类下面），这样始终反映 self.model.data 的最新状态
         
         # 存储画布上的元素
         self.data_rectangles = []  # 数据矩形
@@ -36,6 +41,11 @@ class SequenceListVisualizer:
         self.create_heading()
         self.create_buttons()
         self.update_display()
+    
+    @property
+    def data_store(self):
+        """动态返回当前模型的数据列表，避免旧引用不同步问题。"""
+        return getattr(self.model, "data", [])
     
     def create_heading(self):
         heading = Label(self.window, text="顺序表(线性表)的可视化", 
@@ -100,7 +110,150 @@ class SequenceListVisualizer:
                         bg="blue", fg="white", command=self.back_to_main)
         back_btn.grid(row=1, column=4, padx=10, pady=5)
         self.buttons.append(back_btn)
+        
+        # 保存 / 打开 按钮
+        save_btn = Button(button_frame, text="保存顺序表", font=("Arial", 12),
+                          bg="#6C9EFF", fg="white", command=self.save_sequence)
+        save_btn.grid(row=0, column=5, padx=10, pady=5)
+        self.buttons.append(save_btn)
+        
+        load_btn = Button(button_frame, text="打开顺序表", font=("Arial", 12),
+                          bg="#6C9EFF", fg="white", command=self.load_sequence)
+        load_btn.grid(row=0, column=6, padx=10, pady=5)
+        self.buttons.append(load_btn)
     
+    # ---------- storage helpers ----------
+    def _ensure_sequence_folder(self):
+        """
+        确保 save/sequence 文件夹存在，优先使用 storage.ensure_save_subdir。
+        返回该目录的绝对路径。
+        """
+        try:
+            if hasattr(storage, "ensure_save_subdir"):
+                return storage.ensure_save_subdir("sequence")
+            base_dir = os.path.dirname(os.path.abspath(storage.__file__))
+            default_dir = os.path.join(base_dir, "save", "sequence")
+            os.makedirs(default_dir, exist_ok=True)
+            return default_dir
+        except Exception:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            default_dir = os.path.join(base_dir, "..", "save", "sequence")
+            default_dir = os.path.normpath(default_dir)
+            os.makedirs(default_dir, exist_ok=True)
+            return default_dir
+
+    def save_sequence(self):
+        """
+        保存当前顺序表（self.model.data）到 JSON 文件。
+        初始目录为 save/sequence，默认文件名 sequence_YYYYmmdd_HHMMSS.json
+        """
+        try:
+            arr = list(self.data_store)
+            meta = {"length": len(arr)}
+            
+            if len(arr) == 0:
+                if not messagebox.askyesno("确认", "当前顺序表为空，是否仍然保存一个空文件？"):
+                    return
+            
+            default_dir = self._ensure_sequence_folder()
+            default_name = f"sequence_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            
+            filepath = filedialog.asksaveasfilename(
+                initialdir=default_dir,
+                initialfile=default_name,
+                defaultextension=".json",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                title="保存顺序表到文件"
+            )
+            if not filepath:
+                return
+            
+            payload = {"type": "sequence", "data": arr, "metadata": meta}
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+            
+            messagebox.showinfo("成功", f"顺序表已保存到：\n{filepath}")
+        except Exception as e:
+            print("save_sequence error:", e)
+            messagebox.showerror("错误", f"保存失败：{e}")
+    
+    def load_sequence(self):
+        """
+        从文件加载顺序表数据并快速恢复（无动画）。
+        支持格式：
+          1) {"type":"sequence","data":[...], ...}
+          2) {"data":[...], ...}
+          3) 直接 [...](list)
+        """
+        try:
+            default_dir = self._ensure_sequence_folder()
+            filepath = filedialog.askopenfilename(
+                initialdir=default_dir,
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                title="从文件加载顺序表"
+            )
+            if not filepath:
+                return
+            
+            with open(filepath, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            
+            # 兼容不同格式
+            if isinstance(loaded, dict) and "data" in loaded:
+                data_list = loaded.get("data", [])
+            elif isinstance(loaded, list):
+                data_list = loaded
+            else:
+                messagebox.showerror("错误", "文件格式不被识别（需为 list 或包含 data 字段的 dict）")
+                return
+            
+            if not isinstance(data_list, list):
+                messagebox.showerror("错误", "读取的数据不是列表")
+                return
+            
+            # 直接赋值或兜底逐项插入（保持模型兼容）
+            try:
+                # 如果模型有直接 data 属性，尝试直接替换
+                if hasattr(self.model, "data"):
+                    self.model.data = list(data_list)
+                    # 如果模型有 length/size/top 等，尝试同步
+                    if hasattr(self.model, "length"):
+                        try:
+                            self.model.length = len(self.model.data)
+                        except Exception:
+                            pass
+                else:
+                    # 否则尽量通过提供的接口插入（append/insert）
+                    if hasattr(self.model, "clear"):
+                        try:
+                            self.model.clear()
+                        except Exception:
+                            pass
+                    for v in data_list:
+                        if hasattr(self.model, "append"):
+                            self.model.append(v)
+                        elif hasattr(self.model, "insert_last"):
+                            try:
+                                self.model.insert_last(v)
+                            except Exception:
+                                # 回退为 append
+                                self.model.append(v)
+                        else:
+                            # 兜底：尝试创建 data 属性
+                            if not hasattr(self.model, "data"):
+                                self.model.data = []
+                            self.model.data.append(v)
+            except Exception as e:
+                print("load_sequence assign error:", e)
+                messagebox.showwarning("警告", "加载时遇到模型兼容性问题，可能未完全恢复。")
+            
+            self.update_display()
+            messagebox.showinfo("成功", f"已加载 {len(data_list)} 个元素到顺序表")
+        except Exception as e:
+            print("load_sequence error:", e)
+            messagebox.showerror("错误", f"加载失败：{e}")
+    
+    # ---------- 其余方法（未动） ----------
     def prepare_build_list(self):
         """准备构建顺序表的输入界面"""
         self.build_values_entry = StringVar()
@@ -451,6 +604,7 @@ class SequenceListVisualizer:
     def back_to_main(self):
         # 返回主界面
         self.window.destroy()
+
 
 if __name__ == '__main__':
     window = Tk()
