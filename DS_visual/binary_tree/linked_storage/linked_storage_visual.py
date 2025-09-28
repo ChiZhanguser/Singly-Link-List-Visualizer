@@ -1,9 +1,13 @@
 # DS_visual/binary_tree/binary_tree_visual.py
 from tkinter import *
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from binary_tree.linked_storage.linked_storage_model import BinaryTreeModel, TreeNode
 from typing import Dict, Tuple, List, Optional
 import math
+import storage as storage
+import os
+import json
+from datetime import datetime   
 
 class BinaryTreeVisualizer:
     def __init__(self, root):
@@ -161,11 +165,138 @@ class BinaryTreeVisualizer:
                          command=self.back_to_main)
         back_btn.pack(side=LEFT, padx=5)
         
+        save_btn = Button(button_frame, text="保存树", **button_style,
+                          bg="#6C9EFF", fg="white", activebackground="#4C6EF5",
+                          command=self.save_tree)
+        save_btn.pack(side=LEFT, padx=6)
+        
+        load_btn = Button(button_frame, text="打开树", **button_style,
+                          bg="#6C9EFF", fg="white", activebackground="#4C6EF5",
+                          command=self.load_tree)
+        load_btn.pack(side=LEFT, padx=6)
+        
         # 添加提示标签
         hint_label = Label(control_frame, text="提示: 使用逗号分隔节点，#表示空节点", 
                           font=("Segoe UI", 9), bg="#F3F6FB", fg="#718096")
-        hint_label.pack(pady=(5, 0))
+        hint_label.pack(pady=(5, 0))\
+            
+    def _ensure_tree_folder(self) -> str:
+        """
+        确保 save/tree 文件夹存在，优先使用 storage.ensure_save_subdir("tree")。
+        返回该目录的绝对路径。
+        """
+        try:
+            if hasattr(storage, "ensure_save_subdir"):
+                return storage.ensure_save_subdir("tree")
+            base_dir = os.path.dirname(os.path.abspath(storage.__file__))
+            default_dir = os.path.join(base_dir, "save", "tree")
+            os.makedirs(default_dir, exist_ok=True)
+            return default_dir
+        except Exception:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            default_dir = os.path.join(base_dir, "..", "save", "tree")
+            default_dir = os.path.normpath(default_dir)
+            os.makedirs(default_dir, exist_ok=True)
+            return default_dir
 
+    def save_tree(self):
+        """
+        将当前 self.root_node（链式二叉树）保存为 JSON 文件。
+        格式: {"type":"tree","tree": <storage.tree_to_dict(root)>, "metadata": {...}}
+        """
+        try:
+            if not self.root_node:
+                if not messagebox.askyesno("确认", "当前画布为空，是否仍然保存一个空树文件？"):
+                    return
+
+            default_dir = self._ensure_tree_folder()
+            default_name = f"tree_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+            filepath = filedialog.asksaveasfilename(
+                initialdir=default_dir,
+                initialfile=default_name,
+                defaultextension=".json",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                title="保存树到文件"
+            )
+            if not filepath:
+                return
+
+            # 使用 storage.tree_to_dict 将链式节点图转换为字典描述
+            tree_dict = storage.tree_to_dict(self.root_node) if hasattr(storage, "tree_to_dict") else {}
+            metadata = {
+                "saved_at": datetime.now().isoformat(),
+                "node_count": len(tree_dict.get("nodes", [])) if isinstance(tree_dict, dict) else 0
+            }
+            payload = {"type": "tree", "tree": tree_dict, "metadata": metadata}
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+
+            messagebox.showinfo("成功", f"二叉树已保存到：\n{filepath}")
+            self.update_status("保存成功", "#48BB78")
+        except Exception as e:
+            print("save_tree error:", e)
+            messagebox.showerror("错误", f"保存失败：{e}")
+            self.update_status("保存失败", "#E53E3E")
+    
+    def load_tree(self):
+        """
+        从文件加载链式二叉树并恢复为 TreeNode 实例图（快速恢复，无动画）。
+        支持文件两种情况：
+          1) {"type":"tree","tree": {...}, ...}
+          2) 直接 {"nodes": [...], "root": "n0"}（旧格式）
+        """
+        try:
+            default_dir = self._ensure_tree_folder()
+            filepath = filedialog.askopenfilename(
+                initialdir=default_dir,
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                title="从文件加载二叉树"
+            )
+            if not filepath:
+                return
+
+            with open(filepath, "r", encoding="utf-8") as f:
+                obj = json.load(f)
+            if not obj:
+                messagebox.showerror("错误", "文件内容为空或无法解析")
+                return
+
+            # 兼容两种格式
+            if isinstance(obj, dict) and obj.get("type") == "tree" and "tree" in obj:
+                tree_dict = obj.get("tree", {})
+            elif isinstance(obj, dict) and "nodes" in obj:
+                tree_dict = obj  # 直接是 tree_dict
+            else:
+                messagebox.showerror("错误", "文件格式不被识别（需为 tree 类型或包含 nodes/root 字段）")
+                return
+
+            # 使用 storage.tree_dict_to_nodes 构建 TreeNode 实例图（需要传入 TreeNode 类）
+            if hasattr(storage, "tree_dict_to_nodes"):
+                try:
+                    new_root = storage.tree_dict_to_nodes(tree_dict, TreeNode)
+                except Exception as e:
+                    # 若 storage 内转换有问题，回退为 caller 自行处理
+                    print("tree_dict_to_nodes error:", e)
+                    new_root = None
+            else:
+                new_root = None
+
+            if new_root is None:
+                messagebox.showwarning("警告", "加载成功但无法自动重建节点（storage.tree_dict_to_nodes 不可用），请手工检查。")
+                self.update_status("加载但未重建节点", "#E6A23C")
+                return
+
+            # 成功重建，赋值并重绘
+            self.root_node = new_root
+            self.redraw_tree()
+            messagebox.showinfo("成功", "二叉树已成功加载并恢复")
+            self.update_status("加载成功", "#48BB78")
+        except Exception as e:
+            print("load_tree error:", e)
+            messagebox.showerror("错误", f"加载失败：{e}")
+            self.update_status("加载失败", "#E53E3E")
+    
     # ---------- 状态 ----------
     def draw_instructions(self):
         # instructions 也画在画布上，带 tag 以便在 redraw 时清理保留装饰
