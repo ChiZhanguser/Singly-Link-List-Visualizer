@@ -1,8 +1,11 @@
-# DS_visual/huffman/huffman_visual.py
 from tkinter import *
-from tkinter import messagebox, ttk
+from tkinter import messagebox, ttk, filedialog
 from binary_tree.huffman_tree.huffman_model import HuffmanModel, HuffmanNode
 from typing import Dict, Tuple, List, Optional
+import storage as storage
+import json
+from datetime import datetime
+import os
 
 class HuffmanVisualizer:
     def __init__(self, root):
@@ -86,6 +89,10 @@ class HuffmanVisualizer:
 
         Button(ctrl_frame, text="一步生成(直接)", command=self.build_direct, bg="#47C17E", fg="white").pack(side=LEFT, padx=6)
         Button(ctrl_frame, text="逐步动画构建", command=self.start_animated_build, bg="#2E8B57", fg="white").pack(side=LEFT, padx=6)
+
+        # ---------- 新增：保存 / 打开 按钮 ----------
+        Button(ctrl_frame, text="保存 Huffman", command=self.save_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
+        Button(ctrl_frame, text="打开 Huffman", command=self.load_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
 
         # status text on canvas (top-left)
         self.status_id = None
@@ -178,6 +185,240 @@ class HuffmanVisualizer:
             messagebox.showerror("错误", "请输入数字（用逗号分隔）")
             return None
         return nums
+
+    # ---------- 保存/打开 helpers ----------
+    def _ensure_huffman_folder(self) -> str:
+        """确保 save/huffman 文件夹存在，返回绝对路径"""
+        try:
+            if hasattr(storage, "ensure_save_subdir"):
+                return storage.ensure_save_subdir("huffman")
+            base_dir = os.path.dirname(os.path.abspath(storage.__file__))
+            default_dir = os.path.join(base_dir, "save", "huffman")
+            os.makedirs(default_dir, exist_ok=True)
+            return default_dir
+        except Exception:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            default_dir = os.path.join(base_dir, "..", "save", "huffman")
+            default_dir = os.path.normpath(default_dir)
+            os.makedirs(default_dir, exist_ok=True)
+            return default_dir
+
+    def save_tree(self):
+        """
+        保存当前 Huffman 的初始权值与（可选的）链式节点字典到 JSON 文件。
+        优先保存 input 中解析到的权值；若不存在则尝试从 snap_before 或 node_vis 获取初始权值。
+        """
+        try:
+            # 尝试优先使用 parse_input 的值
+            weights = None
+            try:
+                weights = self.parse_input()
+            except Exception:
+                weights = None
+
+            # 如果 parse_input 返回 None（或输入为空），尝试 snap_before 的第一项
+            if weights is None:
+                if self.snap_before and len(self.snap_before) > 0:
+                    weights = list(self.snap_before[0])
+                else:
+                    # 最后尝试从 node_vis 中收集 leaf 权值（按 leaf index）
+                    leaves = []
+                    for k, v in self.node_vis.items():
+                        if isinstance(k, tuple) and k[0] == "leaf":
+                            leaves.append((k[1], float(v.get("weight", 0))))
+                    if leaves:
+                        leaves.sort(key=lambda x: x[0])
+                        weights = [w for idx, w in leaves]
+
+            # 若仍然没有 weights，询问是否仍然保存仅节点描述（如果有）
+            if weights is None:
+                if not messagebox.askyesno("确认", "无法确定初始权值列表，是否仍然保存当前节点图（如果有）？"):
+                    return
+
+            # 如果 storage 提供 tree_to_dict，则把当前 model.root 转成字典保存
+            tree_dict = {}
+            try:
+                if hasattr(storage, "tree_to_dict"):
+                    # 可能 model 为空或未构建，容错
+                    tree_dict = storage.tree_to_dict(getattr(self.model, "root", None))
+            except Exception as e:
+                print("storage.tree_to_dict error:", e)
+                tree_dict = {}
+
+            payload = {
+                "type": "huffman",
+                "weights": weights,
+                "tree": tree_dict,
+                "metadata": {
+                    "saved_at": datetime.now().isoformat(),
+                    "node_count": len(tree_dict.get("nodes", [])) if isinstance(tree_dict, dict) else 0
+                }
+            }
+
+            default_dir = self._ensure_huffman_folder()
+            default_name = f"huffman_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            filepath = filedialog.asksaveasfilename(
+                initialdir=default_dir,
+                initialfile=default_name,
+                defaultextension=".json",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                title="保存 Huffman 到文件"
+            )
+            if not filepath:
+                return
+
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+
+            messagebox.showinfo("成功", f"Huffman 已保存到：\n{filepath}")
+            self.update_status("保存成功")
+        except Exception as e:
+            print("save_tree error:", e)
+            messagebox.showerror("错误", f"保存失败：{e}")
+            self.update_status("保存失败")
+
+    def load_tree(self):
+        """
+        从 JSON 文件加载 Huffman。优先使用 weights 字段通过 HuffmanModel.build_with_steps 恢复（快速无动画）。
+        兼容格式：
+          - {"type":"huffman","weights":[...], ...}
+          - {"type":"huffman","tree": {...}}  （尝试从 tree 提取 leaf 权值）
+          - 直接 list 或 {"data": [...]}
+        """
+        try:
+            default_dir = self._ensure_huffman_folder()
+            filepath = filedialog.askopenfilename(
+                initialdir=default_dir,
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                title="从文件加载 Huffman"
+            )
+            if not filepath:
+                return
+
+            with open(filepath, "r", encoding="utf-8") as f:
+                obj = json.load(f)
+            if not obj:
+                messagebox.showerror("错误", "文件内容为空或无法解析")
+                return
+
+            # 支持直接 list（权值数组）
+            if isinstance(obj, list):
+                weights = [float(x) for x in obj]
+            elif isinstance(obj, dict) and obj.get("type") == "huffman" and "weights" in obj and isinstance(obj["weights"], list):
+                weights = [float(x) for x in obj["weights"]]
+            elif isinstance(obj, dict) and "data" in obj and isinstance(obj["data"], list):
+                # 兼容旧格式：data 字段可能包含权值
+                weights = [float(x) for x in obj["data"]]
+            else:
+                weights = None
+
+            # 如果拿到了 weights，就通过 model.build_with_steps 重建（无动画）
+            if weights is not None:
+                # rebuild model and visuals
+                self.model = HuffmanModel()
+                root, steps, snaps_before, snaps_after = self.model.build_with_steps(weights)
+                self.steps = steps
+                self.snap_before = snaps_before
+                self.snap_after = snaps_after
+
+                # draw
+                self.node_vis.clear()
+                self._draw_subtle_grid()
+                self._draw_instructions()
+                self.draw_initial_leaves(weights)
+
+                # 非动画形式重做父节点绘制（和 build_direct 类似）
+                for i, (a, b, p) in enumerate(steps):
+                    va = self.node_vis.get(a.id)
+                    vb = self.node_vis.get(b.id)
+                    if va and vb:
+                        tx = (va['cx'] + vb['cx'])/2
+                        ty = min(va['cy'], vb['cy']) - self.level_gap
+                    else:
+                        tx = self.canvas_w/2
+                        ty = self.base_y - (i+1)*self.level_gap
+                    self._create_node_visual(p, tx, ty)
+                    self._link_parent_child(p, a)
+                    self._link_parent_child(p, b)
+                    self._mark_merged(a)
+                    self._mark_merged(b)
+                    if i < len(snaps_after):
+                        self._tree_set_after(i, snaps_after[i])
+
+                self.update_status("已通过权值恢复 Huffman")
+                messagebox.showinfo("成功", f"已通过权值恢复 Huffman（共 {len(weights)} 个初始权值）")
+                return
+
+            # 如果没有 weights，但有 tree 字段，尝试用 storage.tree_dict_to_nodes 提取叶权值
+            tree_dict = None
+            if isinstance(obj, dict) and obj.get("type") == "huffman" and "tree" in obj:
+                tree_dict = obj.get("tree")
+            elif isinstance(obj, dict) and "nodes" in obj and "root" in obj:
+                tree_dict = obj
+
+            if tree_dict:
+                # 如果 storage 提供 tree_dict_to_nodes，我们可以把字典转换回节点图（仅用于尝试提取叶权重）
+                try:
+                    if hasattr(storage, "tree_dict_to_nodes"):
+                        reconstructed_root = storage.tree_dict_to_nodes(tree_dict, HuffmanNode)
+                    else:
+                        reconstructed_root = None
+                except Exception as e:
+                    print("tree_dict_to_nodes error:", e)
+                    reconstructed_root = None
+
+                if reconstructed_root:
+                    # 从重建的链式节点图中提取叶节点权值（按左到右顺序）
+                    def collect_leaves(node, out):
+                        if node is None:
+                            return
+                        if getattr(node, "left", None) is None and getattr(node, "right", None) is None:
+                            out.append(float(getattr(node, "weight", 0)))
+                        else:
+                            collect_leaves(getattr(node, "left", None), out)
+                            collect_leaves(getattr(node, "right", None), out)
+                    leaves = []
+                    collect_leaves(reconstructed_root, leaves)
+                    if leaves:
+                        # 用叶权值列表重建 model（尽量恢复为可交互的模型）
+                        self.model = HuffmanModel()
+                        root, steps, snaps_before, snaps_after = self.model.build_with_steps(leaves)
+                        self.steps = steps
+                        self.snap_before = snaps_before
+                        self.snap_after = snaps_after
+
+                        # draw same as above
+                        self.node_vis.clear()
+                        self._draw_subtle_grid()
+                        self._draw_instructions()
+                        self.draw_initial_leaves(leaves)
+                        for i, (a, b, p) in enumerate(steps):
+                            va = self.node_vis.get(a.id)
+                            vb = self.node_vis.get(b.id)
+                            if va and vb:
+                                tx = (va['cx'] + vb['cx'])/2
+                                ty = min(va['cy'], vb['cy']) - self.level_gap
+                            else:
+                                tx = self.canvas_w/2
+                                ty = self.base_y - (i+1)*self.level_gap
+                            self._create_node_visual(p, tx, ty)
+                            self._link_parent_child(p, a)
+                            self._link_parent_child(p, b)
+                            self._mark_merged(a)
+                            self._mark_merged(b)
+                            if i < len(snaps_after):
+                                self._tree_set_after(i, snaps_after[i])
+
+                        self.update_status("已通过树字典恢复 Huffman（根据叶权值重建）")
+                        messagebox.showinfo("成功", "已通过树字典恢复 Huffman（使用叶权值重建）")
+                        return
+                # 若无法重建，继续下方提示
+            messagebox.showerror("错误", "未能识别文件内容为可恢复格式（期待 weights 列表或包含 tree 的字典）")
+            self.update_status("加载失败")
+        except Exception as e:
+            print("load_tree error:", e)
+            messagebox.showerror("错误", f"加载失败：{e}")
+            self.update_status("加载失败")
 
     # ---------- 直接构建（一次性） ----------
     def build_direct(self):
