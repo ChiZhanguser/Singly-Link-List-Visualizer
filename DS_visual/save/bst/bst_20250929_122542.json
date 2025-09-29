@@ -1,0 +1,102 @@
+{
+  "type": "tree",
+  "tree": {
+    "nodes": [
+      {
+        "id": "n1",
+        "val": "1",
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n4",
+        "val": "15",
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n6",
+        "val": "23",
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n8",
+        "val": "4",
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n9",
+        "val": "5",
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n7",
+        "val": "5",
+        "left": "n8",
+        "right": "n9"
+      },
+      {
+        "id": "n5",
+        "val": "4",
+        "left": "n6",
+        "right": "n7"
+      },
+      {
+        "id": "n3",
+        "val": "23",
+        "left": "n4",
+        "right": "n5"
+      },
+      {
+        "id": "n11",
+        "val": "6",
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n13",
+        "val": "7",
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n14",
+        "val": "71",
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n12",
+        "val": "71",
+        "left": "n13",
+        "right": "n14"
+      },
+      {
+        "id": "n10",
+        "val": "7",
+        "left": "n11",
+        "right": "n12"
+      },
+      {
+        "id": "n2",
+        "val": "6",
+        "left": "n3",
+        "right": "n10"
+      },
+      {
+        "id": "n0",
+        "val": "15",
+        "left": "n1",
+        "right": "n2"
+      }
+    ],
+    "root": "n0"
+  },
+  "metadata": {
+    "saved_at": "2025-09-29T12:25:44.831384",
+    "node_count": 15
+  }
+}

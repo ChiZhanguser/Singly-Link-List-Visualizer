@@ -1,9 +1,12 @@
-# DS_visual/binary_tree/bst_visual.py
 from tkinter import *
 from tkinter import messagebox
-from tkinter import Toplevel
+from tkinter import Toplevel, filedialog
 from typing import Dict, Tuple, List, Optional
 from binary_tree.bst.bst_model import BSTModel, TreeNode
+import storage as storage
+import json
+from datetime import datetime
+import os
 
 class BSTVisualizer:
     def __init__(self, root):
@@ -55,6 +58,11 @@ class BSTVisualizer:
         Button(frame, text="清空", command=self.clear_canvas, bg="orange").pack(side=LEFT, padx=6)
         Button(frame, text="返回主界面", command=self.back_to_main, bg="blue", fg="white").pack(side=LEFT, padx=6)
 
+        # ---------- 保存 / 打开 BST ----------
+        # 放在控件栏末尾（与其它操作并列）
+        Button(frame, text="保存树", command=self.save_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
+        Button(frame, text="打开树", command=self.load_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
+
     def draw_instructions(self):
         self.canvas.delete("all")
         self.node_items.clear()
@@ -72,6 +80,179 @@ class BSTVisualizer:
             self.status_text_id = self.canvas.create_text(self.canvas_width-10, 10, anchor="ne", text=text, font=("Arial",12,"bold"), fill="darkgreen")
         else:
             self.canvas.itemconfig(self.status_text_id, text=text)
+
+    # ---------- storage helpers ----------
+    def _ensure_tree_folder(self) -> str:
+        """
+        确保 save/tree 文件夹存在，优先使用 storage.ensure_save_subdir("tree")。
+        返回该目录的绝对路径。
+        """
+        try:
+            if hasattr(storage, "ensure_save_subdir"):
+                return storage.ensure_save_subdir("bst")
+            base_dir = os.path.dirname(os.path.abspath(storage.__file__))
+            default_dir = os.path.join(base_dir, "save", "bst")
+            os.makedirs(default_dir, exist_ok=True)
+            return default_dir
+        except Exception:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            default_dir = os.path.join(base_dir, "..", "save", "bst")
+            default_dir = os.path.normpath(default_dir)
+            os.makedirs(default_dir, exist_ok=True)
+            return default_dir
+
+    def save_tree(self):
+        """
+        将当前 self.model.root 保存为 JSON 文件（链式节点描述）。
+        """
+        try:
+            if not self.model or getattr(self.model, "root", None) is None:
+                if not messagebox.askyesno("确认", "当前树为空，是否仍然保存一个空树文件？"):
+                    return
+
+            default_dir = self._ensure_tree_folder()
+            default_name = f"bst_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            filepath = filedialog.asksaveasfilename(
+                initialdir=default_dir,
+                initialfile=default_name,
+                defaultextension=".json",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                title="保存树到文件"
+            )
+            if not filepath:
+                return
+
+            # 使用 storage.tree_to_dict（若可用）
+            if hasattr(storage, "tree_to_dict"):
+                try:
+                    tree_dict = storage.tree_to_dict(self.model.root)
+                except Exception as e:
+                    print("storage.tree_to_dict error:", e)
+                    tree_dict = {}
+            else:
+                tree_dict = {}
+
+            metadata = {
+                "saved_at": datetime.now().isoformat(),
+                "node_count": len(tree_dict.get("nodes", [])) if isinstance(tree_dict, dict) else 0
+            }
+            payload = {"type": "tree", "tree": tree_dict, "metadata": metadata}
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+
+            messagebox.showinfo("成功", f"二叉搜索树已保存到：\n{filepath}")
+            self.update_status("保存成功")
+        except Exception as e:
+            print("save_tree error:", e)
+            messagebox.showerror("错误", f"保存失败：{e}")
+            self.update_status("保存失败")
+
+    def load_tree(self):
+        """
+        从文件加载树结构并恢复为链式节点图，优先尝试 storage.tree_dict_to_nodes，
+        否则如果文件是 list 或包含 data 字段，尝试用 BSTModel 逐项 insert 恢复（兜底兼容旧格式）。
+        """
+        try:
+            default_dir = self._ensure_tree_folder()
+            filepath = filedialog.askopenfilename(
+                initialdir=default_dir,
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                title="从文件加载二叉树"
+            )
+            if not filepath:
+                return
+
+            with open(filepath, "r", encoding="utf-8") as f:
+                obj = json.load(f)
+            if not obj:
+                messagebox.showerror("错误", "文件内容为空或无法解析")
+                return
+
+            # 优先识别标准 tree payload
+            if isinstance(obj, dict) and obj.get("type") == "tree" and "tree" in obj:
+                tree_dict = obj.get("tree", {})
+            elif isinstance(obj, dict) and "nodes" in obj and "root" in obj:
+                # 兼容旧式直接 tree_dict
+                tree_dict = obj
+            elif isinstance(obj, list):
+                # 直接是一个层序或顺序数组的情况，使用 BSTModel 逐项插入作为兜底
+                values = obj
+                new_model = BSTModel()
+                for v in values:
+                    try:
+                        new_model.insert(v)
+                    except Exception:
+                        # 尝试字符串化后插入
+                        new_model.insert(str(v))
+                self.model = new_model
+                self.redraw()
+                messagebox.showinfo("成功", f"已通过列表格式恢复为 BST（共 {len(values)} 项）")
+                self.update_status("加载成功（通过列表恢复）")
+                return
+            elif isinstance(obj, dict) and "data" in obj and isinstance(obj.get("data"), list):
+                values = obj.get("data", [])
+                new_model = BSTModel()
+                for v in values:
+                    try:
+                        new_model.insert(v)
+                    except Exception:
+                        new_model.insert(str(v))
+                self.model = new_model
+                self.redraw()
+                messagebox.showinfo("成功", f"已通过 data 字段恢复为 BST（共 {len(values)} 项）")
+                self.update_status("加载成功（通过 data 恢复）")
+                return
+            else:
+                messagebox.showerror("错误", "文件格式不被识别（需为 tree 类型或包含 nodes/root，或为 list）")
+                return
+
+            # 若获得 tree_dict，尝试使用 storage.tree_dict_to_nodes 重建节点图
+            if hasattr(storage, "tree_dict_to_nodes"):
+                try:
+                    new_root = storage.tree_dict_to_nodes(tree_dict, TreeNode)
+                    if new_root is None:
+                        raise RuntimeError("tree_dict_to_nodes 返回 None")
+                    # 将新根赋给模型（注意：BSTModel 可能还需其他内部状态，若有需要请在 model 中提供恢复接口）
+                    try:
+                        self.model.root = new_root
+                    except Exception:
+                        # 若不能直接赋值（不太可能），则替换为新 BSTModel 并设置 root 属性
+                        try:
+                            nm = BSTModel()
+                            nm.root = new_root
+                            self.model = nm
+                        except Exception:
+                            # 最后兜底：仍然尝试把 new_root 直接用于绘图（不改变 model）
+                            self.model.root = new_root
+                    self.redraw()
+                    messagebox.showinfo("成功", "二叉树已成功加载并恢复")
+                    self.update_status("加载成功")
+                    return
+                except Exception as e:
+                    print("tree_dict_to_nodes error:", e)
+                    # 回退到其他方式
+            # 如果到这里说明 tree_dict 重建失败或不存在 重试用层序数组字段（若存在）
+            # 最后兜底：尝试从 obj.get("level_order") 或 obj.get("nodes") 中读取可用值
+            if isinstance(obj, dict) and "level_order" in obj and isinstance(obj["level_order"], list):
+                vals = obj["level_order"]
+                new_model = BSTModel()
+                for v in vals:
+                    try:
+                        new_model.insert(v)
+                    except Exception:
+                        new_model.insert(str(v))
+                self.model = new_model
+                self.redraw()
+                messagebox.showinfo("成功", f"已通过 level_order 恢复（{len(vals)} 项）")
+                self.update_status("加载成功（通过 level_order 恢复）")
+                return
+
+            messagebox.showwarning("警告", "已读取文件但无法自动重建为节点图（storage.tree_dict_to_nodes 失败），请检查文件格式或手动恢复。")
+            self.update_status("加载但未能重建节点")
+        except Exception as e:
+            print("load_tree error:", e)
+            messagebox.showerror("错误", f"加载失败：{e}")
+            self.update_status("加载失败")
 
     # ---------- layout: compute inorder positions ----------
     def compute_positions(self) -> Dict[TreeNode, Tuple[float,float]]:
@@ -369,7 +550,7 @@ class BSTVisualizer:
                     self.animating = False
                     self.update_status(f"删除：未找到 {val}")
                     return
-                # now animate deletion process (visual guidance)
+                # now animate deletion process (visualize)
                 self._animate_deletion_process(val)
                 return
             node = path_nodes[i]
@@ -445,7 +626,7 @@ class BSTVisualizer:
                         self.animating = False
                     self.window.after(500, final_del)
                 self.window.after(700, swap_and_delete)
-        self.window.after(500, after_highlight)
+        self.window.after(500, after_highlight) 
 
     # ---------- clear & back ----------
     def clear_canvas(self):
