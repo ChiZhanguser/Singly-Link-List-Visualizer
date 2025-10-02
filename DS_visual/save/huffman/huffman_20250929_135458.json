@@ -1,0 +1,77 @@
+{
+  "type": "huffman",
+  "weights": [
+    1.0,
+    2.0,
+    3.0,
+    4.0
+  ],
+  "tree": {
+    "nodes": [
+      {
+        "id": "n1",
+        "val": null,
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n3",
+        "val": null,
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n5",
+        "val": null,
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n6",
+        "val": null,
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n4",
+        "val": null,
+        "left": "n5",
+        "right": "n6"
+      },
+      {
+        "id": "n2",
+        "val": null,
+        "left": "n3",
+        "right": "n4"
+      },
+      {
+        "id": "n0",
+        "val": null,
+        "left": "n1",
+        "right": "n2"
+      }
+    ],
+    "root": "n0"
+  },
+  "positions": {
+    "leaves": [],
+    "parents": [
+      [
+        350.0,
+        360.0
+      ],
+      [
+        432.5,
+        280.0
+      ],
+      [
+        528.75,
+        200.0
+      ]
+    ]
+  },
+  "metadata": {
+    "saved_at": "2025-09-29T13:54:58.854601",
+    "node_count": 7
+  }
+}

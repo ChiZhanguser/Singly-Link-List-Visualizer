@@ -9,7 +9,7 @@ from llm.doubao_client import DoubaoClient
 
 from llm import function_dispatcher
 from llm.function_schemas import get_function_schemas
-
+import json
 import re
 
 # Styling constants
@@ -20,6 +20,16 @@ INPUT_BG = "#FFFFFF"
 ACCENT = "#10A37F"          # 按钮/高亮色
 TEXT_COLOR = "#111827"
 META_COLOR = "#6B7280"
+
+STRICT_JSON_PROMPT = (
+    "注意：**严格返回一个 JSON 对象，且不能包含任何额外自然语言**。"
+    "返回格式必须为单个 JSON object，例如：\n"
+    '{"name":"stack_push","arguments":{"value":1}}\n'
+    "或：\n"
+    '{"name":"stack_pop","arguments":{}}\n'
+    "不要使用任何标记、函数调用样式（例如 stack_push(1)）或额外说明文字。\n"
+)
+
 
 class ChatWindow:
     def __init__(self, parent):
@@ -32,7 +42,7 @@ class ChatWindow:
 
         # Create window
         self.win = Toplevel(parent)
-        self.win.title("与豆包模型聊天")
+        self.win.title("LLM 聊天窗口 ")
         self.win.geometry("820x640")
         self.win.configure(bg=BG_COLOR)
         self.win.minsize(560, 400)
@@ -40,7 +50,7 @@ class ChatWindow:
         # Top bar (title + actions)
         topbar = Frame(self.win, bg=BG_COLOR, padx=12, pady=8)
         topbar.pack(fill='x')
-        title = tk.Label(topbar, text="豆包 聊天", font=("Helvetica", 14, "bold"), bg=BG_COLOR, fg=TEXT_COLOR)
+        title = tk.Label(topbar, text="LLM 聊天窗口", font=("Helvetica", 14, "bold"), bg=BG_COLOR, fg=TEXT_COLOR)
         title.pack(side='left')
 
         btn_frame = Frame(topbar, bg=BG_COLOR)
@@ -93,7 +103,7 @@ class ChatWindow:
         self._streaming = False
 
         # Add a polite welcome system message
-        self._system_message("欢迎 — 可直接输入问题，与豆包模型聊天（Enter 发送，Shift+Enter 换行）。")
+        self._system_message("欢迎 — 可直接输入问题（Enter 发送，Shift+Enter 换行）。")
 
     # --- Utilities / UI behaviors ---
     def _on_mousewheel(self, event):
@@ -120,27 +130,24 @@ class ChatWindow:
             return
         val = val.strip()
         if val.lower() == "none":
+            import os
             os.environ["DOUBAO_TIMEOUT"] = "None"
             self.client.timeout = None
         else:
             try:
                 iv = int(val)
+                import os
                 os.environ["DOUBAO_TIMEOUT"] = str(iv)
                 self.client.timeout = iv
             except Exception:
                 messagebox.showerror("设置错误", "请输入整数秒或 None。")
 
     def _insert_example(self):
-        example = "给我讲解一下单链表这个数据结构：\n"
+        example = "将1压入栈"
         self.entry.insert("end", example)
 
     # --- Message creation (bubbles) ---
     def _add_message_bubble(self, who: str, text: str, align: str = "right"):
-        """
-        who: "你" or "豆包"
-        align: "left" (user) or "right" (assistant)
-        returns: reference to label widget (useful for streaming to update text)
-        """
         container = Frame(self.messages_frame, bg=BG_COLOR)
         container.pack(fill='x', pady=6, padx=8)
 
@@ -192,195 +199,167 @@ class ChatWindow:
 
         # start worker thread for streaming
         threading.Thread(target=self._worker_handle_function_call, args=(user_text, assistant_var), daemon=True).start()
+
+    def _extract_message_object(self, resp):
+        # handle list
+        if isinstance(resp, list):
+            # prefer the last dict with 'type'
+            for item in reversed(resp):
+                if isinstance(item, dict) and 'type' in item:
+                    return item
+            # try to find openai-like choices in list
+            for item in reversed(resp):
+                if isinstance(item, dict) and 'choices' in item:
+                    resp = item
+                    break
+
+        # handle dicts (many possible layouts)
+        if isinstance(resp, dict):
+            # already a typed message
+            if 'type' in resp:
+                return resp
+
+            # openai style: { "choices":[ { "message": {...} } ] }
+            if 'choices' in resp and isinstance(resp['choices'], list) and len(resp['choices']) > 0:
+                choice = resp['choices'][-1]
+                if isinstance(choice, dict) and 'message' in choice and isinstance(choice['message'], dict):
+                    m = choice['message']
+                    if 'function_call' in m and isinstance(m['function_call'], dict):
+                        fc = m['function_call']
+                        return {'type': 'function_call', 'name': fc.get('name'), 'arguments': fc.get('arguments')}
+                    return {'type': 'assistant_text', 'text': m.get('content') or m.get('text') or ''}
+                if isinstance(choice, dict) and 'function_call' in choice:
+                    fc = choice['function_call']
+                    return {'type': 'function_call', 'name': fc.get('name'), 'arguments': fc.get('arguments')}
+                if isinstance(choice, dict) and ('text' in choice or 'message' in choice):
+                    return {'type': 'assistant_text', 'text': choice.get('text') or choice.get('message')}
+
+            # some clients return {'messages': [...]}
+            if 'messages' in resp and isinstance(resp['messages'], list):
+                for item in reversed(resp['messages']):
+                    if isinstance(item, dict) and 'type' in item:
+                        return item
+
+            # fallback: if there's a 'text' field treat as assistant_text
+            if 'text' in resp:
+                return {'type': 'assistant_text', 'text': resp.get('text')}
+
+        return None
     
     def _worker_handle_function_call(self, user_text: str, assistant_var: tk.StringVar):
-        """
-        1) 先请求模型（带 functions）；
-        2) 如果模型直接返回 function_call -> dispatch 并显示结果；
-        3) 如果模型返回普通文本 -> 先尝试本地解析（regex），能解析则 dispatch；
-        否则再向模型发起一次“只返回 function_call”的请求，若得到 function_call 则 dispatch。
-        """
         try:
             functions = get_function_schemas()
-            resp = self.client.send_message_with_functions(user_text, functions=functions, timeout_read=None)
+            # resp = self.client.send_message_with_functions(user_text, functions=functions, timeout_read=None)
 
-            # CASE A: 模型直接返回 function_call
-            if resp.get("type") == "function_call":
-                name = resp.get("name")
-                args = resp.get("arguments") or {}
+            system_msg = (
+                "系统指令：你**必须**只输出一个单独的 JSON 对象，不能包含任何多余的自然语言。"
+                "格式：{\"name\":\"FUNCTION_NAME\",\"arguments\":{...}}。"
+            )
+            examples = "示例: 用户: 将1压入栈 -> {\"name\":\"stack_push\",\"arguments\":{\"value\":1}}"
+
+            messages = [
+                {"role":"system", "content": system_msg + "\n" + STRICT_JSON_PROMPT},
+                {"role":"user", "content": examples + "\n用户输入:\n" + user_text}
+            ]
+
+            resp = self.client.send_message_with_functions(
+                messages=messages,
+                functions=functions,
+                temperature=0.0,
+                timeout_read=None
+            )
+            
+            # debug print for dev (if you want more visibility)
+            print("debug -> raw resp from client:", repr(resp)[:2000])
+
+            msg = self._extract_message_object(resp)
+            if msg is None:
+                # defensive: if resp is dict with 'text' present
+                if isinstance(resp, dict) and 'text' in resp:
+                    msg = {'type': 'assistant_text', 'text': resp.get('text', '')}
+                else:
+                    print("parse -> cannot extract message object from initial resp:", resp)
+                    self.win.after(0, lambda: assistant_var.set("（模型回复无法解析；未触发可视化）"))
+                    return
+
+            # if model already returned function_call
+            if msg.get('type') == 'function_call':
+                print("model already returned function_call")
+                name = msg.get('name')
+                args = msg.get('arguments') or {}
                 self.win.after(0, lambda: assistant_var.set(f"[函数调用] {name} -> {args}"))
                 result = function_dispatcher.dispatch(name, args)
-                self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n执行结果: {result.get('message','')}"))
+                # safely display result.message if present
+                res_msg = result.get('message') if isinstance(result, dict) else str(result)
+                self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n执行结果: {res_msg}"))
                 return
 
-            # CASE B: 模型返回普通文本（或 fallback）
-            text = resp.get("text", "")
-            if not text:
-                text = "(空回复)"
-            # 先把模型的文本显示出来
-            self.win.after(0, lambda: assistant_var.set(text))
+            # if assistant_text: try to extract embedded function call markers or JSON
+            if msg.get('type') == 'assistant_text':
+                print("assistant_text")
+                text = msg.get('text', '') or ''
+                self.win.after(0, lambda: assistant_var.set(text))
 
-            # 1) 本地解析尝试直接提取动作并 dispatch
-            parsed_result = self.__parse_and_dispatch_from_text(text)
-            if parsed_result:
-                # parsed_result 是 dispatcher 返回的 dict
-                msg = parsed_result.get("message", "")
-                self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n本地解析并执行结果: {msg}"))
+                # try to extract <|FunctionCallBegin|> ... <|FunctionCallEnd|>
+                m = re.search(r"<\|FunctionCallBegin\|>(.*?)<\|FunctionCallEnd\|>", text, re.S)
+                if m:
+                    payload = m.group(1).strip()
+                    parsed_obj = None
+                    # first try JSON
+                    try:
+                        parsed_obj = json.loads(payload)
+                    except Exception:
+                        # try single quotes -> double quotes
+                        try:
+                            parsed_obj = json.loads(payload.replace("'", '"'))
+                        except Exception:
+                            parsed_obj = None
+
+                    if isinstance(parsed_obj, dict) and 'name' in parsed_obj:
+                        name = parsed_obj.get('name')
+                        params = parsed_obj.get('parameters') or parsed_obj.get('arguments') or {}
+                        self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n[函数调用] {name} -> {params}"))
+                        result = function_dispatcher.dispatch(name, params)
+                        res_msg = result.get('message') if isinstance(result, dict) else str(result)
+                        self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n执行结果: {res_msg}"))
+                        return
+                    else:
+                        # could not parse payload
+                        print("parse -> found markers but payload not parseable:", payload)
+
+                # try to find a JSON object like {"name": "...", "arguments": {...}} inside text
+                json_m = re.search(r"(\{.*\"name\".*\})", text, re.S)
+                if json_m:
+                    payload = json_m.group(1)
+                    try:
+                        obj = json.loads(payload)
+                    except Exception:
+                        try:
+                            obj = json.loads(payload.replace("'", '"'))
+                        except Exception:
+                            obj = None
+                    if isinstance(obj, dict) and 'name' in obj:
+                        name = obj.get('name')
+                        params = obj.get('parameters') or obj.get('arguments') or {}
+                        self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n[函数调用] {name} -> {params}"))
+                        result = function_dispatcher.dispatch(name, params)
+                        res_msg = result.get('message') if isinstance(result, dict) else str(result)
+                        self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n执行结果: {res_msg}"))
+                        return
+                # 没有 function_call, 输出自然语言
+                self.win.after(0, lambda: assistant_var.set(assistant_var.get() + "\n\n（未检测到可执行操作；未触发可视化）"))
                 return
 
-            # 2) 如果本地解析失败，向模型再次请求（明确要求只返回 function_call）
-            followup_prompt = (
-                "注意：如果你想触发前端可视化演示（例如向单链表插入/删除、批量创建、或栈的 push/pop），"
-                "请**只**以 function_call 的形式返回（不要返回额外的自然语言说明）。"
-                "可用函数包括：linked_list_insert_last, linked_list_insert_first, linked_list_delete_first, "
-                "linked_list_delete_last, linked_list_create, stack_push, stack_pop。"
-                "如果你判断需要演示，就返回相应的 function_call 并把必要参数放在 arguments 中。"
-            )
-            resp2 = self.client.send_message_with_functions(f"模型原文：{text}\n\n{followup_prompt}", functions=functions, timeout_read=None)
-            if resp2.get("type") == "function_call":
-                name = resp2.get("name")
-                args = resp2.get("arguments") or {}
-                self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n[函数调用] {name} -> {args}"))
-                result = function_dispatcher.dispatch(name, args)
-                self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n执行结果: {result.get('message','')}"))
-                return
+            # unknown type
+            print("parse -> unexpected message type:", msg)
+            self.win.after(0, lambda: assistant_var.set("（未识别模型输出类型；未触发可视化）"))
+            return
 
-            # 最后兜底：没有 function_call 也没有本地解析到
-            self.win.after(0, lambda: assistant_var.set(assistant_var.get() + "\n\n（未检测到可执行操作；未触发可视化）"))
         except Exception as e:
-            self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n注: 没有进行函数调用"))
+            print("worker error:", e)
+            self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n注: 没有进行函数调"))
         finally:
             self.win.after(0, self._finish_stream)
-    def _chinese_num_to_int(self, s: str):
-        """简单中文数字到整数（支持 0-99 的常见写法：零 一 二 三 ... 十 二十三 等）"""
-        s = s.strip()
-        if not s:
-            return None
-        # 先尝试直接转 int
-        try:
-            return int(s)
-        except Exception:
-            pass
-        # 简单映射
-        digits = {"零":0,"一":1,"二":2,"两":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9}
-        if all(ch in digits or ch=="十" for ch in s):
-            if "十" in s:
-                parts = s.split("十")
-                if parts[0] == "":  # 十, 十三
-                    tens = 1
-                else:
-                    tens = digits.get(parts[0], 0)
-                ones = 0
-                if len(parts) > 1 and parts[1] != "":
-                    ones = digits.get(parts[1], 0)
-                return tens*10 + ones
-            else:
-                # 纯个位中文
-                return digits.get(s, None)
-        return None
-
-    def __parse_and_dispatch_from_text(self, text: str):
-        """
-        修复版解析器：优先识别创建（批量）操作，且优先提取方括号内的值。
-        目标：避免把 '创建链表[1,2,3]' 中的 '创建链表' 当作第一个元素误传入 UI。
-        """
-        if not text or not isinstance(text, str):
-            return None
-
-        # candidates: 先用户输入，再模型回复
-        candidates = []
-        last_user = getattr(self, "_last_user_text", "") or ""
-        if last_user:
-            candidates.append(last_user)
-        if text and text not in candidates:
-            candidates.append(text)
-
-        def extract_list_from_string(s: str):
-            """
-            尝试从字符串中提取元素列表，优先：
-            1) 方括号 [ ... ] 内的内容
-            2) 紧跟在创建/批量/生成关键词后的数字/词序列（由逗号或空白分隔）
-            返回 values 列表或 None
-            """
-            if not s:
-                return None
-            # 1) 方括号优先
-            m_br = re.search(r"\[([^\]]+)\]", s)
-            if m_br:
-                raw = m_br.group(1)
-                vals = [p.strip() for p in re.split(r"[,\s，、]+", raw) if p.strip() != ""]
-                if vals:
-                    return vals
-            # 2) 关键词后面的序列（只取包含数字/字母/中文字符的部分）
-            m_after = re.search(r"(?:创建|批量|生成|初始化|建立|构建)[^\d\[\]]*([0-9A-Za-z\u4e00-\u9fff\-\_,，、\s]+)", s)
-            if m_after:
-                raw = m_after.group(1)
-                vals = [p.strip() for p in re.split(r"[,\s，、]+", raw) if p.strip() != ""]
-                # 过滤掉明显是说明性的词（例如包含“创建”“链表”“位置”等）
-                filtered = [v for v in vals if not re.search(r"(创建|构建|链表|单链表|位置|插入|在|第|位|值为|值是)", v)]
-                if filtered:
-                    return filtered
-                # 如果过滤后为空，但原 vals 看起来像数字序列（全部是数字），则返回原 vals
-                if vals and all(re.match(r"^[+-]?\d+$", v) for v in vals):
-                    return vals
-            return None
-
-        # main loop: 优先创建
-        for s in candidates:
-            s = (s or "").strip()
-            if not s:
-                continue
-
-            # ===== 优先：创建 / 批量操作 =====
-            if re.search(r"(创建|批量|初始化|生成|建立|构建)", s):
-                vals = extract_list_from_string(s)
-                if vals:
-                    print("parse -> linked_list_create (extracted):", vals)
-                    return function_dispatcher.dispatch("linked_list_create", {"values": [str(v) for v in vals]})
-                else:
-                    # 发现创建关键词但没取到 values -> 不盲目执行，提示需要明确
-                    print("parse -> detect '创建' but no values found in:", s)
-                    return {"ok": False, "message": "检测到创建意图，但未找到要创建的元素列表。请使用类似 `创建链表 [1,2,3]` 或 `批量创建 1,2,3`。"}
-
-            # ===== 插入 / 删除 / 栈 等（保留原先行为，优先数字匹配） =====
-            # 第 N 位插入
-            m_pos_val = re.search(r"第\s*(\d+)\s*(?:个|位|位置).*?插入.*?(?:值为)?[:：]?\s*([+-]?\d+)", s)
-            if m_pos_val:
-                idx = int(m_pos_val.group(1))
-                val = m_pos_val.group(2)
-                print(f"parse -> linked_list_insert_at index={idx}, val={val}")
-                return function_dispatcher.dispatch("linked_list_insert_at", {"index": idx, "value": str(val)})
-
-            # 明确插入值（数字优先）
-            m_insert_val = re.search(r"(?:在.*插入|插入|insert).*?(?:值为)?[:：]?\s*([+-]?\d+)", s, flags=re.IGNORECASE)
-            if m_insert_val:
-                val = m_insert_val.group(1)
-                if re.search(r"(头部|首位|开头)", s):
-                    return function_dispatcher.dispatch("linked_list_insert_first", {"value": str(val)})
-                if re.search(r"(尾部|末尾|尾端|后面|最后)", s):
-                    return function_dispatcher.dispatch("linked_list_insert_last", {"value": str(val)})
-                if re.search(r"(链表|单链表|list)", s):
-                    return function_dispatcher.dispatch("linked_list_insert_last", {"value": str(val)})
-
-            # 删除首/尾
-            if re.search(r"(删除|移除).{0,6}(首|头|第一个|第 1 个|第1个)", s):
-                return function_dispatcher.dispatch("linked_list_delete_first", {})
-            if re.search(r"(删除|移除).{0,6}(尾|最后|末尾|尾部)", s):
-                return function_dispatcher.dispatch("linked_list_delete_last", {})
-
-            # 栈 push/pop
-            m_push = re.search(r"(?:push|入栈|压栈)[:：]?\s*([+-]?\d+)", s, flags=re.IGNORECASE)
-            if m_push:
-                val = m_push.group(1)
-                return function_dispatcher.dispatch("stack_push", {"value": str(val)})
-            if re.search(r"\b(pop|出栈|弹出)\b", s):
-                return function_dispatcher.dispatch("stack_pop", {})
-
-        # 本地规则都未命中 -> 回退给模型解析（你已有的更复杂模型解析逻辑）
-        print("parse -> local rules not matched; invoking model parser (fallback).")
-        return self._parse_with_model_and_dispatch(last_user, text)
-
-
 
     def _on_entry_return(self, event):
         # Enter sends unless Shift held

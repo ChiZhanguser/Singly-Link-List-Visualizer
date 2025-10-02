@@ -150,7 +150,7 @@ class MainInterface:
         chat_btn.place(relx=0.95, y=28, anchor='ne', width=90, height=36)
         try:
             self._attach_hover_effect(chat_btn, "#1FA2FF")
-            ToolTip(chat_btn, "与豆包模型聊天")
+            ToolTip(chat_btn, "与LLM聊天")
         except Exception:
             pass
   
