@@ -18,6 +18,26 @@ class SequenceListVisualizer:
         self.model = SequenceListModel()
         # 注意：data_store 改为 property（见类下面），这样始终反映 self.model.data 的最新状态
         
+        # sequence_list_visual.py 中 __init__ 的末尾附近，紧跟 self.model 实例化之后
+        try:
+            # 优先直接 import project 根的 sequence_api
+            import sequence_api
+            # 把 visualizer 的 model 绑定给 adapter，使两个模块共享同一实例
+            sequence_api.bind_visualizer(self)
+            print("sequence_api successfully bound to SequenceListVisualizer (model shared).")
+        except Exception as e:
+            # 若 import 失败，尝试把 sequence_api 路径加入 sys.path 或打印警告
+            try:
+                import sys
+                # 可选地把项目根加入 sys.path（按需取消注释并调整路径）
+                # sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                import sequence_api
+                sequence_api.bind_visualizer(self)
+                print("sequence_api successfully bound after sys.path tweak.")
+            except Exception as e2:
+                print("WARNING: could not bind sequence_api to visualizer:", e, e2)
+
+        
         # 存储画布上的元素
         self.data_rectangles = []  # 数据矩形
         self.data_labels = []      # 数据标签

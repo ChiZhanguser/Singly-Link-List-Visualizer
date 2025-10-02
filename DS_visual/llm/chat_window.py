@@ -248,7 +248,7 @@ class ChatWindow:
     
     def _worker_handle_function_call(self, user_text: str, assistant_var: tk.StringVar):
         try:
-            functions = get_function_schemas()
+            functions = get_function_schemas("all")
             # resp = self.client.send_message_with_functions(user_text, functions=functions, timeout_read=None)
 
             system_msg = (
