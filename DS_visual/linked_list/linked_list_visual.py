@@ -107,8 +107,12 @@ class LinkList:
         self.heading_with_label_subheading()
         self.make_btn()
         self.make_start_with_other()
+        
+        self.dsl_var = StringVar()
+        self.dsl_var.set("") 
         # 新增：批量创建 UI
         self.make_batch_create_ui()
+           
         
         try:
             # register_visualizer - key 'linked_list'
@@ -393,6 +397,64 @@ class LinkList:
                             bg="green", fg="white", relief=RAISED, bd=3,
                             command=self.create_list_from_string)
         create_btn.place(x=620, y=607)
+        dsl_label = Label(self.window, text="DSL 命令:", font=("Arial", 12, "bold"), bg="lightgray")
+        dsl_label.place(x=20, y=650)
+        dsl_entry = Entry(self.window, font=("Arial", 12), bg="white", textvar=self.dsl_var, width=40)
+        dsl_entry.place(x=200, y=650)
+        dsl_entry.bind("<Return>", lambda e: self.process_dsl())
+        dsl_btn = Button(self.window, text="执行 DSL", font=("Arial", 10, "bold"), bg="green", fg="white",
+                        command=self.process_dsl)
+        dsl_btn.place(x=620, y=647)
+        
+    def process_dsl(self, event=None):
+        """
+        DSL 桥接：把输入的命令发给 DSL_utils 的 process_command
+        """
+        txt = self.dsl_var.get().strip()
+        if not txt:
+            return
+        try:
+            # 以防用户还没创建 DSL_utils 包，做兼容性导入
+            try:
+                from DSL_utils import process_command
+            except Exception:
+                # 如果模块不存在，尝试从 llm.function_dispatcher（你的工程可能有）调度
+                process_command = None
+
+            if process_command is not None:
+                process_command(self, txt)
+            else:
+                # 回退：最小手工实现（支持 create 和 clear 简单功能）
+                if txt.startswith("create "):
+                    args = txt[len("create "):].strip()
+                    parts = [p.strip() for p in args.replace(",", " ").split() if p.strip()]
+                    if parts:
+                        self.clear_visualization()
+                        for v in parts:
+                            self.programmatic_insert_last(v)
+                elif txt == "clear":
+                    self.clear_visualization()
+                elif txt.startswith("insert "):
+                    v = txt[len("insert "):].strip()
+                    if v:
+                        self.programmatic_insert_last(v)
+                elif txt.startswith("delete "):
+                    key = txt[len("delete "):].strip()
+                    if key.isdigit():
+                        pos = int(key)
+                        # 用 DSL_utils 更稳，回退时提示用户
+                        messagebox.showinfo("提示", "已收到 delete 请求，请安装 DSL_utils 获取更完整行为")
+                    else:
+                        messagebox.showinfo("提示", "未识别 delete 的参数（仅支持数字/first/last）")
+                else:
+                    messagebox.showinfo("未识别命令", "支持 insert/delete/clear/create 等 (推荐安装 DSL_utils)")
+        finally:
+            # 清空输入框以改善 UX
+            try:
+                self.dsl_var.set("")
+            except Exception:
+                pass
+
 
     #Making of structure to take input about position
     def set_of_input_method(self):
