@@ -4,6 +4,78 @@ Function schemas for LLM function-calling.
 Provides STACK_FUNCTIONS, SEQUENCE_FUNCTIONS and a convenience getter get_function_schemas()
 so other modules (e.g. chat_window) can import get_function_schemas().
 """
+LINKED_LIST_FUNCTIONS = [
+    {
+        "name": "linked_list_insert_first",
+        "description": "在单链表头部插入元素。参数 value 可以是字符串或数字。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "value": {"type": ["string", "number"], "description": "插入的值"}
+            },
+            "required": ["value"]
+        }
+    },
+    {
+        "name": "linked_list_insert_last",
+        "description": "在单链表尾部插入元素。参数 value 可以是字符串或数字。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "value": {"type": ["string", "number"], "description": "插入的值"}
+            },
+            "required": ["value"]
+        }
+    },
+    {
+        "name": "linked_list_insert_at",
+        "description": "在单链表指定位置插入元素。index 使用 0-based，参数 index 和 value。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "index": {"type": "number", "description": "插入位置 (0-based)"},
+                "value": {"type": ["string", "number"], "description": "插入的值"}
+            },
+            "required": ["index", "value"]
+        }
+    },
+    {
+        "name": "linked_list_delete_at",
+        "description": "删除单链表指定位置的元素。参数 index (0-based)。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "index": {"type": "number", "description": "删除位置 (0-based)"}
+            },
+            "required": ["index"]
+        }
+    },
+    {
+        "name": "linked_list_clear",
+        "description": "清空单链表（删除所有节点）。无参数。",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "linked_list_batch_create",
+        "description": "批量创建单链表（按顺序插入）。参数 values 为数组或逗号分隔字符串。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "values": {
+                    "type": ["array", "string"],
+                    "items": {"type": ["string", "number"]},
+                    "description": "按顺序插入的元素列表，或逗号分隔字符串"
+                }
+            },
+            "required": ["values"]
+        }
+    },
+    {
+        "name": "linked_list_get_state",
+        "description": "获取当前单链表的内容（用于模型确认或展示）。",
+        "parameters": {"type": "object", "properties": {}}
+    }
+]
 
 STACK_FUNCTIONS = [
     {
@@ -134,8 +206,10 @@ def get_function_schemas(kind: str = "stack"):
         return STACK_FUNCTIONS
     if kind == "sequence":
         return SEQUENCE_FUNCTIONS
+    if kind == "linked_list":
+        return LINKED_LIST_FUNCTIONS
     if kind == "all":
         # 合并并返回
-        return STACK_FUNCTIONS + SEQUENCE_FUNCTIONS
+        return STACK_FUNCTIONS + SEQUENCE_FUNCTIONS + LINKED_LIST_FUNCTIONS
     # 默认回退为 stack（向后兼容）
     return STACK_FUNCTIONS

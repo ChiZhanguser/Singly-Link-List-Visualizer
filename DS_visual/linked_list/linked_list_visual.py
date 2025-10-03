@@ -3,6 +3,7 @@ from tkinter import messagebox
 import time
 from linked_list.linked_list_model import LinkedListModel
 import storage as storage
+from llm import function_dispatcher
 
 class LinkList: 
     def __init__(self,root):
@@ -108,6 +109,21 @@ class LinkList:
         self.make_start_with_other()
         # 新增：批量创建 UI
         self.make_batch_create_ui()
+        
+        try:
+            # register_visualizer - key 'linked_list'
+            function_dispatcher.register_visualizer("linked_list", self)
+            print("linked list visualizer registered.")
+        except Exception as e:
+            print("linked list registered failed:", e)
+
+        # 如果你也实现了 linked_list_api.bind_visualizer，绑定它（可选）
+        try:
+            import linked_list_api
+            linked_list_api.bind_visualizer(self)
+            print("linked_list_api successfully bound to visualizer (model shared).")
+        except Exception as e:
+            print("linked_list_api bind failed:", e)
         
         
 

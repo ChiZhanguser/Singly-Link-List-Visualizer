@@ -21,7 +21,7 @@ class SequenceListVisualizer:
         # sequence_list_visual.py 中 __init__ 的末尾附近，紧跟 self.model 实例化之后
         try:
             # 优先直接 import project 根的 sequence_api
-            import sequence_api
+            import sequence_api as sequence_api
             # 把 visualizer 的 model 绑定给 adapter，使两个模块共享同一实例
             sequence_api.bind_visualizer(self)
             print("sequence_api successfully bound to SequenceListVisualizer (model shared).")
@@ -31,7 +31,7 @@ class SequenceListVisualizer:
                 import sys
                 # 可选地把项目根加入 sys.path（按需取消注释并调整路径）
                 # sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-                import sequence_api
+                import sequence_api as sequence_api
                 sequence_api.bind_visualizer(self)
                 print("sequence_api successfully bound after sys.path tweak.")
             except Exception as e2:

@@ -12,6 +12,7 @@ import math
 from llm.chat_window import ChatWindow
 from llm.function_dispatcher import register_visualizer
 
+
 def hex_to_rgb(h):
     h = h.lstrip('#')
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))

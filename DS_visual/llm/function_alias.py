@@ -1,0 +1,76 @@
+"""
+集中维护函数名别名映射表，便于扩展和管理。
+被 llm.function_dispatcher._normalize_name 调用。
+尽量把常见的模型输出变体都列上，优先把 linked-list 的变体映射到 linked_list_*。
+"""
+
+_ALIAS_MAP = {
+    # ---- stack aliases ----
+    "push_to_stack": "stack_push",
+    "push_stack": "stack_push",
+    "push": "stack_push",
+    "push_to_stack_v1": "stack_push",
+    "pushstack": "stack_push",
+    "pushstack_v1": "stack_push",
+    "democlearstack": "stack_clear",
+    "clearstack": "stack_clear",
+    "clear": "stack_clear",
+
+    # ---- sequence/list aliases (顺序表/数组) ----
+    "list_insert": "sequence_insert_last",
+    "list_append": "sequence_insert_last",
+    "list_push": "sequence_insert_last",
+    "list_add": "sequence_insert_last",
+    "insert_into_list": "sequence_insert_last",
+    "seq_list_insert": "sequence_insert_last",
+    "sequence_insert": "sequence_insert_last",
+    "list_insert_at": "sequence_insert_at",
+    "list_insert_pos": "sequence_insert_at",
+    "list_insert_position": "sequence_insert_at",
+    "list_delete": "sequence_delete_at",
+    "list_remove": "sequence_delete_at",
+    "seq_list_delete": "sequence_delete_at",
+    "list_clear": "sequence_clear",
+    "sequenceclear": "sequence_clear",
+    "build_list": "sequence_batch_create",
+    "sequence_batch_create": "sequence_batch_create",
+    "get_list_state": "sequence_get_state",
+    "create_sequence_list": "sequence_batch_create",
+    "create_list": "sequence_batch_create",
+    "create_seq_list": "sequence_batch_create",
+    "build_sequence": "sequence_batch_create",
+    "create_sequence": "sequence_batch_create",
+    "elements_to_list": "sequence_batch_create",
+    "clear_sequence_list": "sequence_clear",
+    "clear_list_sequence": "sequence_clear",
+
+    # ---- linked list aliases (优先映射到 linked_list_*) ----
+    # common variants
+    "linked_list_insert_tail": "linked_list_insert_last",
+    "linked_list_insert_last": "linked_list_insert_last",
+    "linked_list_insert": "linked_list_insert_last",
+    "linkedlist_insert": "linked_list_insert_last",
+    "linked-list-insert": "linked_list_insert_last",
+    "linked_list_push": "linked_list_insert_last",
+    "ll_insert": "linked_list_insert_last",
+    "linked_list_append": "linked_list_insert_last",
+    "linked_list_add": "linked_list_insert_last",
+    "linked_list_insert_head": "linked_list_insert_first",
+    "linked_list_insert_first": "linked_list_insert_first",
+    "linked_list_insert_at": "linked_list_insert_at",
+    "linked_list_insert_pos": "linked_list_insert_at",
+    "linked_list_insert_position": "linked_list_insert_at",
+    "linked_list_delete_at": "linked_list_delete_at",
+    "linked_list_remove": "linked_list_delete_at",
+    "linked_list_pop": "linked_list_delete_at",
+    "linkedlist_delete": "linked_list_delete_at",
+    "linked_list_clear": "linked_list_clear",
+    "clear_linked_list": "linked_list_clear",
+    "linked_list_batch_create": "linked_list_batch_create",
+    "create_linked_list": "linked_list_batch_create",
+    "build_linked_list": "linked_list_batch_create",
+    "linked_list_get_state": "linked_list_get_state",
+    "get_linked_list_state": "linked_list_get_state",
+    "linkedlist_clear": "linked_list_clear",
+    "linked_list": "linked_list_get_state",
+}
