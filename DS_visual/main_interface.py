@@ -1,4 +1,3 @@
-# improved_main_interface_fixed.py
 from tkinter import *
 from tkinter import ttk
 from linked_list.linked_list_visual import LinkList
@@ -11,7 +10,6 @@ from avl.avl_visual import AVLVisualizer
 import math
 from llm.chat_window import ChatWindow
 from llm.function_dispatcher import register_visualizer
-
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -76,22 +74,20 @@ class MainInterface:
         header_h = 160
         self.header = Canvas(self.window, height=header_h, bd=0, highlightthickness=0)
         self.header.pack(fill=X)
-        # 绑定重绘，保证窗口大小变化时渐变正常
         self.header.bind("<Configure>", lambda e: self._draw_header_gradient(self.header, header_h, "#3a8dde", "#70b7ff"))
 
-        # 顶部文字
+        # Header Text
         self.header.create_text(40, 42, anchor='w', text="数据结构可视化工具",
-                                font=("Helvetica", 28, "bold"), fill="#062A4A", tags="title")
-        self.header.create_text(40, 80, anchor='w',
+                                font=("Helvetica", 32, "bold"), fill="#062A4A", tags="title")
+        self.header.create_text(40, 100, anchor='w',
                                 text="交互、演示与教学 — 支持链表/顺序表/栈/多种树结构",
-                                font=("Helvetica", 12), fill="#EAF6FF", tags="subtitle")
+                                font=("Helvetica", 14), fill="#EAF6FF", tags="subtitle")
 
-        # 先放 shadow（阴影）——非常关键：阴影应该在 card 下面
-        shadow = Frame(self.window, bg="#d7e9ff")
+        # Shadow and Card
+        shadow = Frame(self.window, bg="#d7e9ff", bd=8)
         shadow.place(relx=0.5, y=header_h - 18, anchor='n', relwidth=0.86, height=424)
 
-        # 再放主卡片（card），以保证卡片位于阴影之上
-        card = Frame(self.window, bg="white")
+        card = Frame(self.window, bg="white", relief="flat", bd=0, highlightthickness=0)
         card.place(relx=0.5, y=header_h - 20, anchor='n', relwidth=0.86, height=420)
         card.grid_propagate(False)
         card.grid_rowconfigure(0, weight=0)
@@ -100,10 +96,10 @@ class MainInterface:
 
         top_frame = Frame(card, bg="white")
         top_frame.grid(row=0, column=0, sticky="ew", padx=24, pady=(20, 10))
-        subtitle = Label(top_frame, text="选择可视化模块", font=("Helvetica", 16, "bold"), bg="white", fg="#0b3a66")
+        subtitle = Label(top_frame, text="选择可视化模块", font=("Helvetica", 20, "bold"), bg="white", fg="#0b3a66")
         subtitle.grid(row=0, column=0, sticky="w")
         desc = Label(top_frame, text="点击下面的按钮进入对应数据结构的交互演示。支持键盘/鼠标交互。",
-                     font=("Helvetica", 10), bg="white", fg="#4d6b88")
+                     font=("Helvetica", 12), bg="white", fg="#4d6b88")
         desc.grid(row=1, column=0, sticky="w", pady=(6, 0))
 
         btn_frame = Frame(card, bg="white")
@@ -124,39 +120,37 @@ class MainInterface:
         for idx, (label, color, emoji, cmd, tip) in enumerate(btns):
             col = idx % 2
             row = idx // 2
-            btn = Button(btn_frame, text=f"{emoji}  {label}", font=("Helvetica", 13, "bold"),
+            btn = Button(btn_frame, text=f"{emoji}  {label}", font=("Helvetica", 16, "bold"),
                          bd=0, relief='flat', activebackground=lighten_hex(color, 0.10),
-                         bg=color, fg="white", cursor="hand2",
-                         command=cmd)
+                         bg=color, fg="white", cursor="hand2", width=20, height=2, command=cmd)
             btn.grid(row=row, column=col, sticky="nsew", padx=12, pady=12, ipadx=6, ipady=12)
             btn_frame.grid_rowconfigure(row, weight=1, minsize=80)
             self._attach_hover_effect(btn, color)
             ToolTip(btn, tip)
 
-        bottom_bar = Frame(self.window, bg="#F4F8FF", height=36)
+        bottom_bar = Frame(self.window, bg="#F4F8FF", height=40)
         bottom_bar.pack(fill=X, side=BOTTOM)
         copyright_label = Label(bottom_bar, text="© 张驰 的 数据结构可视化工具", bg="#F4F8FF", fg="#7a8897",
                                 font=("Arial", 10))
         copyright_label.pack(side=LEFT, padx=12)
-        status_label = Label(bottom_bar, text="版本 1.0  •  UI 改进版", bg="#F4F8FF", fg="#7a8897", font=("Arial", 10))
+        status_label = Label(bottom_bar, text="23070215", bg="#F4F8FF", fg="#7a8897", font=("Arial", 10))
         status_label.pack(side=RIGHT, padx=12)
 
         self.window.bind("<Key-1>", lambda e: self.open_linked_list())
         self.window.bind("<Key-2>", lambda e: self.open_sequence_list())
         self.window.bind("<Key-3>", lambda e: self.open_stack())
-        
-        chat_btn = Button(self.header, text="🤖 聊天", font=("Helvetica", 10, "bold"),
-                  bg="#1FA2FF", fg="white", bd=0, relief='flat', cursor="hand2",
-                  command=lambda: ChatWindow(self.window))
-        chat_btn.place(relx=0.95, y=28, anchor='ne', width=90, height=36)
+
+        chat_btn = Button(self.header, text="🤖 聊天", font=("Helvetica", 14, "bold"),
+                          bg="#1FA2FF", fg="white", bd=0, relief='flat', cursor="hand2",
+                          command=lambda: ChatWindow(self.window))
+        chat_btn.place(relx=0.95, y=28, anchor='ne', width=100, height=40)
         try:
             self._attach_hover_effect(chat_btn, "#1FA2FF")
             ToolTip(chat_btn, "与LLM聊天")
         except Exception:
             pass
-  
+
     def _draw_header_gradient(self, canvas, h, c1, c2):
-        # 清除旧图形
         canvas.delete("grad")
         width = canvas.winfo_width() or self.window.winfo_width() or 980
         steps = 60
@@ -166,7 +160,6 @@ class MainInterface:
             y0 = int(i * (h / steps))
             y1 = int((i+1) * (h / steps))
             canvas.create_rectangle(0, y0, width, y1, outline=color, fill=color, tags="grad")
-        # 波浪装饰
         points = []
         wave_h = 14
         for x in range(0, width+100, 20):
@@ -174,7 +167,6 @@ class MainInterface:
             points.append(x)
             points.append(y)
         canvas.create_polygon(*points, fill=blend_hex(c2, "#ffffff", 0.12), outline='', tags="grad")
-        # 重新绘制标题文字在最上层
         canvas.tag_raise("title")
         canvas.tag_raise("subtitle")
 
@@ -193,10 +185,9 @@ class MainInterface:
         widget.bind("<Enter>", on_enter)
         widget.bind("<Leave>", on_leave)
 
-    # 以下函数保持不变，直接打开对应可视化窗口
+    # Visualization Window functions remain unchanged
     def open_linked_list(self):
-        # self.window.destroy()
-        linked_list_window = Toplevel(self.window)  
+        linked_list_window = Toplevel(self.window)
         linked_list_window.title("单链表可视化")
         linked_list_window.geometry("1350x730")
         linked_list_window.maxsize(1350, 730)
@@ -204,9 +195,8 @@ class MainInterface:
         ll = LinkList(linked_list_window)
         register_visualizer("linked_list", ll)
         linked_list_window.mainloop()
-    
+
     def open_sequence_list(self):
-        # self.window.destroy()
         sequence_list_window = Toplevel(self.window)
         sequence_list_window.title("顺序表可视化")
         sequence_list_window.geometry("1350x730")
@@ -216,7 +206,6 @@ class MainInterface:
         sequence_list_window.mainloop()
 
     def open_stack(self):
-        # self.window.destroy()
         stack_window = Toplevel(self.window)
         stack_window.title("栈可视化")
         stack_window.geometry("1350x730")
@@ -226,7 +215,6 @@ class MainInterface:
         stack_window.mainloop()
 
     def open_binary_tree(self):
-        # self.window.destroy()
         binary_tree_window = Toplevel(self.window)
         binary_tree_window.title("二叉树可视化")
         binary_tree_window.geometry("1350x730")
@@ -236,7 +224,6 @@ class MainInterface:
         binary_tree_window.mainloop()
 
     def open_bst(self):
-        # self.window.destroy()
         bst_window = Toplevel(self.window)
         bst_window.title("二叉搜索树可视化")
         bst_window.geometry("1350x730")
@@ -246,7 +233,6 @@ class MainInterface:
         bst_window.mainloop()
 
     def open_huffman(self):
-        # self.window.destroy()
         huffman_window = Toplevel(self.window)
         huffman_window.title("Huffman 可视化")
         huffman_window.geometry("1350x730")
@@ -254,7 +240,6 @@ class MainInterface:
         huffman_window.mainloop()
 
     def open_avl(self):
-        # self.window.destroy()
         avl_window = Toplevel(self.window)
         avl_window.title("AVL 可视化")
         avl_window.geometry("1350x730")
