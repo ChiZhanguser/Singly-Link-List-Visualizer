@@ -1,5 +1,6 @@
 from . import linkedlist_dsl
 from . import stack_dsl
+from . import sequence_dsl
 
 def process_command(visualizer, text):
     if not visualizer or not text or not text.strip():
@@ -12,6 +13,11 @@ def process_command(visualizer, text):
     try:
         if "stack" in type(visualizer).__name__.lower():
             return stack_dsl.process(visualizer, text)
+    except Exception:
+        pass
+    try:
+        if "sequence" in type(visualizer).__name__.lower():
+            return sequence_dsl.process(visualizer, text)
     except Exception:
         pass
 

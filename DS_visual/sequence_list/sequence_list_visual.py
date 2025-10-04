@@ -36,7 +36,8 @@ class SequenceListVisualizer:
                 print("sequence_api successfully bound after sys.path tweak.")
             except Exception as e2:
                 print("WARNING: could not bind sequence_api to visualizer:", e, e2)
-
+        self.dsl_var=StringVar()
+        
         
         # 存储画布上的元素
         self.data_rectangles = []  # 数据矩形
@@ -141,6 +142,14 @@ class SequenceListVisualizer:
                           bg="#6C9EFF", fg="white", command=self.load_sequence)
         load_btn.grid(row=0, column=6, padx=10, pady=5)
         self.buttons.append(load_btn)
+        dsl_label = Label(button_frame, text="DSL 命令:", font=("Arial", 12), bg="lightgreen")
+        dsl_label.grid(row=2, column=0, padx=(10,2), pady=8, sticky="w")
+        dsl_entry = Entry(button_frame, textvariable=self.dsl_var, font=("Arial", 12), width=40)
+        dsl_entry.grid(row=2, column=1, columnspan=3, padx=4, pady=8, sticky="w")
+        dsl_entry.bind("<Return>", lambda e: self.process_dsl())
+        dsl_btn = Button(button_frame, text="执行 DSL", font=("Arial", 12), bg="#4CAF50", fg="white", command=self.process_dsl)
+        dsl_btn.grid(row=2, column=4, padx=10, pady=8)
+
     
     # ---------- storage helpers ----------
     def _ensure_sequence_folder(self):
@@ -589,6 +598,91 @@ class SequenceListVisualizer:
         
         # 启用所有按钮
         self.enable_buttons()
+    def process_dsl(self, event=None):
+        txt = (self.dsl_var.get() or "").strip()
+        if not txt:
+            return
+        try:
+            from DSL_utils import process_command
+        except Exception:
+            process_command = None
+        try:
+            if process_command:
+                process_command(self, txt)
+            else:
+                # 最小回退：支持 create/clear/insert/delete 简单行为
+                cmd = txt.split()
+                if not cmd:
+                    return
+                c = cmd[0].lower()
+                args = cmd[1:]
+                if c == "create":
+                    # 快速创建（无动画）
+                    items = []
+                    for a in args:
+                        for p in a.split(","):
+                            s = p.strip()
+                            if s:
+                                items.append(s)
+                    if hasattr(self.model, "clear"):
+                        self.model.clear()
+                    if hasattr(self.model, "append"):
+                        for v in items:
+                            self.model.append(v)
+                    self.update_display()
+                elif c == "clear":
+                    if hasattr(self, "clear_list"):
+                        self.clear_list()
+                    else:
+                        if hasattr(self.model, "clear"):
+                            self.model.clear()
+                        self.update_display()
+                elif c == "insert":
+                    if not args:
+                        return
+                    v = " ".join(args)
+                    if hasattr(self.model, "append"):
+                        self.model.append(v)
+                    self.update_display()
+                elif c == "delete":
+                    if not args:
+                        return
+                    key = args[0].lower()
+                    if key in ("first", "1"):
+                        if hasattr(self.model, "pop"):
+                            try:
+                                self.model.pop(0)
+                            except Exception:
+                                pass
+                        elif hasattr(self, "delete_first"):
+                            self.delete_first()
+                        self.update_display()
+                    elif key in ("last",):
+                        if hasattr(self.model, "pop"):
+                            try:
+                                self.model.pop()
+                            except Exception:
+                                pass
+                        elif hasattr(self, "delete_last"):
+                            self.delete_last()
+                        self.update_display()
+                    else:
+                        try:
+                            pos = int(key)
+                            if hasattr(self.model, "pop"):
+                                try:
+                                    self.model.pop(pos-1)
+                                except Exception:
+                                    pass
+                            self.update_display()
+                        except Exception:
+                            pass
+        finally:
+            try:
+                self.dsl_var.set("")
+            except Exception:
+                pass
+
     
     def update_display(self):
         # 清除画布上的所有元素
