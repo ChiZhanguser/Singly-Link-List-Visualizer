@@ -1,6 +1,7 @@
 from . import linkedlist_dsl
 from . import stack_dsl
 from . import sequence_dsl
+from . import bst_dsl
 
 def process_command(visualizer, text):
     if not visualizer or not text or not text.strip():
@@ -20,7 +21,11 @@ def process_command(visualizer, text):
             return sequence_dsl.process(visualizer, text)
     except Exception:
         pass
-
+    try:
+        if "bst" in type(visualizer).__name__.lower():
+            return bst_dsl.process(visualizer, text)
+    except Exception:
+        pass
 
     from tkinter import messagebox
     messagebox.showinfo("未识别可视化类型", "当前 DSL 只支持单链表（linked list）的命令。")

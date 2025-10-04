@@ -7,6 +7,7 @@ import storage as storage
 import json
 from datetime import datetime
 import os
+from DSL_utils import process_command
 
 class BSTVisualizer:
     def __init__(self, root):
@@ -19,6 +20,8 @@ class BSTVisualizer:
 
         # 模型
         self.model = BSTModel()
+        
+        self.dsl_var = StringVar()
 
         # drawing bookkeeping
         self.node_to_rect: Dict[TreeNode, int] = {}
@@ -43,26 +46,170 @@ class BSTVisualizer:
         self.draw_instructions()
         
     def create_controls(self):
-        frame = Frame(self.window, bg="#F7F9FB")
-        frame.pack(pady=8, fill=X)
+        # 父框（占据一整行）
+        top_frame = Frame(self.window, bg="#F7F9FB")
+        top_frame.pack(pady=6, fill=X)
 
-        Label(frame, text="值输入（单值或逗号批量）:", font=("Arial",12), bg="#F7F9FB").pack(side=LEFT, padx=6)
-        entry = Entry(frame, textvariable=self.input_var, width=46, font=("Arial",12))
-        entry.pack(side=LEFT, padx=6)
+        # 上排：主输入 + 操作按钮（占满宽度，超多按钮会自动换行到下一行）
+        op_frame = Frame(top_frame, bg="#F7F9FB")
+        op_frame.pack(fill=X, padx=6)
+
+        Label(op_frame, text="值输入（单值或逗号/空格批量）:", font=("Arial",12), bg="#F7F9FB").pack(side=LEFT, padx=(0,6))
+        entry = Entry(op_frame, textvariable=self.input_var, width=36, font=("Arial",12))
+        entry.pack(side=LEFT, padx=(0,8))
         entry.insert(0, "15,6,23,4,7,71,5")
 
-        Button(frame, text="Insert (直接)", command=self.insert_direct, bg="green", fg="white").pack(side=LEFT, padx=6)
-        Button(frame, text="Insert (动画)", command=self.start_insert_animated, bg="#2E8B57", fg="white").pack(side=LEFT, padx=6)
-        Button(frame, text="Search (动画)", command=self.start_search_animated, bg="#FFA500").pack(side=LEFT, padx=6)
-        Button(frame, text="Delete (动画)", command=self.start_delete_animated, bg="red", fg="white").pack(side=LEFT, padx=6)
-        Button(frame, text="清空", command=self.clear_canvas, bg="orange").pack(side=LEFT, padx=6)
-        Button(frame, text="返回主界面", command=self.back_to_main, bg="blue", fg="white").pack(side=LEFT, padx=6)
+        Button(op_frame, text="Insert (直接)", command=self.insert_direct, bg="green", fg="white").pack(side=LEFT, padx=4)
+        Button(op_frame, text="Insert (动画)", command=self.start_insert_animated, bg="#2E8B57", fg="white").pack(side=LEFT, padx=4)
+        Button(op_frame, text="Search (动画)", command=self.start_search_animated, bg="#FFA500").pack(side=LEFT, padx=4)
+        Button(op_frame, text="Delete (动画)", command=self.start_delete_animated, bg="red", fg="white").pack(side=LEFT, padx=4)
+        Button(op_frame, text="清空", command=self.clear_canvas, bg="orange").pack(side=LEFT, padx=4)
+        Button(op_frame, text="返回主界面", command=self.back_to_main, bg="blue", fg="white").pack(side=LEFT, padx=4)
 
-        # ---------- 保存 / 打开 BST ----------
-        # 放在控件栏末尾（与其它操作并列）
-        Button(frame, text="保存树", command=self.save_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
-        Button(frame, text="打开树", command=self.load_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
+        # 下排：保存/打开 + DSL（保证可见）
+        bottom_frame = Frame(self.window, bg="#F7F9FB")
+        bottom_frame.pack(pady=(4,8), fill=X, padx=6)
 
+        # 左侧：保存/打开
+        left_ops = Frame(bottom_frame, bg="#F7F9FB")
+        left_ops.pack(side=LEFT, anchor="w")
+        Button(left_ops, text="保存树", command=self.save_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
+        Button(left_ops, text="打开树", command=self.load_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
+
+        # 右侧：DSL 输入（放在右边更显眼），但也能放在中间
+        dsl_ops = Frame(bottom_frame, bg="#F7F9FB")
+        dsl_ops.pack(side=RIGHT, anchor="e")
+        Label(dsl_ops, text="DSL 命令:", font=("Arial",11), bg="#F7F9FB").pack(side=LEFT, padx=(0,6))
+        # 绑定到 self.dsl_var，保存为实例属性便于调试/访问
+        self.dsl_entry = Entry(dsl_ops, width=36, font=("Arial",11), textvariable=self.dsl_var)
+        self.dsl_entry.pack(side=LEFT, padx=(0,6))
+        # 回车执行
+        self.dsl_entry.bind("<Return>", lambda e: self.process_dsl())
+        # 按钮执行
+        Button(dsl_ops, text="执行DSL", command=self.process_dsl).pack(side=LEFT)
+
+        # 给 DSL entry 初始焦点提示（可选）
+        # self.dsl_entry.insert(0, "例如: insert 10 20 30 / search 7 / delete 9 / create 5 6 7")
+
+    def process_dsl(self, event=None):
+        text = (self.dsl_var.get() or "").strip()
+        if not text:
+            return
+        if getattr(self, "animating", False):
+            messagebox.showinfo("提示", "当前正在动画，请稍后执行 DSL 命令")
+            return
+        try:
+            # process_command 在文件顶部已导入（from DSL_utils import process_command）
+            # 但我们仍做存在性判断以避免 import 问题
+            try:
+                from DSL_utils import process_command as _pc
+            except Exception:
+                _pc = None
+            if _pc:
+                _pc(self, text)
+            else:
+                # 回退实现（尽量提供最基本的行为）
+                cmd = text.split()
+                if not cmd:
+                    return
+                c = cmd[0].lower()
+                args = cmd[1:]
+                if c == "insert" or c == "create":
+                    # 空格优先： insert 5 6 7 或 create 1 2 3
+                    items = [a for a in args if a != ""]
+                    # 兼容逗号写法
+                    if len(items) == 1 and "," in items[0]:
+                        items = [x.strip() for x in items[0].split(",") if x.strip()!=""]
+                    # 清空并创建（create）或插入（insert）
+                    if c == "create":
+                        # 清空 model 并插入
+                        try:
+                            if hasattr(self.model, "clear"):
+                                self.model.clear()
+                            else:
+                                self.model.root = None
+                        except Exception:
+                            pass
+                        for v in items:
+                            try:
+                                self.model.insert(v)
+                            except Exception:
+                                pass
+                        if hasattr(self, "redraw"):
+                            self.redraw()
+                    else:  # insert
+                        for v in items:
+                            try:
+                                self.model.insert(v)
+                            except Exception:
+                                pass
+                        if hasattr(self, "redraw"):
+                            self.redraw()
+                elif c == "search":
+                    if not args:
+                        messagebox.showerror("错误", "search 需要一个参数，例如：search 7")
+                    else:
+                        v = args[0]
+                        # 尝试直接调用动画入口，否则简单 redraw + status
+                        if hasattr(self, "input_var") and hasattr(self, "start_search_animated"):
+                            self.input_var.set(v); self.start_search_animated()
+                        else:
+                            # 简易查找
+                            node = None
+                            if hasattr(self.model, "search_with_path"):
+                                node, _ = self.model.search_with_path(v)
+                            elif hasattr(self.model, "search"):
+                                node = self.model.search(v)
+                            if node is not None:
+                                if hasattr(self, "update_status"):
+                                    self.update_status(f"查找：找到 {v}")
+                                if hasattr(self, "redraw"):
+                                    self.redraw()
+                            else:
+                                if hasattr(self, "update_status"):
+                                    self.update_status(f"查找：未找到 {v}")
+                elif c == "delete":
+                    if not args:
+                        messagebox.showerror("错误", "delete 需要一个参数，例如：delete 7")
+                    else:
+                        v = args[0]
+                        if hasattr(self, "input_var") and hasattr(self, "start_delete_animated"):
+                            self.input_var.set(v); self.start_delete_animated()
+                        else:
+                            try:
+                                if hasattr(self.model, "delete"):
+                                    self.model.delete(v)
+                                elif hasattr(self.model, "remove"):
+                                    self.model.remove(v)
+                                elif hasattr(self.model, "delete_by_value"):
+                                    self.model.delete_by_value(v)
+                            except Exception:
+                                pass
+                            if hasattr(self, "redraw"):
+                                self.redraw()
+                elif c == "clear":
+                    if hasattr(self, "clear_canvas"):
+                        self.clear_canvas()
+                    else:
+                        try:
+                            self.model = BSTModel()
+                        except Exception:
+                            try:
+                                self.model.root = None
+                            except Exception:
+                                pass
+                        if hasattr(self, "redraw"):
+                            self.redraw()
+                else:
+                    messagebox.showinfo("未识别命令", "支持：insert/search/delete/clear/create（参数以空格分隔，例如：insert 5 6 7）")
+        finally:
+            # 清空 DSL 输入框（改善 UX）
+            try:
+                self.dsl_var.set("")
+            except Exception:
+                pass
+
+    
     def draw_instructions(self):
         self.canvas.delete("all")
         self.node_items.clear()
