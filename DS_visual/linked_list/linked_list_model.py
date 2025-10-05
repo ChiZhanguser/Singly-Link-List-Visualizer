@@ -30,7 +30,7 @@ class LinkedListModel:
 
     def insert_last(self, value: Any) -> None:
         self.node_value_store.append(value)
-
+    
     def insert_after(self, position: int, value: Any) -> None:
         # position 1-based: insert after position -> insert at index position
         if position < 1 or position > len(self.node_value_store):

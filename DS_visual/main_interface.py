@@ -1,5 +1,5 @@
 from tkinter import *
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from linked_list.linked_list_visual import LinkList
 from sequence_list.sequence_list_visual import SequenceListVisualizer
 from stack.stack_visual import StackVisualizer
@@ -10,7 +10,18 @@ from avl.avl_visual import AVLVisualizer
 import math
 from llm.chat_window import ChatWindow
 from llm.function_dispatcher import register_visualizer
+from rbt.rbt_visual import RBTVisualizer
+from circular_queue.circular_queue_visual import CircularQueueVisualizer
+from trie.trie_visual import TrieVisualizer
+from bplustree.bplustree_visual import BPlusVisualizer
+from hashtable.hashtable_visual import HashtableVisualizer
 
+import random
+import time
+
+# -------------------------
+# Color helpers
+# -------------------------
 def hex_to_rgb(h):
     h = h.lstrip('#')
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
@@ -32,6 +43,9 @@ def lighten_hex(h, amount=0.12):
     b = min(255, int(b + (255 - b) * amount))
     return rgb_to_hex((r, g, b))
 
+# -------------------------
+# Tooltip (unchanged)
+# -------------------------
 class ToolTip:
     def __init__(self, widget, text):
         self.widget = widget
@@ -58,77 +72,99 @@ class ToolTip:
             self.tip.destroy()
             self.tip = None
 
+# -------------------------
+# Main Interface (buttons restored to original simple Buttons)
+# -------------------------
 class MainInterface:
     def __init__(self, root):
         self.window = root
         self.window.title("数据结构可视化工具 — 张驰")
-        self.window.geometry("980x720")
-        self.window.minsize(860, 600)
+        # 放大窗口以容纳更多按钮与更大卡片区
+        self.window.geometry("1280x880")
+        self.window.minsize(1000, 700)
         try:
             style = ttk.Style(self.window)
             style.theme_use('clam')
         except Exception:
             pass
+        # set a pleasant light background for the window frame to contrast the header
         self.window.configure(bg="#EAF5FF")
 
-        header_h = 160
-        self.header = Canvas(self.window, height=header_h, bd=0, highlightthickness=0)
+        # header with animated gradient + particles (高度略增)
+        header_h = 200
+        self.header = Canvas(self.window, height=header_h, bd=0, highlightthickness=0, bg=self.window['bg'])
         self.header.pack(fill=X)
-        self.header.bind("<Configure>", lambda e: self._draw_header_gradient(self.header, header_h, "#3a8dde", "#70b7ff"))
+        # animation state
+        self._anim_phase = 0.0
+        # 粒子范围随 header 宽度扩展
+        self._particle_positions = [(random.uniform(40, 1180), random.uniform(18, header_h-18),
+                                     random.uniform(6, 26), random.uniform(0.12, 0.6)) for _ in range(12)]
+        self._draw_header_gradient(self.header, header_h, "#3a8dde", "#70b7ff")
+        self._animate_header()
 
-        # Header Text
-        self.header.create_text(40, 42, anchor='w', text="数据结构可视化工具",
-                                font=("Helvetica", 32, "bold"), fill="#062A4A", tags="title")
-        self.header.create_text(40, 100, anchor='w',
+        # Header Text (keeps original look)
+        self.header.create_text(48, 52, anchor='w', text="数据结构可视化工具",
+                                font=("Helvetica", 36, "bold"), fill="#062A4A", tags="title")
+        self.header.create_text(48, 120, anchor='w',
                                 text="交互、演示与教学 — 支持链表/顺序表/栈/多种树结构",
                                 font=("Helvetica", 14), fill="#EAF6FF", tags="subtitle")
 
-        # Shadow and Card
+        # Shadow and Card (增大卡片面积)
         shadow = Frame(self.window, bg="#d7e9ff", bd=8)
-        shadow.place(relx=0.5, y=header_h - 18, anchor='n', relwidth=0.86, height=424)
+        shadow.place(relx=0.5, y=header_h - 12, anchor='n', relwidth=0.92, height=560)
 
         card = Frame(self.window, bg="white", relief="flat", bd=0, highlightthickness=0)
-        card.place(relx=0.5, y=header_h - 20, anchor='n', relwidth=0.86, height=420)
+        card.place(relx=0.5, y=header_h - 16, anchor='n', relwidth=0.92, height=540)
         card.grid_propagate(False)
         card.grid_rowconfigure(0, weight=0)
         card.grid_rowconfigure(1, weight=1)
         card.grid_columnconfigure(0, weight=1)
 
-        top_frame = Frame(card, bg="white")
-        top_frame.grid(row=0, column=0, sticky="ew", padx=24, pady=(20, 10))
-        subtitle = Label(top_frame, text="选择可视化模块", font=("Helvetica", 20, "bold"), bg="white", fg="#0b3a66")
+        top_frame = Frame(card, bg="white", bd=0)
+        top_frame.grid(row=0, column=0, sticky="ew", padx=28, pady=(24, 12))
+        subtitle = Label(top_frame, text="选择可视化模块", font=("Helvetica", 22, "bold"), bg="white", fg="#0b3a66")
         subtitle.grid(row=0, column=0, sticky="w")
-        desc = Label(top_frame, text="点击下面的按钮进入对应数据结构的交互演示。支持键盘/鼠标交互。",
+        desc = Label(top_frame, text="点击下面的按钮进入对应数据结构的交互演示。支持键盘/鼠标/DSL/自然语言交互。",
                      font=("Helvetica", 12), bg="white", fg="#4d6b88")
         desc.grid(row=1, column=0, sticky="w", pady=(6, 0))
 
         btn_frame = Frame(card, bg="white")
-        btn_frame.grid(row=1, column=0, sticky="nsew", padx=24, pady=10)
-        for i in range(2):
+        btn_frame.grid(row=1, column=0, sticky="nsew", padx=28, pady=14)
+        # 更改为 3 列布局以容纳更多按钮且不覆盖
+        cols = 3
+        for i in range(cols):
             btn_frame.grid_columnconfigure(i, weight=1)
 
+        # revert to original simple Buttons (新增更多项)
         btns = [
             ("单链表", "#FF8C42", "🔗", self.open_linked_list, "单链表（单向）可视化与操作"),
-            ("顺序表", "#2ECC71", "📋", self.open_sequence_list, "基于数组的顺序表演示"),
+            ("顺序表", "#2ECC71", "📋", self.open_sequence_list, "基于数组的顺序表演"),
             ("栈", "#8E44AD", "📚", self.open_stack, "后进先出（LIFO）结构演示"),
             ("二叉树链式存储", "#E74C3C", "🌳", self.open_binary_tree, "链式存储的普通二叉树"),
             ("二叉搜索树", "#3498DB", "🔎", self.open_bst, "BST：插入/删除/查找演示"),
             ("Huffman树", "#A0522D", "🔠", self.open_huffman, "基于频率的编码树（Huffman）"),
+            ("Trie（前缀树）", "#FF6F61", "🔤", self.open_trie, "Trie（前缀树）可视化 — 自动补全 / 前缀查询"),
+            ("B+树", "#16A085", "🗃️", self.open_bplustree, "B+树（B+ Tree）可视化 — 索引 / 磁盘页 演示"),
             ("AVL (平衡二叉树)", "#5DADE2", "⚖️", self.open_avl, "自平衡 AVL 树演示"),
+            ("红黑树", "#D84315", "🔴", self.open_rbt, "红黑树（Red-Black Tree）可视化"),
+            ("循环队列", "#F1C40F", "🔁", self.open_circular_queue, "循环队列（Ring Buffer）可视化 — 入队/出队/环绕示意"),
+            ("哈希表", "#2C3E50", "🔑", self.open_hashtable, "哈希表（Hash Table）可视化 — 键值对存储")
         ]
 
+        # 按钮尺寸与间距略微调小，以适配三列同时保持良好触控面积
         for idx, (label, color, emoji, cmd, tip) in enumerate(btns):
-            col = idx % 2
-            row = idx // 2
-            btn = Button(btn_frame, text=f"{emoji}  {label}", font=("Helvetica", 16, "bold"),
+            col = idx % cols
+            row = idx // cols
+            btn = Button(btn_frame, text=f"{emoji}  {label}", font=("Helvetica", 15, "bold"),
                          bd=0, relief='flat', activebackground=lighten_hex(color, 0.10),
-                         bg=color, fg="white", cursor="hand2", width=20, height=2, command=cmd)
-            btn.grid(row=row, column=col, sticky="nsew", padx=12, pady=12, ipadx=6, ipady=12)
-            btn_frame.grid_rowconfigure(row, weight=1, minsize=80)
+                         bg=color, fg="white", cursor="hand2", width=22, height=2, command=cmd)
+            btn.grid(row=row, column=col, sticky="nsew", padx=10, pady=10, ipadx=6, ipady=12)
+            btn_frame.grid_rowconfigure(row, weight=1, minsize=84)
             self._attach_hover_effect(btn, color)
             ToolTip(btn, tip)
 
-        bottom_bar = Frame(self.window, bg="#F4F8FF", height=40)
+        # bottom bar (original)
+        bottom_bar = Frame(self.window, bg="#F4F8FF", height=44)
         bottom_bar.pack(fill=X, side=BOTTOM)
         copyright_label = Label(bottom_bar, text="© 张驰 的 数据结构可视化工具", bg="#F4F8FF", fg="#7a8897",
                                 font=("Arial", 10))
@@ -136,24 +172,28 @@ class MainInterface:
         status_label = Label(bottom_bar, text="23070215", bg="#F4F8FF", fg="#7a8897", font=("Arial", 10))
         status_label.pack(side=RIGHT, padx=12)
 
+        # key bindings remain (并新增快捷键 4/5 给 Trie / B+Tree)
         self.window.bind("<Key-1>", lambda e: self.open_linked_list())
         self.window.bind("<Key-2>", lambda e: self.open_sequence_list())
         self.window.bind("<Key-3>", lambda e: self.open_stack())
+        self.window.bind("<Key-4>", lambda e: self.open_trie())
+        self.window.bind("<Key-5>", lambda e: self.open_bplustree())
 
+        # chat button: original simple Button but placed on header
         chat_btn = Button(self.header, text="🤖 聊天", font=("Helvetica", 14, "bold"),
                           bg="#1FA2FF", fg="white", bd=0, relief='flat', cursor="hand2",
                           command=lambda: ChatWindow(self.window))
-        chat_btn.place(relx=0.95, y=28, anchor='ne', width=100, height=40)
+        chat_btn.place(relx=0.96, y=28, anchor='ne', width=110, height=44)
         try:
             self._attach_hover_effect(chat_btn, "#1FA2FF")
-            ToolTip(chat_btn, "与LLM聊天")
+            ToolTip(chat_btn, "通过LLM交互")
         except Exception:
             pass
 
     def _draw_header_gradient(self, canvas, h, c1, c2):
         canvas.delete("grad")
-        width = canvas.winfo_width() or self.window.winfo_width() or 980
-        steps = 60
+        width = canvas.winfo_width() or self.window.winfo_width() or 1280
+        steps = 72
         for i in range(steps):
             t = i / (steps - 1)
             color = blend_hex(c1, c2, t)
@@ -161,12 +201,15 @@ class MainInterface:
             y1 = int((i+1) * (h / steps))
             canvas.create_rectangle(0, y0, width, y1, outline=color, fill=color, tags="grad")
         points = []
-        wave_h = 14
-        for x in range(0, width+100, 20):
+        wave_h = 18
+        for x in range(0, width+160, 20):
             y = h - (math.sin(x / 60.0) * wave_h + 8)
             points.append(x)
             points.append(y)
         canvas.create_polygon(*points, fill=blend_hex(c2, "#ffffff", 0.12), outline='', tags="grad")
+        # draw particle circles (static at draw time; _animate_header will update by redrawing)
+        for i, (px, py, rad, alpha) in enumerate(self._particle_positions):
+            canvas.create_oval(px-rad, py-rad, px+rad, py+rad, fill=blend_hex("#ffffff", c2, 0.7), outline="", tags="grad")
         canvas.tag_raise("title")
         canvas.tag_raise("subtitle")
 
@@ -185,7 +228,26 @@ class MainInterface:
         widget.bind("<Enter>", on_enter)
         widget.bind("<Leave>", on_leave)
 
-    # Visualization Window functions remain unchanged
+    def _animate_header(self):
+        # update animation phase and particle positions and redraw header gradient
+        self._anim_phase = (self._anim_phase + 0.006) % 1.0
+        new_positions = []
+        for (x, y, r, a) in self._particle_positions:
+            nx = x + math.sin(time.time() * 0.18 + x) * 0.4
+            # wrap horizontally
+            if nx < 20: nx = 1240
+            if nx > 1240: nx = 20
+            # slight vertical bobbing
+            ny = y + math.sin(time.time() * 0.85 + x) * 4 * a
+            new_positions.append((nx, ny, r, a))
+        self._particle_positions = new_positions
+        try:
+            self._draw_header_gradient(self.header, 200, "#3a8dde", "#70b7ff")
+        except Exception:
+            pass
+        self.window.after(40, self._animate_header)
+
+    # Visualization Window functions unchanged
     def open_linked_list(self):
         linked_list_window = Toplevel(self.window)
         linked_list_window.title("单链表可视化")
@@ -245,6 +307,87 @@ class MainInterface:
         avl_window.geometry("1350x730")
         AVLVisualizer(avl_window)
         avl_window.mainloop()
+
+    def open_rbt(self):
+        rbt_window = Toplevel(self.window)
+        rbt_window.title("红黑树可视化")
+        rbt_window.geometry("1350x730")
+        rbt_window.maxsize(1350, 730)
+        rbt_window.minsize(1350, 730)
+        rb = RBTVisualizer(rbt_window)
+        try:
+            register_visualizer("rbt", rb)
+        except Exception:
+            pass
+        rbt_window.mainloop()
+
+    # -------------------------
+    # 新增：Trie / B+ 树窗口打开函数
+    # -------------------------
+    def open_trie(self):
+        trie_window = Toplevel(self.window)
+        trie_window.title("Trie（前缀树）可视化")
+        trie_window.geometry("1350x730")
+        trie_window.maxsize(1350, 730)
+        trie_window.minsize(1350, 730)
+        try:
+            t = TrieVisualizer(trie_window)
+            try:
+                register_visualizer("trie", t)
+            except Exception:
+                pass
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开 Trie 可视化：{e}")
+        trie_window.mainloop()
+
+    def open_bplustree(self):
+        bpt_window = Toplevel(self.window)
+        bpt_window.title("B+树 可视化")
+        bpt_window.geometry("1350x730")
+        bpt_window.maxsize(1350, 730)
+        bpt_window.minsize(1350, 730)
+        try:
+            bp = BPlusVisualizer(bpt_window)
+            try:
+                register_visualizer("bplustree", bp)
+            except Exception:
+                pass
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开 B+树 可视化：{e}")
+        bpt_window.mainloop()
+    
+    def open_circular_queue(self):
+        cq_window = Toplevel(self.window)
+        cq_window.title("循环队列 可视化")
+        cq_window.geometry("1350x730")
+        cq_window.maxsize(1350, 730)
+        cq_window.minsize(1350, 730)
+        try:
+            cq = CircularQueueVisualizer(cq_window)
+            try:
+                register_visualizer("circular_queue", cq)
+            except Exception:
+                pass
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开 循环队列 可视化：{e}")
+        cq_window.mainloop()
+        
+    def open_hashtable(self):
+        ht_window = Toplevel(self.window)
+        ht_window.title("哈希表 可视化")
+        ht_window.geometry("1350x730")
+        ht_window.maxsize(1350, 730)
+        ht_window.minsize(1350, 730)
+        try:
+            ht = HashtableVisualizer(ht_window)
+            try:
+                register_visualizer("hashtable", ht)
+            except Exception:
+                pass
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开 哈希表 可视化：{e}")
+        ht_window.mainloop()
+
 
 if __name__ == '__main__':
     root = Tk()
