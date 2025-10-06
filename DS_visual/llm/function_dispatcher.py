@@ -1,15 +1,3 @@
-# llm/function_dispatcher.py
-"""
-Robust dispatcher that ensures stack_api, sequence_api and linked_list_api are importable.
-- tries package import
-- tries relative import
-- if still not found, tries to locate *_api.py in parent folders and load it via importlib
-
-Provides:
-    register_visualizer(kind_or_visualizer, visualizer=None)
-    unregister_visualizer(kind_or_visualizer, visualizer=None)
-    dispatch(name, arguments)
-"""
 import json
 import weakref
 import os
@@ -17,18 +5,9 @@ import importlib
 import importlib.util
 import re
 from typing import Any, Dict, Optional
+from llm.function_aliases import _ALIAS_MAP  
 
-# alias map file (you already created llm/function_aliases.py)
-try:
-    from llm.function_aliases import _ALIAS_MAP  # note: file name function_aliases.py in your repo
-except Exception:
-    # fallback if package import fails
-    try:
-        from function_aliases import _ALIAS_MAP
-    except Exception:
-        _ALIAS_MAP = {}
 
-# ----------------- backend modules (lazy-loaded) -----------------
 stack_api = None
 sequence_api = None
 linked_list_api = None

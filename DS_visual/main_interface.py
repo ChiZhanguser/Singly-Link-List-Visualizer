@@ -19,9 +19,6 @@ from hashtable.hashtable_visual import HashtableVisualizer
 import random
 import time
 
-# -------------------------
-# Color helpers
-# -------------------------
 def hex_to_rgb(h):
     h = h.lstrip('#')
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
@@ -321,9 +318,6 @@ class MainInterface:
             pass
         rbt_window.mainloop()
 
-    # -------------------------
-    # 新增：Trie / B+ 树窗口打开函数
-    # -------------------------
     def open_trie(self):
         trie_window = Toplevel(self.window)
         trie_window.title("Trie（前缀树）可视化")
