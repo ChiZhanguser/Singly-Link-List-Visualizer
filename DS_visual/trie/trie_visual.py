@@ -1,4 +1,3 @@
-# trie_visual.py
 from tkinter import *
 from tkinter import messagebox, ttk
 from typing import Dict, Tuple, List, Optional
@@ -7,17 +6,15 @@ from trie.trie_model import TrieModel, TrieNode
 class TrieVisualizer:
     def __init__(self, root):
         self.window = root
-        self.window.title("Trie（字典树）可视化 - 带插入动画")
+        self.window.title("Trie（字典树）可视化")
         self.window.config(bg="#F3F6FB")
         self.window.geometry("1200x720")
 
-        # layout: 左侧控制面板(固定宽度) + 右侧画布(可滚动)
         self.left_width = 320
 
         main = Frame(self.window, bg="#F3F6FB")
         main.pack(fill=BOTH, expand=True)
-
-        # 先创建用于状态显示的变量（避免 _build_left_panel 里引用时尚未定义）
+        
         self.status_text_var = StringVar(value="就绪：可插入 / 查找 / 清空。")
 
         # 左侧控制面板

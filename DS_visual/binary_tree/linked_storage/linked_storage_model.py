@@ -1,4 +1,3 @@
-# DS_visual/binary_tree/binary_tree_model.py
 from typing import Any, List, Optional, Tuple
 from collections import deque
 
@@ -23,8 +22,6 @@ class BinaryTreeModel:
         it = iter(items)
         first = next(it, None)
         if first is None or first == "#":
-            # 整个树为空
-            # node_list 长度与 items 相同，但全为 None
             return None, [None] * len(items)
 
         root = TreeNode(first)

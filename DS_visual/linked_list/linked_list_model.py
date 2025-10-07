@@ -51,7 +51,6 @@ class _NodeList:
         self._size += 1
 
     def _node_at(self, idx: int) -> _Node:
-        """返回索引 idx 的节点（支持负索引）。若越界抛 IndexError。"""
         n = self._size
         if idx < 0:
             idx += n
@@ -96,12 +95,6 @@ class _NodeList:
         return node.value
 
     def insert(self, idx: int, value: Any) -> None:
-        """
-        行为与 list.insert 一致：
-        - 如果 idx <= 0，插入到头部；
-        - 如果 idx >= len，则尾插；
-        - 否则插入到 idx 位置（原来 idx 及之后元素右移）。
-        """
         if idx <= 0:
             # head insert
             new = _Node(value)
@@ -121,8 +114,6 @@ class _NodeList:
 
 class LinkedListModel:
     def __init__(self):
-        # 注意：这里 node_value_store 不是内置 list，而是 _NodeList 的实例，
-        # 但对外表现得像 list，因此可在 linked_list_visual.py 中直接使用。
         self.node_value_store: _NodeList = _NodeList()
 
     def to_list(self):

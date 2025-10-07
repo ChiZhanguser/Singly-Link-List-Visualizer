@@ -10,28 +10,18 @@ import os
 class HuffmanVisualizer:
     def __init__(self, root):
         self.window = root
-        # 更柔和的窗体背景
         self.window.config(bg="#F0F4F8")
         self.canvas_w = 920   # 左侧 main canvas 宽
         self.canvas_h = 520
-        # 使用 frame 布局：左边 canvas，右边 treeview 面板
         container = Frame(self.window, bg="#F0F4F8")
         container.pack(fill=BOTH, expand=True, padx=10, pady=8)
-
-        # 左画布区域
         left_frame = Frame(container, bg="#F0F4F8")
         left_frame.pack(side=LEFT, fill=BOTH, expand=True)
-
         self.canvas = Canvas(left_frame, bg="#FBFDFF", width=self.canvas_w, height=self.canvas_h, bd=0, highlightthickness=0)
         self.canvas.pack(fill=BOTH, expand=False, padx=(0,8))
-        # 画微妙网格作为背景纹理
         self._draw_subtle_grid()
-
-        # 右侧堆显示区域（更漂亮的 Treeview）
         right_frame = Frame(container, width=320, bg="#F0F4F8")
         right_frame.pack(side=RIGHT, fill=Y)
-
-        # 用 ttk.Style 美化 Treeview
         style = ttk.Style()
         style.theme_use('clam')
         style.configure("HeapTree.Treeview", 
@@ -42,10 +32,8 @@ class HuffmanVisualizer:
                         font=("Arial", 10))
         style.configure("HeapTree.Treeview.Heading", font=("Arial", 10, "bold"), background="#E6EEF8")
         style.map("HeapTree.Treeview", background=[('selected', '#FFD59E')])
-
         label = Label(right_frame, text="当前堆快照（按权值排序）", bg="#F0F4F8", fg="#0B2545", font=("Arial", 11, "bold"))
         label.pack(padx=8, pady=(6,2), anchor="nw")
-
         columns = ("before", "after")
         self.heap_tree = ttk.Treeview(right_frame, columns=columns, show="headings", style="HeapTree.Treeview", height=20)
         self.heap_tree.heading("before", text="Before")
@@ -53,8 +41,6 @@ class HuffmanVisualizer:
         self.heap_tree.column("before", width=140, anchor="w")
         self.heap_tree.column("after", width=140, anchor="w")
         self.heap_tree.pack(padx=8, pady=4, fill=Y)
-
-        # 右下放一个解释/清理按钮区域
         bottom_right = Frame(right_frame, bg="#F0F4F8")
         bottom_right.pack(side=BOTTOM, fill=X, pady=8)
         Button(bottom_right, text="清空", command=self.clear_canvas, bg="#FFB74D").pack(side=LEFT, padx=6)
@@ -67,7 +53,7 @@ class HuffmanVisualizer:
         self.snap_after: List[List[float]] = []
 
         # visual bookkeeping
-        self.node_vis: Dict = {}   # key: node.id or ("leaf", idx) -> {cx,cy,rect,text,merged,weight}
+        self.node_vis: Dict = {}  
         self.animating = False
 
         # layout params
@@ -390,8 +376,6 @@ class HuffmanVisualizer:
                 self.update_status("加载失败")
                 return
 
-            # --- 到这里我们已有 weights（初始叶权值） ---
-            # 从文件中读取 positions（可选）
             positions = {}
             if isinstance(obj, dict) and "positions" in obj and isinstance(obj["positions"], dict):
                 positions = obj["positions"]
@@ -507,8 +491,6 @@ class HuffmanVisualizer:
             self.update_status("加载失败")
 
         
-
-    # ---------- 直接构建（一次性） ----------
     def build_direct(self):
         nums = self.parse_input()
         if nums is None:
@@ -570,6 +552,7 @@ class HuffmanVisualizer:
             return
         self.animating = True
         self._animate_step(0)
+
 
     def _animate_step(self, idx: int):
         if idx >= len(self.steps):
