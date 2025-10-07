@@ -1,11 +1,132 @@
-from typing import List, Any, Optional
+# linked_list_model.py
+from typing import Any, Iterable, Iterator, Optional
+
+class _Node:
+    __slots__ = ("value", "next")
+    def __init__(self, value: Any):
+        self.value: Any = value
+        self.next: Optional["_Node"] = None
+
+class _NodeList:
+    def __init__(self, iterable: Optional[Iterable[Any]] = None):
+        self.head: Optional[_Node] = None
+        self._size: int = 0
+        if iterable:
+            for v in iterable:
+                self.append(v)
+
+    def __len__(self) -> int:
+        return self._size
+
+    def __iter__(self) -> Iterator[Any]:
+        cur = self.head
+        while cur:
+            yield cur.value
+            cur = cur.next
+
+    def to_list(self) -> list:
+        out = []
+        cur = self.head
+        while cur:
+            out.append(cur.value)
+            cur = cur.next
+        return out
+
+    def __repr__(self) -> str:
+        return repr(self.to_list())
+
+    def clear(self) -> None:
+        self.head = None
+        self._size = 0
+
+    def append(self, value: Any) -> None:
+        new = _Node(value)
+        if not self.head:
+            self.head = new
+        else:
+            cur = self.head
+            while cur.next:
+                cur = cur.next
+            cur.next = new
+        self._size += 1
+
+    def _node_at(self, idx: int) -> _Node:
+        """返回索引 idx 的节点（支持负索引）。若越界抛 IndexError。"""
+        n = self._size
+        if idx < 0:
+            idx += n
+        if idx < 0 or idx >= n:
+            raise IndexError("index out of range")
+        cur = self.head
+        for _ in range(idx):
+            cur = cur.next  # type: ignore
+        return cur  # type: ignore
+
+    def __getitem__(self, idx: int) -> Any:
+        node = self._node_at(idx)
+        return node.value
+
+    def __setitem__(self, idx: int, value: Any) -> None:
+        node = self._node_at(idx)
+        node.value = value
+
+    def pop(self, idx: int = -1) -> Any:
+        if self._size == 0:
+            raise IndexError("pop from empty list")
+        n = self._size
+        if idx < 0:
+            idx += n
+        if idx < 0 or idx >= n:
+            raise IndexError("pop index out of range")
+        # pop head
+        if idx == 0:
+            node = self.head
+            assert node is not None
+            self.head = node.next
+            node.next = None
+            self._size -= 1
+            return node.value
+        # find previous
+        prev = self._node_at(idx - 1)
+        assert prev.next is not None
+        node = prev.next
+        prev.next = node.next
+        node.next = None
+        self._size -= 1
+        return node.value
+
+    def insert(self, idx: int, value: Any) -> None:
+        """
+        行为与 list.insert 一致：
+        - 如果 idx <= 0，插入到头部；
+        - 如果 idx >= len，则尾插；
+        - 否则插入到 idx 位置（原来 idx 及之后元素右移）。
+        """
+        if idx <= 0:
+            # head insert
+            new = _Node(value)
+            new.next = self.head
+            self.head = new
+            self._size += 1
+            return
+        if idx >= self._size:
+            self.append(value)
+            return
+        # 插入到 idx（prev = idx-1）
+        prev = self._node_at(idx - 1)
+        new = _Node(value)
+        new.next = prev.next
+        prev.next = new
+        self._size += 1
 
 class LinkedListModel:
     def __init__(self):
-        self.node_value_store: List[Any] = []
+        # 注意：这里 node_value_store 不是内置 list，而是 _NodeList 的实例，
+        # 但对外表现得像 list，因此可在 linked_list_visual.py 中直接使用。
+        self.node_value_store: _NodeList = _NodeList()
 
-    def to_list(self) -> List[Any]:
-        return list(self.node_value_store)
+    def to_list(self):
+        return self.node_value_store.to_list()
 
     def clear(self) -> None:
         self.node_value_store.clear()
@@ -26,23 +147,24 @@ class LinkedListModel:
         return repr(self.node_value_store)
 
     def insert_first(self, value: Any) -> None:
+        # 等价于 insert(0, value)
         self.node_value_store.insert(0, value)
 
     def insert_last(self, value: Any) -> None:
         self.node_value_store.append(value)
-    
+
     def insert_after(self, position: int, value: Any) -> None:
-        # position 1-based: insert after position -> insert at index position
+        # position 为 1-based：在 position 后插入 -> 在 index position 处插入
         if position < 1 or position > len(self.node_value_store):
             raise IndexError("position out of range")
         self.node_value_store.insert(position, value)
 
     def delete_first(self) -> None:
-        if not self.node_value_store:
+        if len(self.node_value_store) == 0:
             raise IndexError("delete from empty list")
         self.node_value_store.pop(0)
 
     def delete_last(self) -> None:
-        if not self.node_value_store:
+        if len(self.node_value_store) == 0:
             raise IndexError("delete from empty list")
         self.node_value_store.pop()

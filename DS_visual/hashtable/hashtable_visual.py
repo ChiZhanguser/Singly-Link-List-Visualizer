@@ -1,202 +1,713 @@
+# hash_visual.py
 from tkinter import *
 from tkinter import messagebox, filedialog
 import json
 import os
 from datetime import datetime
-from typing import Any, List, Tuple
 
-from hashtable.hashtable_model import HashTable, _TOMBSTONE
+# 兼容导入 HashTableModel，如果项目结构不同时允许导入失败后回退内部简单实现
+HashTableModel = None
+try:
+    from hashtable.hashtable_model import HashTableModel, TOMBSTONE
+except Exception:
+    HashTableModel = None
+    TOMBSTONE = object()
+
+# 提供一个最小回退模型（若没有 hash_model.py）
+def _make_minimal_model(capacity=11):
+    class Minimal:
+        def __init__(self, capacity=11):
+            self.capacity = capacity
+            self.table = [None] * capacity
+            self.tombstone = TOMBSTONE
+        def _hash(self, x):
+            try:
+                xi = int(x)
+            except Exception:
+                xi = hash(x)
+            return int(xi) % self.capacity
+        def find(self, x):
+            start = self._hash(x)
+            i = start
+            while True:
+                val = self.table[i]
+                if val is None:
+                    return -1
+                if val is not self.tombstone and val == x:
+                    return i
+                i = (i + 1) % self.capacity
+                if i == start:
+                    break
+            return -1
+        def insert(self, x):
+            if self.find(x) != -1:
+                return self.find(x)
+            start = self._hash(x)
+            i = start
+            first_tomb = -1
+            while True:
+                val = self.table[i]
+                if val is None:
+                    target = first_tomb if first_tomb != -1 else i
+                    self.table[target] = x
+                    return target
+                if val is self.tombstone and first_tomb == -1:
+                    first_tomb = i
+                i = (i + 1) % self.capacity
+                if i == start:
+                    break
+            if first_tomb != -1:
+                self.table[first_tomb] = x
+                return first_tomb
+            return None
+        def delete(self, x):
+            idx = self.find(x)
+            if idx == -1:
+                return None
+            self.table[idx] = self.tombstone
+            return idx
+        def clear(self):
+            self.table = [None] * self.capacity
+        def load_list(self, items):
+            self.clear()
+            for v in items:
+                self.insert(v)
+    return Minimal(capacity)
+
+# DSL fallback解析（与 stack_visual 风格保持一致）
+def _fallback_process_command(visualizer, text):
+    if getattr(visualizer, "animating", False):
+        messagebox.showinfo("提示", "当前正在执行动画，请稍后再试")
+        return
+    text = (text or "").strip()
+    if not text:
+        return
+    parts = text.split()
+    cmd = parts[0].lower()
+    args = parts[1:]
+    if cmd in ("insert", "put", "add"):
+        if not args:
+            messagebox.showerror("错误", "insert 需要一个参数，例如：insert 5")
+            return
+        visualizer.prepare_insert(args[0])
+        return
+    if cmd in ("find", "search", "lookup"):
+        if not args:
+            messagebox.showerror("错误", "find 需要一个参数，例如：find 5")
+            return
+        visualizer.find_value(args[0])
+        return
+    if cmd in ("delete", "del", "remove"):
+        if not args:
+            messagebox.showerror("错误", "delete 需要一个参数，例如：delete 5")
+            return
+        visualizer.delete_value(args[0])
+        return
+    if cmd == "clear":
+        visualizer.clear_table()
+        return
+    if cmd == "create":
+        if not args:
+            messagebox.showerror("错误", "create 需要参数，例如：create 1,2,3")
+            return
+        s = " ".join(args)
+        parts = []
+        for seg in s.replace(",", " ").split():
+            if seg.strip() != "":
+                parts.append(seg.strip())
+        visualizer.create_from_list(parts)
+        return
+    messagebox.showinfo("未识别命令", "支持命令：insert x / find x / delete x / clear / create 1,2,3")
+
+# 如果有外部 process_command 可用则优先使用（和 stack_visual 保持一致）
+process_command = None
+try:
+    from DSL_utils import process_command as _pc
+    process_command = _pc
+except Exception:
+    process_command = _fallback_process_command
 
 class HashtableVisualizer:
-    def __init__(self, root):
+    def __init__(self, root, capacity: int = 11):
         self.window = root
-        self.window.title("哈希表（线性探测）可视化")
-        self.window.config(bg="#FFFDF0")
-        self.canvas = Canvas(self.window, bg="white", width=1200, height=520, bd=6, relief=RAISED)
+        self.window.config(bg="#F0F8FF")
+        self.canvas = Canvas(self.window, bg="white", width=1350, height=500, relief=RAISED, bd=8)
         self.canvas.pack()
 
-        # model & params
-        self.capacity = 11
-        self.model = HashTable(self.capacity)
-        self.cell_w = 120
-        self.cell_h = 60
-        self.start_x = 40
-        self.start_y = 120
-        self.gap = 12
+        self.capacity = capacity
+        if HashTableModel is not None:
+            try:
+                self.model = HashTableModel(self.capacity)
+            except Exception:
+                self.model = _make_minimal_model(self.capacity)
+        else:
+            self.model = _make_minimal_model(self.capacity)
 
-        # state
-        self.key_var = StringVar()
-        self.value_var = StringVar()
-        self.batch_var = StringVar()
+        # 可视元素引用
+        self.cell_rects = []
+        self.cell_texts = []
+        self.index_texts = []
+        self.capacity = self.model.capacity
+
+        # 布局参数
+        self.start_x = 60
+        self.start_y = 200
+        self.cell_width = 90
+        self.cell_height = 60
+        self.spacing = 12
+
+        # 控件与状态
+        self.value_entry = StringVar()
         self.dsl_var = StringVar()
+        self.batch_entry_var = StringVar()
+        self.input_frame = None
+        self.animating = False
+        self.batch_queue = []
+        self.batch_index = 0
 
-        # UI
         self.create_heading()
-        self.create_controls()
+        self.create_buttons()
         self.update_display()
 
     def create_heading(self):
-        Label(self.window, text="线性探测哈希表（带墓碑）",
-              font=("Arial", 24, "bold"), bg="#FFFDF0", fg="#5D4037").place(x=24, y=12)
-        Label(self.window, text="映射: hash(key) % capacity；删除用 tombstone（墓碑）标记",
-              font=("Arial", 11), bg="#FFFDF0").place(x=24, y=52)
+        heading = Label(self.window, text="散列表（线性探测法）可视化",
+                        font=("Arial", 26, "bold"), bg="#F0F8FF", fg="darkgreen")
+        heading.place(x=420, y=12)
+        info = Label(self.window, text="散列方式：h(x)=x%capacity；冲突处理：线性探测（向后逐位查找），删除使用墓碑（tombstone）",
+                     font=("Arial", 12), bg="#F0F8FF")
+        info.place(x=300, y=60)
 
-    def create_controls(self):
-        frame = Frame(self.window, bg="#FFFDF0")
-        frame.place(x=24, y=76, width=1150, height=40)
+    def create_buttons(self):
+        button_frame = Frame(self.window, bg="#F0F8FF")
+        button_frame.place(x=20, y=540, width=1310, height=160)
 
-        Label(frame, text="Key:", bg="#FFFDF0").pack(side=LEFT, padx=(4,2))
-        Entry(frame, textvariable=self.key_var, width=20).pack(side=LEFT, padx=(0,8))
-        Label(frame, text="Value:", bg="#FFFDF0").pack(side=LEFT, padx=(4,2))
-        Entry(frame, textvariable=self.value_var, width=20).pack(side=LEFT, padx=(0,8))
-        Button(frame, text="Put", bg="#4CAF50", fg="white", command=self.on_put).pack(side=LEFT, padx=6)
-        Button(frame, text="Get", bg="#2196F3", fg="white", command=self.on_get).pack(side=LEFT, padx=6)
-        Button(frame, text="Remove", bg="#F44336", fg="white", command=self.on_remove).pack(side=LEFT, padx=6)
-        Button(frame, text="Clear", bg="#FFB300", fg="white", command=self.on_clear).pack(side=LEFT, padx=6)
-        Button(frame, text="Save", bg="#6C9EFF", fg="white", command=self.save_table).pack(side=LEFT, padx=6)
-        Button(frame, text="Load", bg="#6C9EFF", fg="white", command=self.load_table).pack(side=LEFT, padx=6)
+        Button(button_frame, text="插入 Insert", font=("Arial", 12), width=14, height=2, bg="green", fg="white",
+               command=self.prepare_insert).grid(row=0, column=0, padx=10, pady=6)
+        Button(button_frame, text="查找 Find", font=("Arial", 12), width=14, height=2, bg="blue", fg="white",
+               command=lambda: self.prepare_find()).grid(row=0, column=1, padx=10, pady=6)
+        Button(button_frame, text="删除 Delete", font=("Arial", 12), width=14, height=2, bg="orange", fg="white",
+               command=lambda: self.prepare_delete()).grid(row=0, column=2, padx=10, pady=6)
+        Button(button_frame, text="清空 Clear", font=("Arial", 12), width=14, height=2, bg="red", fg="white",
+               command=self.clear_table).grid(row=0, column=3, padx=10, pady=6)
+        Button(button_frame, text="返回主界面", font=("Arial", 12), width=14, height=2, bg="#6C9EFF", fg="white",
+               command=self.back_to_main).grid(row=0, column=4, padx=10, pady=6)
 
-        bottom = Frame(self.window, bg="#FFFDF0")
-        bottom.place(x=24, y=420, width=1150, height=120)
-        Label(bottom, text="批量创建 (k1:v1,k2:v2 ...):", bg="#FFFDF0").grid(row=0, column=0, sticky="w", padx=6, pady=6)
-        Entry(bottom, textvariable=self.batch_var, width=80).grid(row=0, column=1, padx=6, pady=6)
-        Button(bottom, text="批量创建", command=self.batch_create).grid(row=0, column=2, padx=6)
+        Label(button_frame, text="值:", bg="#F0F8FF").grid(row=1, column=0, sticky="e", padx=(10,2))
+        Entry(button_frame, textvariable=self.value_entry, width=20).grid(row=1, column=1, sticky="w")
+        Button(button_frame, text="确认", command=self._on_confirm_value).grid(row=1, column=2, padx=8, sticky="w")
 
-        Label(bottom, text="DSL:", bg="#FFFDF0").grid(row=1, column=0, sticky="w", padx=6, pady=6)
-        Entry(bottom, textvariable=self.dsl_var, width=80).grid(row=1, column=1, padx=6, pady=6)
-        Button(bottom, text="执行", command=self.process_dsl).grid(row=1, column=2, padx=6)
+        Label(button_frame, text="批量构建 (逗号分隔):", bg="#F0F8FF").grid(row=1, column=3, sticky="e")
+        Entry(button_frame, textvariable=self.batch_entry_var, width=40).grid(row=1, column=4, sticky="w")
+        Button(button_frame, text="开始批量构建", command=self.start_batch_build).grid(row=1, column=5, padx=6)
 
-    def on_put(self):
-        k = self.key_var.get().strip()
-        v = self.value_var.get()
-        if k == "":
-            messagebox.showerror("错误", "Key 不能为空")
-            return
-        self.model.put(k, v)
-        self.update_display()
+        Label(button_frame, text="DSL 命令:", bg="#F0F8FF").grid(row=2, column=0, sticky="e")
+        dsl_entry = Entry(button_frame, textvariable=self.dsl_var, width=70)
+        dsl_entry.grid(row=2, column=1, columnspan=4, sticky="w", padx=6)
+        dsl_entry.bind("<Return>", lambda e: self.process_dsl())
+        Button(button_frame, text="执行", command=self.process_dsl).grid(row=2, column=5, padx=6)
 
-    def on_get(self):
-        k = self.key_var.get().strip()
-        if k == "":
-            messagebox.showerror("错误", "Key 不能为空")
-            return
-        v = self.model.get(k)
-        if v is None:
-            messagebox.showinfo("Get", f"{k} not found")
-        else:
-            messagebox.showinfo("Get", f"{k} -> {v}")
+        # 保存/加载结构（可选）
+        Button(button_frame, text="保存", command=self.save_structure).grid(row=0, column=6, padx=8)
+        Button(button_frame, text="打开", command=self.load_structure).grid(row=1, column=6, padx=8)
 
-    def on_remove(self):
-        k = self.key_var.get().strip()
-        if k == "":
-            messagebox.showerror("错误", "Key 不能为空")
-            return
-        ok = self.model.remove(k)
-        messagebox.showinfo("Remove", "removed" if ok else "not found")
-        self.update_display()
-
-    def on_clear(self):
-        self.model.clear()
-        self.update_display()
-
-    def batch_create(self):
-        txt = self.batch_var.get().strip()
-        if not txt:
-            return
-        parts = [p.strip() for p in txt.split(",") if p.strip()]
-        for p in parts:
-            if ":" in p:
-                k, v = p.split(":", 1)
-                self.model.put(k.strip(), v)
-        self.update_display()
-
-    # ---------- DSL ----------
     def process_dsl(self):
-        t = self.dsl_var.get().strip()
-        if not t:
+        text = self.dsl_var.get().strip()
+        if not text:
             return
-        parts = t.split(maxsplit=2)
-        cmd = parts[0].lower()
-        if cmd == "put" and len(parts) >= 3:
-            k = parts[1]; v = parts[2]
-            self.model.put(k, v); self.update_display()
-        elif cmd == "get" and len(parts) >= 2:
-            k = parts[1]; v = self.model.get(k)
-            messagebox.showinfo("Get", f"{k} -> {v}" if v is not None else f"{k} not found")
-        elif cmd in ("remove", "rm") and len(parts) >= 2:
-            k = parts[1]; ok = self.model.remove(k)
-            messagebox.showinfo("Remove", "removed" if ok else "not found"); self.update_display()
-        elif cmd == "clear":
-            self.model.clear(); self.update_display()
-        else:
-            messagebox.showinfo("DSL 未识别", "支持：put k v, get k, remove k, clear")
-        self.dsl_var.set("")
-    
+        try:
+            process_command(self, text)
+        finally:
+            self.dsl_var.set("")
 
-    # ---------- save/load ----------
     def _ensure_folder(self):
-        base = os.path.dirname(os.path.abspath(__file__))
-        d = os.path.join(base, "save")
-        os.makedirs(d, exist_ok=True)
-        return d
+        try:
+            base = os.path.dirname(os.path.abspath(__file__))
+            p = os.path.join(base, "save", "hashtable")
+            os.makedirs(p, exist_ok=True)
+            return p
+        except Exception:
+            return os.getcwd()
 
-    def save_table(self):
-        items = list(self.model.items())
-        default = f"hashtable_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        path = filedialog.asksaveasfilename(initialdir=self._ensure_folder(), initialfile=default, defaultextension=".json")
-        if not path:
+    def save_structure(self):
+        try:
+            payload = {"type": "hashtable", "capacity": self.capacity, "data": self.model.table}
+            default_dir = self._ensure_folder()
+            default_name = f"hashtable_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            filepath = filedialog.asksaveasfilename(initialdir=default_dir, initialfile=default_name, defaultextension=".json", filetypes=[("JSON","*.json")])
+            if not filepath:
+                return
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            messagebox.showinfo("保存成功", f"已保存到 {filepath}")
+        except Exception as e:
+            messagebox.showerror("保存失败", str(e))
+
+    def load_structure(self):
+        try:
+            default_dir = self._ensure_folder()
+            filepath = filedialog.askopenfilename(initialdir=default_dir, filetypes=[("JSON","*.json")])
+            if not filepath:
+                return
+            with open(filepath, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            if not isinstance(loaded, dict) or "data" not in loaded:
+                messagebox.showerror("错误", "文件格式不被识别 (需包含 data 字段)")
+                return
+            data = loaded["data"]
+            if not isinstance(data, list):
+                messagebox.showerror("错误", "data 字段需为列表")
+                return
+            # 校验并加载
+            if len(data) != self.capacity:
+                if messagebox.askyesno("容量不符", f"文件容量 {len(data)} 与当前 capacity {self.capacity} 不符，是否以文件容量为准并重建？"):
+                    self.capacity = len(data)
+                    # 重新构造 model
+                    if HashTableModel is not None:
+                        self.model = HashTableModel(self.capacity)
+                    else:
+                        self.model = _make_minimal_model(self.capacity)
+                else:
+                    # 尽量 fit 到当前容量：截断或补 None
+                    data = (data + [None] * self.capacity)[:self.capacity]
+            # 直接赋值（注意 tombstone 字符需转换回对象）
+            conv = []
+            for v in data:
+                if v == "__TOMBSTONE__":
+                    conv.append(self.model.tombstone)
+                else:
+                    conv.append(v)
+            self.model.table = conv
+            self.update_display()
+            messagebox.showinfo("加载成功", "已加载散列表")
+        except Exception as e:
+            messagebox.showerror("加载失败", str(e))
+
+    # ---------- 输入准备与回调 ----------
+    def prepare_insert(self, default_value: str = ""):
+        if self.animating:
             return
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump({"items": items, "meta": {"capacity": self.model.capacity}}, f, ensure_ascii=False, indent=2)
-        messagebox.showinfo("保存", "保存成功")
+        self._open_input("插入的值", default_value, action="insert")
 
-    def load_table(self):
-        path = filedialog.askopenfilename(initialdir=self._ensure_folder(), filetypes=[("JSON files", "*.json")])
-        if not path:
+    def prepare_find(self, default_value: str = ""):
+        if self.animating:
             return
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        items = data.get("items", [])
-        cap = data.get("meta", {}).get("capacity", self.capacity)
-        self.capacity = max(3, int(cap))
-        self.model = HashTable(self.capacity)
-        for k, v in items:
-            self.model.put(k, v)
-        self.update_display()
-        messagebox.showinfo("加载", "加载完成")
+        self._open_input("查找的值", default_value, action="find")
 
-    # ---------- display ----------
+    def prepare_delete(self, default_value: str = ""):
+        if self.animating:
+            return
+        self._open_input("删除的值", default_value, action="delete")
+
+    def _open_input(self, label_text, default_value, action):
+        if self.input_frame:
+            try:
+                self.input_frame.destroy()
+            except Exception:
+                pass
+            self.input_frame = None
+        self.value_entry.set(default_value)
+        self.input_frame = Frame(self.window, bg="#F0F8FF")
+        self.input_frame.place(x=420, y=620, width=500, height=70)
+        Label(self.input_frame, text=label_text + ":", bg="#F0F8FF").grid(row=0, column=0, padx=6, pady=8)
+        Entry(self.input_frame, textvariable=self.value_entry).grid(row=0, column=1)
+        Button(self.input_frame, text="确认", command=lambda: self._on_confirm(action)).grid(row=0, column=2, padx=8)
+        self.window.after(50, lambda: self.input_frame.focus_force())
+
+    def _on_confirm(self, action):
+        val = self.value_entry.get()
+        if val == "":
+            messagebox.showerror("错误", "请输入一个值")
+            return
+        if self.input_frame:
+            try:
+                self.input_frame.destroy()
+            except Exception:
+                pass
+            self.input_frame = None
+        if action == "insert":
+            self.insert_value(val)
+        elif action == "find":
+            self.find_value(val)
+        elif action == "delete":
+            self.delete_value(val)
+
+    def _on_confirm_value(self):
+        # 默认按 insert 处理
+        v = self.value_entry.get()
+        if v.strip() == "":
+            messagebox.showerror("错误", "请输入一个值")
+            return
+        self.insert_value(v)
+
+    # ---------- 动画操作 ----------
+    def animate_insert(self, value, target_idx, probe_path):
+        """
+        value: 要插入的值（字符串）
+        target_idx: 最终插入位置索引（若 None 表示失败）
+        probe_path: 探测的索引序列（用于高亮显示探测过程）
+        """
+        if self.animating:
+            return
+        self.animating = True
+        self._set_buttons_state("disabled")
+
+        # 起点：画布左侧外面飞入
+        start_x = - (self.cell_width + 40)
+        start_y = self.start_y
+        rect = self.canvas.create_rectangle(start_x, start_y, start_x + self.cell_width, start_y + self.cell_height, fill="lightgreen", outline="black", width=2)
+        text_id = self.canvas.create_text(start_x + self.cell_width/2, start_y + self.cell_height/2, text=str(value), font=("Arial", 14, "bold"))
+
+        total_steps = 30
+        target_x = self.start_x + (self.cell_width + self.spacing) * (target_idx if target_idx is not None else (len(probe_path)-1))
+        dx = (target_x - start_x) / total_steps
+        step_delay = 12
+
+        # 在移动之前先做探测高亮动画
+        def probe_and_move_then_place():
+            # probe_path 高亮（逐个闪烁）
+            def probe_step(i=0):
+                if i < len(probe_path):
+                    idx = probe_path[i]
+                    rect_id = self.cell_rects[idx]
+                    # 高亮当前探测格
+                    self.canvas.itemconfig(rect_id, outline="red", width=3)
+                    self.window.after(220, lambda: unhighlight_and_next(i))
+                else:
+                    # 探测完成后开始移动
+                    move_step(0)
+
+            def unhighlight_and_next(i):
+                idx = probe_path[i]
+                rect_id = self.cell_rects[idx]
+                self.canvas.itemconfig(rect_id, outline="black", width=2)
+                self.window.after(60, lambda: probe_step(i+1))
+
+            probe_step()
+
+        def move_step(step_i=0):
+            nonlocal rect, text_id
+            if step_i < total_steps:
+                self.canvas.move(rect, dx, 0)
+                self.canvas.move(text_id, dx, 0)
+                self.window.after(step_delay, lambda: move_step(step_i + 1))
+            else:
+                # 删除临时移动形状，插入模型并刷新显示
+                try:
+                    inserted = self.model.insert(value)
+                except Exception:
+                    inserted = None
+                self.canvas.delete(rect)
+                self.canvas.delete(text_id)
+                self.update_display()
+                self.animating = False
+                self._set_buttons_state("normal")
+
+        probe_and_move_then_place()
+
+    def insert_value(self, value):
+        """由接口触发的插入（带动画）。"""
+        if self.animating:
+            return
+        # 先模拟探测路径并返回最终位置（不修改 model）
+        start = self.model._hash(value)
+        i = start
+        probe = []
+        first_tomb = -1
+        while True:
+            probe.append(i)
+            val = self.model.table[i]
+            if val is None:
+                target = first_tomb if first_tomb != -1 else i
+                break
+            if val is self.model.tombstone:
+                if first_tomb == -1:
+                    first_tomb = i
+            if val == value:
+                # 已存在：标记 probe path 并高亮提示（不插入）
+                self._probe_highlight(probe, found=True, found_idx=i, msg=f"值已存在于索引 {i}")
+                return
+            i = (i + 1) % self.capacity
+            if i == start:
+                target = first_tomb if first_tomb != -1 else None
+                break
+        if target is None:
+            # 表满
+            self._probe_highlight(probe, found=False, found_idx=None, msg="散列表已满，无法插入")
+            return
+        # 执行动画：探测高亮 + 飞入放置
+        self.animate_insert(value, target, probe)
+
+    def _probe_highlight(self, probe_path, found=False, found_idx=None, msg=None):
+        """通用的 probe 高亮：逐个闪烁，当 found=True 时高亮找到位置并提示 msg"""
+        if self.animating:
+            return
+        self.animating = True
+        self._set_buttons_state("disabled")
+
+        def step(i=0):
+            if i < len(probe_path):
+                idx = probe_path[i]
+                rid = self.cell_rects[idx]
+                self.canvas.itemconfig(rid, outline="red", width=3)
+                self.window.after(220, lambda: unhighlight(i))
+            else:
+                # 探测结束
+                if found and found_idx is not None:
+                    # 强调找到的位置
+                    rid = self.cell_rects[found_idx]
+                    self.canvas.itemconfig(rid, outline="lime", width=4)
+                    self.window.after(600, finish)
+                else:
+                    self.window.after(200, finish)
+
+        def unhighlight(i):
+            idx = probe_path[i]
+            rid = self.cell_rects[idx]
+            self.canvas.itemconfig(rid, outline="black", width=2)
+            self.window.after(60, lambda: step(i+1))
+
+        def finish():
+            if msg:
+                messagebox.showinfo("提示", msg)
+            self.animating = False
+            self._set_buttons_state("normal")
+            self.update_display()
+
+        step()
+
+    def find_value(self, value):
+        """查找并高亮探测路径；找到的话突出显示格子并提示索引。"""
+        if self.animating:
+            return
+        start = self.model._hash(value)
+        i = start
+        probe = []
+        while True:
+            probe.append(i)
+            val = self.model.table[i]
+            if val is None:
+                # 遇到空位 => 不存在
+                self._probe_highlight(probe, found=False, found_idx=None, msg=f"未找到 {value}")
+                return
+            if val is not self.model.tombstone and val == value:
+                self._probe_highlight(probe, found=True, found_idx=i, msg=f"找到 {value}，索引 {i}")
+                return
+            i = (i + 1) % self.capacity
+            if i == start:
+                self._probe_highlight(probe, found=False, found_idx=None, msg=f"未找到 {value}（全表探测）")
+                return
+
+    def delete_value(self, value):
+        """查找并用墓碑标记删除（带探测动画）。"""
+        if self.animating:
+            return
+        start = self.model._hash(value)
+        i = start
+        probe = []
+        while True:
+            probe.append(i)
+            val = self.model.table[i]
+            if val is None:
+                self._probe_highlight(probe, found=False, found_idx=None, msg=f"未找到 {value}，无法删除")
+                return
+            if val is not self.model.tombstone and val == value:
+                # 做探测高亮，然后执行删除模型并刷新显示，同时在该格写上墓碑标记
+                def after_probe():
+                    try:
+                        idx = self.model.delete(value)
+                    except Exception:
+                        idx = None
+                    if idx is not None:
+                        messagebox.showinfo("删除", f"已在索引 {idx} 用墓碑删除 {value}")
+                    self.update_display()
+                # 使用 _probe_highlight 并在 finish 后执行删除效果
+                self._probe_highlight_with_callback(probe, found=True, found_idx=i, callback=after_probe)
+                return
+            i = (i + 1) % self.capacity
+            if i == start:
+                self._probe_highlight(probe, found=False, found_idx=None, msg=f"未找到 {value}（全表探测）")
+                return
+
+    def _probe_highlight_with_callback(self, probe_path, found, found_idx, callback):
+        """与 _probe_highlight 类似，但 finish 后执行 callback"""
+        if self.animating:
+            return
+        self.animating = True
+        self._set_buttons_state("disabled")
+        def step(i=0):
+            if i < len(probe_path):
+                idx = probe_path[i]
+                rid = self.cell_rects[idx]
+                self.canvas.itemconfig(rid, outline="red", width=3)
+                self.window.after(220, lambda: unhighlight(i))
+            else:
+                if found and found_idx is not None:
+                    rid = self.cell_rects[found_idx]
+                    self.canvas.itemconfig(rid, outline="orange", width=4)
+                    self.window.after(360, finish)
+                else:
+                    self.window.after(200, finish)
+        def unhighlight(i):
+            idx = probe_path[i]
+            rid = self.cell_rects[idx]
+            self.canvas.itemconfig(rid, outline="black", width=2)
+            self.window.after(60, lambda: step(i+1))
+        def finish():
+            try:
+                callback()
+            except Exception:
+                pass
+            self.animating = False
+            self._set_buttons_state("normal")
+            self.update_display()
+        step()
+
+    def clear_table(self):
+        if self.animating:
+            return
+        # 如果已经空了，提示
+        if all(v is None for v in self.model.table):
+            messagebox.showinfo("清空", "散列表已为空")
+            return
+        # 逐格清空动画（从右到左）
+        self.animating = True
+        self._set_buttons_state("disabled")
+        idxs = [i for i in range(self.capacity-1, -1, -1)]
+        def clear_step(i=0):
+            if i >= len(idxs):
+                self.animating = False
+                self._set_buttons_state("normal")
+                return
+            idx = idxs[i]
+            rid = self.cell_rects[idx]
+            # 做一个闪烁然后清空
+            self.canvas.itemconfig(rid, fill="#ffdddd")
+            self.window.after(80, lambda: self.canvas.itemconfig(rid, fill="white"))
+            # 模型清除对应位置（设置为 None）
+            try:
+                self.model.table[idx] = None
+            except Exception:
+                pass
+            self.update_display()
+            self.window.after(100, lambda: clear_step(i+1))
+        clear_step()
+
+    # ---------- 批量构建 ----------
+    def start_batch_build(self):
+        if self.animating:
+            return
+        text = self.batch_entry_var.get().strip()
+        if not text:
+            messagebox.showinfo("提示", "请输入要批量构建的值，例如：1,2,3")
+            return
+        items = [s.strip() for s in text.replace("，", ",").split(",") if s.strip() != ""]
+        if not items:
+            messagebox.showinfo("提示", "未解析到有效值")
+            return
+        # 若 items 长度超 capacity，提示截断或扩容：这里简单截断
+        if len(items) > self.capacity:
+            if not messagebox.askyesno("容量不足", f"要插入 {len(items)} 个元素，capacity={self.capacity}。是否只插入前 {self.capacity} 个？"):
+                return
+            items = items[:self.capacity]
+        self.batch_queue = items
+        self.batch_index = 0
+        self._set_buttons_state("disabled")
+        self._batch_step()
+
+    def _batch_step(self):
+        if self.batch_index >= len(self.batch_queue):
+            self.batch_queue = []
+            self.batch_index = 0
+            self._set_buttons_state("normal")
+            return
+        val = self.batch_queue[self.batch_index]
+        self.batch_index += 1
+        # 直接调用 insert_value（含动画），在其完成后继续下一项
+        def continue_batch():
+            if self.animating:
+                # poll until not animating
+                self.window.after(120, continue_batch)
+            else:
+                self._batch_step()
+        # initiate animation and poll for finish
+        self.insert_value(val)
+        self.window.after(150, continue_batch)
+
+    # ---------- 显示更新 ----------
     def update_display(self):
         self.canvas.delete("all")
-        x = self.start_x
-        y = self.start_y
+        self.cell_rects.clear()
+        self.cell_texts.clear()
+        self.index_texts.clear()
 
-        # status/info box
-        status = f"size={self.model.size}  capacity={self.model.capacity}  tombstones={self.model.tombstones}"
-        self.canvas.create_text(24, 24, anchor="nw", text=status, font=("Arial", 12, "bold"))
+        total_width = (self.cell_width + self.spacing) * self.capacity
+        # 背景框
+        self.canvas.create_rectangle(self.start_x - 8, self.start_y - 8, self.start_x + total_width + 8, self.start_y + self.cell_height + 8, outline="#DDD", fill="#FAFAFA")
 
-        for i in range(self.model.capacity):
-            rect = self.canvas.create_rectangle(x, y, x + self.cell_w, y + self.cell_h, fill="#FAFAFA", outline="#333")
-            k = self.model.keys[i]
-            v = self.model.values[i]
+        # 说明区域
+        info_x = 20
+        info_y = 20
+        info_w = 380
+        self.canvas.create_rectangle(info_x-8, info_y-8, info_x + info_w + 8, info_y + 170, fill="#F7FFF7", outline="#DDD")
+        info_text = f"容量: {self.capacity}  有效元素数: {len(self.model)}"
+        self.canvas.create_text(info_x+6, info_y+6, text=info_text, anchor="nw", font=("Arial", 12))
+        inst = ("说明：\n"
+                "1) 插入: insert x（或按钮）\n"
+                "2) 查找: find x\n"
+                "3) 删除: delete x（使用墓碑标记）\n"
+                "4) 清空: clear")
+        self.canvas.create_text(info_x+6, info_y+36, text=inst, anchor="nw", width=info_w, font=("Arial", 11))
 
-            # display string
-            if k is None:
-                display = ""
-            elif k is _TOMBSTONE:
-                display = "<TOMBSTONE>"
+        # 绘制格子
+        for i in range(self.capacity):
+            x = self.start_x + i * (self.cell_width + self.spacing)
+            rect = self.canvas.create_rectangle(x, self.start_y, x + self.cell_width, self.start_y + self.cell_height, fill="white", outline="black", width=2)
+            self.cell_rects.append(rect)
+            # index 上方
+            idx_text = self.canvas.create_text(x + self.cell_width/2, self.start_y - 16, text=str(i), font=("Arial", 10, "bold"))
+            self.index_texts.append(idx_text)
+            # cell 内容：根据模型
+            val = self.model.table[i]
+            if val is None:
+                txt = ""
+            elif val is self.model.tombstone:
+                txt = "墓碑"
+                # tombstone 特殊填色
+                self.canvas.itemconfig(rect, fill="#eeeeee")
             else:
-                display = f"{k}:{v}"
+                txt = str(val)
+            text_id = self.canvas.create_text(x + self.cell_width/2, self.start_y + self.cell_height/2, text=txt, font=("Arial", 12))
+            self.cell_texts.append(text_id)
 
-            # index & content
-            self.canvas.create_text(x + 8, y + 8, anchor="nw", text=f"idx {i}", font=("Arial", 10), fill="#666")
-            self.canvas.create_text(x + self.cell_w/2, y + self.cell_h/2, text=display, font=("Arial", 12))
+        # 右侧注释
+        self.canvas.create_text(self.start_x + total_width + 40, self.start_y + self.cell_height/2, text="散列表格", font=("Arial", 12, "bold"))
 
-            x += self.cell_w + self.gap
+    def _set_buttons_state(self, state):
+        # enable/disable window-level buttons by scanning all children
+        for w in self.window.winfo_children():
+            try:
+                if isinstance(w, Frame):
+                    for c in w.winfo_children():
+                        try:
+                            c.config(state=state)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
 
-# ---------- run demo ----------
+    def back_to_main(self):
+        if self.animating:
+            messagebox.showinfo("提示", "正在动画执行，无法返回")
+            return
+        try:
+            self.window.destroy()
+        except Exception:
+            pass
+
 if __name__ == "__main__":
     root = Tk()
-    root.geometry("1280x620")
-    HashtableVisualizer(root)
+    root.title("散列表可视化")
+    root.geometry("1350x770")
+    root.minsize(1350, 770)
+    HashVisualizer(root, capacity=13)
     root.mainloop()

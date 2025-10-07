@@ -1,129 +1,85 @@
-# hashtable/hashtable_model.py
-from typing import Any, List, Optional, Tuple, Iterator
+from typing import List, Optional, Any
+TOMBSTONE = object()
 
-_TOMBSTONE = object()
+class HashTableModel:
+    def __init__(self, capacity: int = 11):
+        if capacity <= 0:
+            raise ValueError("capacity must be positive")
+        self.capacity = capacity
+        self.table: List[Optional[Any]] = [None] * capacity
+        self.tombstone = TOMBSTONE
 
-class HashTable:
-    """
-    线性探测哈希表（带墓碑）。hash -> (hash(key) & 0x7fffffff) % capacity
-    支持自动扩容（按 load_factor）。
-    """
-    def __init__(self, capacity: int = 11, load_factor: float = 0.6, auto_resize: bool = True):
-        self.capacity = max(3, int(capacity))
-        self.keys: List[Optional[Any]] = [None] * self.capacity
-        self.values: List[Optional[Any]] = [None] * self.capacity
-        self.size = 0
-        self.tombstones = 0
-        self.load_factor = float(load_factor)
-        self.auto_resize = bool(auto_resize)
+    def _hash(self, x: Any) -> int:
+        try:
+            xi = int(x)
+        except Exception:
+            xi = hash(x)
+        return int(xi) % self.capacity
 
-    def _hash(self, key: Any) -> int:
-        return (hash(key) & 0x7fffffff) % self.capacity
-
-    def _probe(self, start: int) -> Iterator[int]:
+    def find(self, x: Any) -> int:
+        """查找值 x，若找到返回索引，否则返回 -1。探测到空位（None）则可终止。"""
+        start = self._hash(x)
         i = start
+        first_pass = True
         while True:
-            yield i
-            i += 1
-            if i >= self.capacity:
-                i = 0
+            val = self.table[i]
+            if val is None:
+                return -1  # 直接遇到空位 => 不存在
+            if val is not self.tombstone and val == x:
+                return i
+            i = (i + 1) % self.capacity
+            if i == start:
+                break
+        return -1
 
-    def _need_grow(self) -> bool:
-        return self.auto_resize and (self.size + self.tombstones) / self.capacity > self.load_factor
+    def insert(self, x: Any) -> Optional[int]:
+        if self.find(x) != -1:
+            return self.find(x)
 
-    def _grow(self):
-        items = list(self.items())
-        newcap = max(3, self.capacity * 2)
-        self.capacity = newcap
-        self.keys = [None] * self.capacity
-        self.values = [None] * self.capacity
-        self.size = 0
-        self.tombstones = 0
-        for k, v in items:
-            self.put(k, v, allow_grow=False)
-
-    def _find_slot(self, key: Any) -> Tuple[Optional[int], Optional[int]]:
-        """返回 (found_idx, insert_idx). found_idx 若存在; insert_idx 为可插入位置"""
-        h = self._hash(key)
-        first_tomb = None
-        for idx in self._probe(h):
-            k = self.keys[idx]
-            if k is None:
-                return (None, first_tomb if first_tomb is not None else idx)
-            if k is _TOMBSTONE:
-                if first_tomb is None:
-                    first_tomb = idx
-            elif k == key:
-                return (idx, idx)
-        return (None, None)
-
-    def put(self, key: Any, value: Any, allow_grow: bool = True) -> bool:
-        if allow_grow and self._need_grow():
-            self._grow()
-        found, insert = self._find_slot(key)
-        if found is not None:
-            self.values[found] = value
-            return True
-        if insert is None:
-            return False
-        if self.keys[insert] is _TOMBSTONE:
-            self.tombstones -= 1
-        self.keys[insert] = key
-        self.values[insert] = value
-        self.size += 1
-        return True
-
-    def get(self, key: Any) -> Optional[Any]:
-        h = self._hash(key)
-        for idx in self._probe(h):
-            k = self.keys[idx]
-            if k is None:
-                return None
-            if k is _TOMBSTONE:
-                continue
-            if k == key:
-                return self.values[idx]
+        start = self._hash(x)
+        i = start
+        first_tombstone = -1
+        while True:
+            val = self.table[i]
+            if val is None:
+                # 如果之前遇到 tombstone，优先放在那里
+                target = first_tombstone if first_tombstone != -1 else i
+                self.table[target] = x
+                return target
+            if val is self.tombstone:
+                if first_tombstone == -1:
+                    first_tombstone = i
+            # 否则被占用，继续线性探测
+            i = (i + 1) % self.capacity
+            if i == start:
+                break
+        # 全表探测一圈仍未找到空位
+        if first_tombstone != -1:
+            self.table[first_tombstone] = x
+            return first_tombstone
         return None
 
-    def remove(self, key: Any) -> bool:
-        h = self._hash(key)
-        for idx in self._probe(h):
-            k = self.keys[idx]
-            if k is None:
-                return False
-            if k is _TOMBSTONE:
-                continue
-            if k == key:
-                self.keys[idx] = _TOMBSTONE
-                self.values[idx] = None
-                self.size -= 1
-                self.tombstones += 1
-                return True
-        return False
-
-    def contains(self, key: Any) -> bool:
-        return self.get(key) is not None
+    def delete(self, x: Any) -> Optional[int]:
+        """删除 x（用 tombstone 标记）。若不存在返回 None；否则返回被删除的索引。"""
+        idx = self.find(x)
+        if idx == -1:
+            return None
+        self.table[idx] = self.tombstone
+        return idx
 
     def clear(self):
-        self.keys = [None] * self.capacity
-        self.values = [None] * self.capacity
-        self.size = 0
-        self.tombstones = 0
+        """完全清空表（把 tombstone 都清除为 None）"""
+        self.table = [None] * self.capacity
 
-    def items(self):
-        for k, v in zip(self.keys, self.values):
-            if k is not None and k is not _TOMBSTONE:
-                yield (k, v)
+    def __len__(self):
+        # 统计实际存储的元素（不计 tombstone）
+        return sum(1 for v in self.table if v is not None and v is not self.tombstone)
 
-    def __len__(self) -> int:
-        return self.size
+    def load_list(self, items: List[Any]):
+        """按顺序批量清空并插入 items（用于批量构建）"""
+        self.clear()
+        for x in items:
+            self.insert(x)
 
-    def is_empty(self) -> bool:
-        return self.size == 0
-
-    def is_full(self) -> bool:
-        return self.size + self.tombstones >= self.capacity and not self.auto_resize
-
-    def __repr__(self) -> str:
-        pairs = ", ".join(f"{k}:{v}" for k, v in self.items())
-        return f"<HashTable cap={self.capacity} size={self.size} [{pairs}]>"
+    def __repr__(self):
+        return f"HashTableModel(capacity={self.capacity}, table={self.table})"

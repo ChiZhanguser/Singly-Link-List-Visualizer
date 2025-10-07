@@ -11,11 +11,21 @@ from DSL_utils import process_command
 
 class BSTVisualizer:
     def __init__(self, root):
+        # --- 仅改动：统一深色背景色调变量 ---
+        self.WIN_BG = "#0B1220"         # 窗口背景
+        self.PANEL_BG = "#0F2330"       # 控件区域背景
+        self.CANVAS_BG = "#071A2B"      # 画布背景
+        self.TEXT_COLOR = "#E6F7FF"     # 默认文字颜色
+        self.HINT_COLOR = "#9FB8C6"     # 次要文字颜色
+        self.STATUS_COLOR = "lightgreen"
+
         self.window = root
-        self.window.config(bg="#F7F9FB")
+        # 将主窗体背景改为深色
+        self.window.config(bg=self.WIN_BG)
         self.canvas_width = 1250
         self.canvas_height = 560
-        self.canvas = Canvas(self.window, bg="white", width=self.canvas_width, height=self.canvas_height, relief=RAISED, bd=8)
+        # 画布背景改为深色
+        self.canvas = Canvas(self.window, bg=self.CANVAS_BG, width=self.canvas_width, height=self.canvas_height, relief=RAISED, bd=8, highlightthickness=0)
         self.canvas.pack(pady=(10,0))
 
         # 模型
@@ -46,47 +56,47 @@ class BSTVisualizer:
         self.draw_instructions()
         
     def create_controls(self):
-        # 父框（占据一整行）
-        top_frame = Frame(self.window, bg="#F7F9FB")
+        # 父框（占据一整行），背景改为深色
+        top_frame = Frame(self.window, bg=self.PANEL_BG)
         top_frame.pack(pady=6, fill=X)
 
         # 上排：主输入 + 操作按钮（占满宽度，超多按钮会自动换行到下一行）
-        op_frame = Frame(top_frame, bg="#F7F9FB")
+        op_frame = Frame(top_frame, bg=self.PANEL_BG)
         op_frame.pack(fill=X, padx=6)
 
-        Label(op_frame, text="值输入（单值或逗号/空格批量）:", font=("Arial",12), bg="#F7F9FB").pack(side=LEFT, padx=(0,6))
-        entry = Entry(op_frame, textvariable=self.input_var, width=36, font=("Arial",12))
+        Label(op_frame, text="值输入（单值或逗号/空格批量）:", font=("Arial",12), bg=self.PANEL_BG, fg=self.TEXT_COLOR).pack(side=LEFT, padx=(0,6))
+        entry = Entry(op_frame, textvariable=self.input_var, width=36, font=("Arial",12), bg="#16313a", fg=self.TEXT_COLOR, insertbackground=self.TEXT_COLOR)
         entry.pack(side=LEFT, padx=(0,8))
         entry.insert(0, "15,6,23,4,7,71,5")
 
-        Button(op_frame, text="Insert (直接)", command=self.insert_direct, bg="green", fg="white").pack(side=LEFT, padx=4)
+        Button(op_frame, text="Insert (直接)", command=self.insert_direct, bg="#1f8f4a", fg="white").pack(side=LEFT, padx=4)
         Button(op_frame, text="Insert (动画)", command=self.start_insert_animated, bg="#2E8B57", fg="white").pack(side=LEFT, padx=4)
         Button(op_frame, text="Search (动画)", command=self.start_search_animated, bg="#FFA500").pack(side=LEFT, padx=4)
-        Button(op_frame, text="Delete (动画)", command=self.start_delete_animated, bg="red", fg="white").pack(side=LEFT, padx=4)
-        Button(op_frame, text="清空", command=self.clear_canvas, bg="orange").pack(side=LEFT, padx=4)
-        Button(op_frame, text="返回主界面", command=self.back_to_main, bg="blue", fg="white").pack(side=LEFT, padx=4)
+        Button(op_frame, text="Delete (动画)", command=self.start_delete_animated, bg="#c04a4a", fg="white").pack(side=LEFT, padx=4)
+        Button(op_frame, text="清空", command=self.clear_canvas, bg="#d67a2a").pack(side=LEFT, padx=4)
+        Button(op_frame, text="返回主界面", command=self.back_to_main, bg="#2B6CB0", fg="white").pack(side=LEFT, padx=4)
 
         # 下排：保存/打开 + DSL（保证可见）
-        bottom_frame = Frame(self.window, bg="#F7F9FB")
+        bottom_frame = Frame(self.window, bg=self.PANEL_BG)
         bottom_frame.pack(pady=(4,8), fill=X, padx=6)
 
         # 左侧：保存/打开
-        left_ops = Frame(bottom_frame, bg="#F7F9FB")
+        left_ops = Frame(bottom_frame, bg=self.PANEL_BG)
         left_ops.pack(side=LEFT, anchor="w")
-        Button(left_ops, text="保存树", command=self.save_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
-        Button(left_ops, text="打开树", command=self.load_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
+        Button(left_ops, text="保存树", command=self.save_tree, bg="#426EF6", fg="white").pack(side=LEFT, padx=6)
+        Button(left_ops, text="打开树", command=self.load_tree, bg="#426EF6", fg="white").pack(side=LEFT, padx=6)
 
         # 右侧：DSL 输入（放在右边更显眼），但也能放在中间
-        dsl_ops = Frame(bottom_frame, bg="#F7F9FB")
+        dsl_ops = Frame(bottom_frame, bg=self.PANEL_BG)
         dsl_ops.pack(side=RIGHT, anchor="e")
-        Label(dsl_ops, text="DSL 命令:", font=("Arial",11), bg="#F7F9FB").pack(side=LEFT, padx=(0,6))
+        Label(dsl_ops, text="DSL 命令:", font=("Arial",11), bg=self.PANEL_BG, fg=self.TEXT_COLOR).pack(side=LEFT, padx=(0,6))
         # 绑定到 self.dsl_var，保存为实例属性便于调试/访问
-        self.dsl_entry = Entry(dsl_ops, width=36, font=("Arial",11), textvariable=self.dsl_var)
+        self.dsl_entry = Entry(dsl_ops, width=36, font=("Arial",11), textvariable=self.dsl_var, bg="#16313a", fg=self.TEXT_COLOR, insertbackground=self.TEXT_COLOR)
         self.dsl_entry.pack(side=LEFT, padx=(0,6))
         # 回车执行
         self.dsl_entry.bind("<Return>", lambda e: self.process_dsl())
         # 按钮执行
-        Button(dsl_ops, text="执行DSL", command=self.process_dsl).pack(side=LEFT)
+        Button(dsl_ops, text="执行DSL", command=self.process_dsl, bg="#2B6CB0", fg="white").pack(side=LEFT)
 
         # 给 DSL entry 初始焦点提示（可选）
         # self.dsl_entry.insert(0, "例如: insert 10 20 30 / search 7 / delete 9 / create 5 6 7")
@@ -214,17 +224,18 @@ class BSTVisualizer:
         self.canvas.delete("all")
         self.node_items.clear()
         self.node_to_rect.clear()
-        self.canvas.create_text(10, 10, anchor="nw", text="BST：插入 / 查找 / 删除 动态演示。中序位置用于横向布局。", font=("Arial",11))
+        # 指示文本颜色改为浅色，便于在深色背景上可读
+        self.canvas.create_text(10, 10, anchor="nw", text="BST：插入 / 查找 / 删除 动态演示。中序位置用于横向布局。", font=("Arial",11), fill=self.TEXT_COLOR)
         if self.status_text_id:
             try:
                 self.canvas.delete(self.status_text_id)
             except Exception:
                 pass
-        self.status_text_id = self.canvas.create_text(self.canvas_width-10, 10, anchor="ne", text="", font=("Arial",12,"bold"), fill="darkgreen")
+        self.status_text_id = self.canvas.create_text(self.canvas_width-10, 10, anchor="ne", text="", font=("Arial",12,"bold"), fill=self.STATUS_COLOR)
 
     def update_status(self, text: str):
         if not self.status_text_id:
-            self.status_text_id = self.canvas.create_text(self.canvas_width-10, 10, anchor="ne", text=text, font=("Arial",12,"bold"), fill="darkgreen")
+            self.status_text_id = self.canvas.create_text(self.canvas_width-10, 10, anchor="ne", text=text, font=("Arial",12,"bold"), fill=self.STATUS_COLOR)
         else:
             self.canvas.itemconfig(self.status_text_id, text=text)
 
@@ -401,12 +412,10 @@ class BSTVisualizer:
             messagebox.showerror("错误", f"加载失败：{e}")
             self.update_status("加载失败")
 
-    # ---------- layout: compute inorder positions ----------
     def compute_positions(self) -> Dict[TreeNode, Tuple[float,float]]:
         pos: Dict[TreeNode, Tuple[float,float]] = {}
         nodes_inorder: List[TreeNode] = []
         depths: Dict[TreeNode, int] = {}
-
         def inorder(n: Optional[TreeNode], d: int):
             if n is None:
                 return
@@ -414,7 +423,6 @@ class BSTVisualizer:
             nodes_inorder.append(n)
             depths[n] = d
             inorder(n.right, d+1)
-
         inorder(self.model.root, 0)
         n = len(nodes_inorder)
         if n == 0:
@@ -429,18 +437,41 @@ class BSTVisualizer:
             y = 60 + depths[node] * self.level_gap
             pos[node] = (x, y)
         return pos
-
-    # ---------- drawing ----------
     def redraw(self):
         self.canvas.delete("all")
+        # draw a subtle gradient-ish background on canvas (approximate by rectangles)
+        w = max(self.canvas_width, self.canvas.winfo_width() if self.canvas.winfo_width() else self.canvas_width)
+        h = max(self.canvas_height, self.canvas.winfo_height() if self.canvas.winfo_height() else self.canvas_height)
+        stops = ["#071A2B", "#0A2433", "#0E2F3A"]
+        steps = 30
+        def interp(c1, c2, t):
+            r1,g1,b1 = int(c1[1:3],16), int(c1[3:5],16), int(c1[5:7],16)
+            r2,g2,b2 = int(c2[1:3],16), int(c2[3:5],16), int(c2[5:7],16)
+            r = int(r1 + (r2-r1)*t); g = int(g1 + (g2-g1)*t); b = int(b1 + (b2-b1)*t)
+            return f"#{r:02x}{g:02x}{b:02x}"
+        for i in range(steps):
+            t = i/(steps-1)
+            idx = int(t*(len(stops)-1))
+            t2 = (t*(len(stops)-1)) - idx
+            c = interp(stops[idx], stops[min(idx+1, len(stops)-1)], t2)
+            y0 = int(i*(h/steps))
+            y1 = int((i+1)*(h/steps))
+            self.canvas.create_rectangle(0, y0, w, y1, outline="", fill=c)
+        # faint grid lines to give structure
+        grid_col = "#0b3a46"
+        for gx in range(0, w, 80):
+            self.canvas.create_line(gx, 0, gx, h, fill=grid_col)
+        for gy in range(0, h, 80):
+            self.canvas.create_line(0, gy, w, gy, fill=grid_col)
+
         self.node_items.clear()
         self.node_to_rect.clear()
         self.draw_instructions()
         if self.model.root is None:
-            self.canvas.create_text(self.canvas_width/2, self.canvas_height/2, text="空树", font=("Arial",18), fill="gray")
+            self.canvas.create_text(self.canvas_width/2, self.canvas_height/2, text="空树", font=("Arial",18), fill="#9fb8c6")
             return
         pos = self.compute_positions()
-        # draw edges first for nicer visuals
+        # draw edges first for nicer visuals (use a lighter color)
         for node, (cx, cy) in pos.items():
             if node.left and node.left in pos:
                 lx, ly = pos[node.left]
@@ -457,8 +488,8 @@ class BSTVisualizer:
         top = cy + self.node_h/2
         bot = ty - self.node_h/2
         mid_y = (top + bot) / 2
-        l1 = self.canvas.create_line(cx, top, cx, mid_y, width=2)
-        l2 = self.canvas.create_line(cx, mid_y, tx, bot, arrow=LAST, width=2)
+        l1 = self.canvas.create_line(cx, top, cx, mid_y, width=2, fill="#6ee7b7")
+        l2 = self.canvas.create_line(cx, mid_y, tx, bot, arrow=LAST, width=2, fill="#86f0da")
         self.node_items += [l1, l2]
 
     def _draw_node(self, node: TreeNode, cx: float, cy: float):
@@ -466,6 +497,7 @@ class BSTVisualizer:
         top = cy - self.node_h/2
         right = cx + self.node_w/2
         bottom = cy + self.node_h/2
+        # 为了与深色背景形成对比，保留节点为浅色卡片
         rect = self.canvas.create_rectangle(left, top, right, bottom, fill="#F0F8FF", outline="black", width=2)
         self.node_to_rect[node] = rect
         self.node_items.append(rect)
@@ -475,7 +507,7 @@ class BSTVisualizer:
         v1 = self.canvas.create_line(x1, top, x1, bottom, width=1)
         v2 = self.canvas.create_line(x2, top, x2, bottom, width=1)
         self.node_items += [v1, v2]
-        self.canvas.create_text((x1+x2)/2, (top+bottom)/2, text=str(node.val), font=("Arial",12,"bold"))
+        self.canvas.create_text((x1+x2)/2, (top+bottom)/2, text=str(node.val), font=("Arial",12,"bold"), fill="#0b2236")
 
     # ---------- user actions ----------
     def insert_direct(self):

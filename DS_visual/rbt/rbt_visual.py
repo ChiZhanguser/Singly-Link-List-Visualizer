@@ -1,10 +1,10 @@
 # DS_visual/binary_tree/rbt_visual.py
 from tkinter import *
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from typing import Dict, Tuple, List, Optional
 from rbt.rbt_model import RBModel, RBNode, clone_tree
 import storage as storage
-from tkinter import filedialog
+
 
 class RBTVisualizer:
     def __init__(self, root):
@@ -38,7 +38,7 @@ class RBTVisualizer:
         Label(frame, text="输入（按插入顺序，逗号分隔）:", bg="#F7F4F8", font=("Arial",11)).pack(side=LEFT, padx=6)
         entry = Entry(frame, textvariable=self.input_var, width=44, font=("Arial",11))
         entry.pack(side=LEFT, padx=6)
-        entry.insert(0, "10,5,20")
+        entry.insert(0, "1,2,3,4,5")
 
         Button(frame, text="Insert (动画)", bg="#C62828", fg="white", command=self.start_insert_animated).pack(side=LEFT, padx=6)
         Button(frame, text="清空", bg="#FFB74D", command=self.clear_canvas).pack(side=LEFT, padx=6)
@@ -102,6 +102,38 @@ class RBTVisualizer:
             y = 60 + depths[node] * self.level_gap
             res[key] = (x, y)
         return res
+
+    def _build_key_maps_from_root(self, root: Optional[RBNode]) -> Tuple[Dict[int,str], Dict[str, RBNode]]:
+        """
+        返回两个映射：
+          - orig_id_to_key: 快照中每个克隆节点的 orig_id -> key（key 是 draw 布局使用的标识）
+          - key_to_node: key -> 克隆节点对象
+        便于通过原始 model 节点 id 找到在该快照中的 key 位置。
+        """
+        orig_id_to_key: Dict[int,str] = {}
+        key_to_node: Dict[str, RBNode] = {}
+        if not root:
+            return orig_id_to_key, key_to_node
+
+        inorder_nodes: List[RBNode] = []
+        def inorder_collect(n: Optional[RBNode]):
+            if not n:
+                return
+            inorder_collect(n.left)
+            inorder_nodes.append(n)
+            inorder_collect(n.right)
+        inorder_collect(root)
+
+        counts: Dict[str,int] = {}
+        for node in inorder_nodes:
+            base = str(node.val)
+            cnt = counts.get(base, 0)
+            counts[base] = cnt + 1
+            key = f"{base}#{cnt}" if cnt > 0 else base
+            key_to_node[key] = node
+            if getattr(node, 'orig_id', None) is not None:
+                orig_id_to_key[node.orig_id] = key
+        return orig_id_to_key, key_to_node
 
     def draw_tree_from_root(self, root: Optional[RBNode]):
         self.canvas.delete("all")
@@ -189,10 +221,7 @@ class RBTVisualizer:
         snap_after_insert = snapshots[1] if len(snapshots) > 1 else None
 
         pos_pre = self.compute_positions_for_root(snap_pre)
-        val_to_keys_pre: Dict[str, List[str]] = {}
-        for k in pos_pre.keys():
-            base = k.split('#')[0]
-            val_to_keys_pre.setdefault(base, []).append(k)
+        origid_to_key_pre, _ = self._build_key_maps_from_root(snap_pre)
 
         def highlight_path(i=0):
             if i >= len(path_nodes):
@@ -200,18 +229,15 @@ class RBTVisualizer:
                 self.animate_flyin_new(val, snap_after_insert, lambda: self._after_insert_events(events, snapshots, idx))
                 return
             node = path_nodes[i]
-            v = str(node.val)
-            keylist = val_to_keys_pre.get(v, [])
-            if keylist:
-                key = keylist.pop(0)
-                self.draw_tree_from_root(snap_pre)
+            node_id = getattr(node, 'id', None)
+            key = origid_to_key_pre.get(node_id)
+            self.draw_tree_from_root(snap_pre)
+            if key:
                 try:
                     self.canvas.itemconfig(self.node_vis[key]['rect'], outline="orange", width=4)
                 except Exception:
                     pass
-            else:
-                self.draw_tree_from_root(snap_pre)
-            self.update_status(f"搜索路径: 访问 {v} (step {i})")
+            self.update_status(f"搜索路径: 访问 {node.val} (step {i})")
             self.window.after(420, lambda: highlight_path(i+1))
 
         highlight_path(0)
@@ -220,7 +246,13 @@ class RBTVisualizer:
         if not snap_after_insert:
             on_complete(); return
         pos_after = self.compute_positions_for_root(snap_after_insert)
-        candidate_keys = [k for k in pos_after.keys() if k.split('#')[0] == str(val_str)]
+        # build orig_id->key map to find newly inserted clone
+        origid_to_key_after, _ = self._build_key_maps_from_root(snap_after_insert)
+        candidate_keys = [k for id_, k in origid_to_key_after.items() if k and k.split('#')[0] == str(val_str)]
+        # better: prefer last occurrence (right-most) as new insert generally appears at that key
+        if not candidate_keys:
+            # fallback: match by value keys
+            candidate_keys = [k for k in pos_after.keys() if k.split('#')[0] == str(val_str)]
         if not candidate_keys:
             on_complete(); return
         target_key = candidate_keys[-1]
@@ -263,7 +295,10 @@ class RBTVisualizer:
         pos_before = self.compute_positions_for_root(before_root)
         pos_after = self.compute_positions_for_root(after_root)
 
+        # 画 before 快照，并建立快照内的 orig_id -> key 映射
         self.draw_tree_from_root(before_root)
+        origid_to_key_before, key_to_node_before = self._build_key_maps_from_root(before_root)
+        origid_to_key_after, key_to_node_after = self._build_key_maps_from_root(after_root)
 
         keys_common = set(pos_before.keys()) & set(pos_after.keys())
         moves = []
@@ -278,10 +313,10 @@ class RBTVisualizer:
         label_id = None
         if event.get('type') == 'recolor':
             label_text = "重染色 (parent/uncle -> B, grand -> R)"
-            # try to find parent/uncle keys for label
-            parent = event.get('parent'); uncle = event.get('uncle'); grand = event.get('grand')
-            pk = next((k for k in pos_before.keys() if k.split('#')[0] == str(parent.val)), None) if parent else None
-            gk = next((k for k in pos_before.keys() if k.split('#')[0] == str(grand.val)), None) if grand else None
+            parent_id = event.get('parent_id')
+            grand_id = event.get('grand_id')
+            pk = origid_to_key_before.get(parent_id)
+            gk = origid_to_key_before.get(grand_id)
             if pk and gk:
                 px, py = pos_before[pk]; gx, gy = pos_before[gk]
                 mx = (px + gx)/2
@@ -291,16 +326,17 @@ class RBTVisualizer:
                     label_id = None
         else:
             label_text = event.get('type', 'rotate')
-            # place label near root of affected before snapshot if possible
-            z = event.get('x') or event.get('z')
-            if z:
-                zk = next((k for k in pos_before.keys() if k.split('#')[0] == str(z.val)), None)
-                if zk:
-                    zx, zy = pos_before[zk]
-                    try:
+            z_id = event.get('z_id') or event.get('z') or event.get('z_id')
+            zk = None
+            if z_id:
+                zk = origid_to_key_before.get(z_id) or origid_to_key_after.get(z_id)
+            if zk:
+                zx, zy = pos_before.get(zk, pos_after.get(zk, (None, None)))
+                try:
+                    if zx is not None:
                         label_id = self.canvas.create_text(zx, zy-36, text=label_text, font=("Arial",10,"bold"), fill="red")
-                    except:
-                        label_id = None
+                except:
+                    label_id = None
 
         frames = 24
         delay = 30
@@ -332,8 +368,6 @@ class RBTVisualizer:
                     dy = cur_cy - ccy
                     self.canvas.move(rect_id, dx, dy)
                     self.canvas.move(text_id, dx, dy)
-                    # move color label if exists
-                    # find color_label by scanning items (not ideal but ok)
                 except Exception:
                     pass
             self.window.after(delay, lambda: frame_step(f+1))
@@ -347,6 +381,7 @@ class RBTVisualizer:
             if i >= len(events):
                 on_all_done()
                 return
+            # snapshots[1+i] is before this event, snapshots[2+i] is after this event
             before_root = snapshots[1 + i]
             after_root = snapshots[2 + i]
             ev = events[i]
@@ -393,11 +428,11 @@ class RBTVisualizer:
         self.model.root = newroot
         self.draw_tree_from_root(clone_tree(self.model.root))
         self.update_status("已经从文件加载并恢复结构")
-
+        
 
 if __name__ == '__main__':
     w = Tk()
     w.title("Red-Black Tree 可视化")
     w.geometry("1350x730")
-    RBVisualizer(w)
+    RBTVisualizer(w)
     w.mainloop()
