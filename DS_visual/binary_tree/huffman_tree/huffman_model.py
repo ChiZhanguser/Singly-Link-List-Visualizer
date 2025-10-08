@@ -1,4 +1,3 @@
-# DS_visual/huffman/huffman_model.py
 from typing import Any, List, Tuple, Optional
 import heapq
 import itertools

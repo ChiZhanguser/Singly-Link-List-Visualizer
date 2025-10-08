@@ -174,321 +174,168 @@ class HuffmanVisualizer:
 
     # ---------- 保存/打开 helpers ----------
     def _ensure_huffman_folder(self) -> str:
-        """确保 save/huffman 文件夹存在，返回绝对路径"""
-        try:
-            if hasattr(storage, "ensure_save_subdir"):
-                return storage.ensure_save_subdir("huffman")
-            base_dir = os.path.dirname(os.path.abspath(storage.__file__))
-            default_dir = os.path.join(base_dir, "save", "huffman")
-            os.makedirs(default_dir, exist_ok=True)
-            return default_dir
-        except Exception:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            default_dir = os.path.join(base_dir, "..", "save", "huffman")
-            default_dir = os.path.normpath(default_dir)
-            os.makedirs(default_dir, exist_ok=True)
-            return default_dir
-
+        return storage.ensure_save_subdir("huffman")
     def save_tree(self):
-        """
-        保存当前 Huffman 的初始权值与（可选的）链式节点字典和视觉坐标到 JSON 文件。
-        """
-        try:
-            # ...（保留你原来的 weights 获取逻辑）...
-            weights = None
-            try:
-                weights = self.parse_input()
-            except Exception:
-                weights = None
+        weights = self.parse_input()
+        positions = {"leaves": [], "parents": []}
+        leaf_positions = []
+        for k, v in list(self.node_vis.items()):
+            if isinstance(k, tuple) and k[0] == "leaf":
+                leaf_positions.append((k[1], float(v.get("cx", 0)), float(v.get("cy", 0))))
+        if leaf_positions:
+            leaf_positions.sort(key=lambda x: x[0])
+            positions["leaves"] = [[cx, cy] for idx, cx, cy in leaf_positions]
 
-            if weights is None:
-                if self.snap_before and len(self.snap_before) > 0:
-                    weights = list(self.snap_before[0])
-                else:
-                    leaves = []
-                    for k, v in self.node_vis.items():
-                        if isinstance(k, tuple) and k[0] == "leaf":
-                            leaves.append((k[1], float(v.get("weight", 0))))
-                    if leaves:
-                        leaves.sort(key=lambda x: x[0])
-                        weights = [w for idx, w in leaves]
+        parent_positions = []
+        for (a, b, p) in getattr(self, "steps", []):
+            pv = self.node_vis.get(p.id)
+            if pv:
+                parent_positions.append([float(pv.get("cx", 0)), float(pv.get("cy", 0))])
+            else:
+                parent_positions.append(None)
+        if parent_positions:
+            positions["parents"] = parent_positions
 
-            if weights is None:
-                if not messagebox.askyesno("确认", "无法确定初始权值列表，是否仍然保存当前节点图（如果有）？"):
-                    return
-
-            # --- 收集可用的视觉坐标 ---
-            positions = {"leaves": [], "parents": []}
-            # leaves: 按索引收集
-            leaf_positions = []
-            for k, v in list(self.node_vis.items()):
-                if isinstance(k, tuple) and k[0] == "leaf":
-                    leaf_positions.append((k[1], float(v.get("cx", 0)), float(v.get("cy", 0))))
-            if leaf_positions:
-                leaf_positions.sort(key=lambda x: x[0])
-                positions["leaves"] = [[cx, cy] for idx, cx, cy in leaf_positions]
-
-            # parents: 按步骤顺序收集父节点坐标（若已绘制）
-            parent_positions = []
-            for (a, b, p) in getattr(self, "steps", []):
-                pv = self.node_vis.get(p.id)
-                if pv:
-                    parent_positions.append([float(pv.get("cx", 0)), float(pv.get("cy", 0))])
-                else:
-                    # 若某一步没有绘制过父节点（例如只保存 weights 而从未 build），写 null 占位
-                    parent_positions.append(None)
-            if parent_positions:
-                positions["parents"] = parent_positions
-
-            # 尝试导出 tree_dict（如果 storage 有能力）
-            tree_dict = {}
-            try:
-                if hasattr(storage, "tree_to_dict"):
-                    tree_dict = storage.tree_to_dict(getattr(self.model, "root", None))
-            except Exception:
-                tree_dict = {}
-
-            payload = {
-                "type": "huffman",
-                "weights": weights,
-                "tree": tree_dict,
-                "positions": positions,
-                "metadata": {
-                    "saved_at": datetime.now().isoformat(),
-                    "node_count": len(tree_dict.get("nodes", [])) if isinstance(tree_dict, dict) else 0
-                }
+        tree_dict = storage.tree_to_dict(getattr(self.model, "root", None))
+        payload = {
+            "type": "huffman",
+            "weights": weights,
+            "tree": tree_dict,
+            "positions": positions,
+            "metadata": {
+                "saved_at": datetime.now().isoformat(),
+                "node_count": len(tree_dict.get("nodes", [])) if isinstance(tree_dict, dict) else 0
             }
+        }
 
-            default_dir = self._ensure_huffman_folder()
-            default_name = f"huffman_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            filepath = filedialog.asksaveasfilename(
-                initialdir=default_dir,
-                initialfile=default_name,
-                defaultextension=".json",
-                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-                title="保存 Huffman 到文件"
-            )
-            if not filepath:
-                return
+        default_dir = self._ensure_huffman_folder()
+        default_name = f"huffman_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        filepath = filedialog.asksaveasfilename(
+            initialdir=default_dir,
+            initialfile=default_name,
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="保存 Huffman 到文件"
+        )
 
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2, ensure_ascii=False)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
 
-            messagebox.showinfo("成功", f"Huffman 已保存到：\n{filepath}")
-            self.update_status("保存成功")
-        except Exception as e:
-            print("save_tree error:", e)
-            messagebox.showerror("错误", f"保存失败：{e}")
-            self.update_status("保存失败")
+        messagebox.showinfo("成功", f"Huffman 已保存到：\n{filepath}")
+        self.update_status("保存成功")
 
     def load_tree(self):
-        try:
-            default_dir = self._ensure_huffman_folder()
-            filepath = filedialog.askopenfilename(
-                initialdir=default_dir,
-                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-                title="从文件加载 Huffman"
-            )
-            if not filepath:
-                return
+        default_dir = self._ensure_huffman_folder()
+        filepath = filedialog.askopenfilename(
+            initialdir=default_dir,
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="从文件加载 Huffman"
+        )
+        with open(filepath, "r", encoding="utf-8") as f:
+            obj = json.load(f)
+        weights = [float(x) for x in obj.get("weights", [])]
 
-            with open(filepath, "r", encoding="utf-8") as f:
-                obj = json.load(f)
-            if not obj:
-                messagebox.showerror("错误", "文件内容为空或无法解析")
-                self.update_status("加载失败")
-                return
+        positions = {}
+        if isinstance(obj, dict) and "positions" in obj and isinstance(obj["positions"], dict):
+            positions = obj["positions"]
+        else:
+            # 兼容旧文件：可能把 positions 放到 top-level某处
+            positions = obj.get("positions", {}) if isinstance(obj, dict) else {}
 
-            # 1) 直接识别 weights（多种可能位置）
-            weights = None
-            if isinstance(obj, list):
-                # 文件直接就是权值列表
-                try:
-                    weights = [float(x) for x in obj]
-                except Exception:
-                    weights = None
-            elif isinstance(obj, dict):
-                # 优先 type==huffman 且包含 weights
-                if obj.get("type") == "huffman" and isinstance(obj.get("weights"), list):
-                    try:
-                        weights = [float(x) for x in obj.get("weights", [])]
-                    except Exception:
-                        weights = None
-                # 兼容旧格式 data 字段
-                if weights is None and isinstance(obj.get("data"), list):
-                    try:
-                        weights = [float(x) for x in obj.get("data", [])]
-                    except Exception:
-                        weights = None
-                # 如果没有 weights，但文件本身可能就是一个简单字典（例如 storage.save_list_to_file 的输出）
-                if weights is None and "list" in obj and isinstance(obj.get("list"), list):
-                    try:
-                        weights = [float(x) for x in obj.get("list", [])]
-                    except Exception:
-                        weights = None
+        leaf_pos_list = positions.get("leaves", []) if isinstance(positions, dict) else []
+        parent_pos_list = positions.get("parents", []) if isinstance(positions, dict) else []
 
-            # 2) 如果没有 weights，但有树字典，尝试从树字典中重建链式节点并抽取叶子权值
-            tree_dict = None
-            if weights is None and isinstance(obj, dict):
-                if obj.get("type") == "huffman" and isinstance(obj.get("tree"), dict):
-                    tree_dict = obj.get("tree")
-                elif "nodes" in obj and "root" in obj:
-                    # 可能是直接保存的 tree_dict（不带 type）
-                    tree_dict = obj
+        # 重新用 HuffmanModel 构建（得到 steps/snaps 用于后续绘制）
+        self.model = HuffmanModel()
+        root, steps, snaps_before, snaps_after = self.model.build_with_steps(weights)
+        self.steps = steps
+        self.snap_before = snaps_before
+        self.snap_after = snaps_after
 
-            if weights is None and tree_dict:
-                try:
-                    # 如果 storage 提供 tree_dict_to_nodes，可尝试转换为 HuffmanNode 链式图
-                    reconstructed_root = None
-                    if hasattr(storage, "tree_dict_to_nodes"):
-                        try:
-                            reconstructed_root = storage.tree_dict_to_nodes(tree_dict, HuffmanNode)
-                        except Exception:
-                            reconstructed_root = None
-                    # 如果我们得到了链式节点，按左到右收集叶权值
-                    if reconstructed_root:
-                        leaves = []
+        # 重绘画布并根据 saved positions 恢复视觉
+        self.node_vis.clear()
+        self._draw_subtle_grid()
+        self._draw_instructions()
+        self._tree_clear()
 
-                        def collect_leaves(node):
-                            if node is None:
-                                return
-                            # 若是叶子
-                            if getattr(node, "left", None) is None and getattr(node, "right", None) is None:
-                                try:
-                                    leaves.append(float(getattr(node, "weight", getattr(node, "val", 0))))
-                                except Exception:
-                                    leaves.append(float(0))
-                            else:
-                                collect_leaves(getattr(node, "left", None))
-                                collect_leaves(getattr(node, "right", None))
-
-                        collect_leaves(reconstructed_root)
-                        if leaves:
-                            weights = leaves
-                except Exception as e:
-                    # 解析失败，忽略并继续后续兼容尝试
-                    print("tree_dict reconstruction error:", e)
-                    weights = None
-
-            # 3) 如果还没有 weights，提示无法识别
-            if weights is None:
-                messagebox.showerror("错误", "未能识别文件内容为可恢复格式（期待权值列表或包含树字典）")
-                self.update_status("加载失败")
-                return
-
-            positions = {}
-            if isinstance(obj, dict) and "positions" in obj and isinstance(obj["positions"], dict):
-                positions = obj["positions"]
+        # 绘制叶子：优先使用 leaf_pos_list 中的坐标，否则使用默认计算位置
+        n = len(weights)
+        total_w = n * self.node_w + max(0, (n - 1) * self.gap_x)
+        start_x = max(self.node_w / 2 + 20, (self.canvas_w - total_w) / 2 + self.node_w / 2)
+        for i, w in enumerate(weights):
+            if i < len(leaf_pos_list) and leaf_pos_list[i] is not None:
+                # 允许 leaf_pos_list 元素为 [cx, cy] 或 {"cx":..,"cy":..}
+                lp = leaf_pos_list[i]
+                if isinstance(lp, dict):
+                    cx = float(lp.get("cx", start_x + i * (self.node_w + self.gap_x)))
+                    cy = float(lp.get("cy", self.base_y))
+                elif isinstance(lp, (list, tuple)) and len(lp) >= 2:
+                    cx = float(lp[0]); cy = float(lp[1])
+                else:
+                    cx = start_x + i * (self.node_w + self.gap_x); cy = self.base_y
             else:
-                # 兼容旧文件：可能把 positions 放到 top-level某处
-                positions = obj.get("positions", {}) if isinstance(obj, dict) else {}
+                cx = start_x + i * (self.node_w + self.gap_x)
+                cy = self.base_y
+            rect = self.canvas.create_rectangle(cx - self.node_w/2, cy - self.node_h/2,
+                                                cx + self.node_w/2, cy + self.node_h/2,
+                                                fill="#E8F8F0", outline="#88C7A3", width=2)
+            txt = self.canvas.create_text(cx, cy, text=self._fmt_num(w), font=("Arial",12,"bold"), fill="#0B2545")
+            # 存放 leaf mapping（注意：later we may map child node.id -> this visual）
+            self.node_vis[("leaf", i)] = {'cx': cx, 'cy': cy, 'rect': rect, 'text': txt, 'merged': False, 'weight': float(w)}
 
-            leaf_pos_list = positions.get("leaves", []) if isinstance(positions, dict) else []
-            parent_pos_list = positions.get("parents", []) if isinstance(positions, dict) else []
-
-            # 重新用 HuffmanModel 构建（得到 steps/snaps 用于后续绘制）
-            self.model = HuffmanModel()
-            root, steps, snaps_before, snaps_after = self.model.build_with_steps(weights)
-            self.steps = steps
-            self.snap_before = snaps_before
-            self.snap_after = snaps_after
-
-            # 重绘画布并根据 saved positions 恢复视觉
-            self.node_vis.clear()
-            self._draw_subtle_grid()
-            self._draw_instructions()
-            self._tree_clear()
-
-            # 绘制叶子：优先使用 leaf_pos_list 中的坐标，否则使用默认计算位置
-            try:
-                n = len(weights)
-                total_w = n * self.node_w + max(0, (n - 1) * self.gap_x)
-                start_x = max(self.node_w / 2 + 20, (self.canvas_w - total_w) / 2 + self.node_w / 2)
-                for i, w in enumerate(weights):
-                    if i < len(leaf_pos_list) and leaf_pos_list[i] is not None:
-                        # 允许 leaf_pos_list 元素为 [cx, cy] 或 {"cx":..,"cy":..}
-                        lp = leaf_pos_list[i]
-                        if isinstance(lp, dict):
-                            cx = float(lp.get("cx", start_x + i * (self.node_w + self.gap_x)))
-                            cy = float(lp.get("cy", self.base_y))
-                        elif isinstance(lp, (list, tuple)) and len(lp) >= 2:
-                            cx = float(lp[0]); cy = float(lp[1])
-                        else:
-                            cx = start_x + i * (self.node_w + self.gap_x); cy = self.base_y
+        # 绘制父节点（按 steps 顺序），优先使用 parent_pos_list 中的坐标
+        for i, (a, b, p) in enumerate(steps):
+            # 优先使用保存的 parent 坐标（支持 None 占位）
+            if i < len(parent_pos_list) and parent_pos_list[i] is not None:
+                pp = parent_pos_list[i]
+                # 支持 dict 或 list/tuple
+                if isinstance(pp, dict):
+                    tx = float(pp.get("cx", self.canvas_w/2))
+                    ty = float(pp.get("cy", self.base_y - (i+1)*self.level_gap))
+                elif isinstance(pp, (list, tuple)) and len(pp) >= 2:
+                    tx = float(pp[0]); ty = float(pp[1])
+                else:
+                    # fallback 自动计算
+                    va = self.node_vis.get(a.id); vb = self.node_vis.get(b.id)
+                    if va and vb:
+                        tx = (va['cx'] + vb['cx'])/2
+                        ty = min(va['cy'], vb['cy']) - self.level_gap
                     else:
-                        cx = start_x + i * (self.node_w + self.gap_x)
-                        cy = self.base_y
-                    rect = self.canvas.create_rectangle(cx - self.node_w/2, cy - self.node_h/2,
-                                                        cx + self.node_w/2, cy + self.node_h/2,
-                                                        fill="#E8F8F0", outline="#88C7A3", width=2)
-                    txt = self.canvas.create_text(cx, cy, text=self._fmt_num(w), font=("Arial",12,"bold"), fill="#0B2545")
-                    # 存放 leaf mapping（注意：later we may map child node.id -> this visual）
-                    self.node_vis[("leaf", i)] = {'cx': cx, 'cy': cy, 'rect': rect, 'text': txt, 'merged': False, 'weight': float(w)}
-            except Exception as e:
-                print("绘制叶子失败:", e)
-                messagebox.showwarning("警告", f"绘制叶子时出错: {e}")
+                        tx = self.canvas_w/2
+                        ty = self.base_y - (i+1) * self.level_gap
+            else:
+                # 自动计算目标位置（与 build_direct 一致）
+                va = self.node_vis.get(a.id)
+                vb = self.node_vis.get(b.id)
+                if va and vb:
+                    tx = (va['cx'] + vb['cx'])/2
+                    ty = min(va['cy'], vb['cy']) - self.level_gap
+                else:
+                    tx = self.canvas_w/2
+                    ty = self.base_y - (i+1) * self.level_gap
 
-            # 绘制父节点（按 steps 顺序），优先使用 parent_pos_list 中的坐标
+            # create visual, link, mark merged
+            self._create_node_visual(p, tx, ty)
+            # connect to children (this will try to map leaf visuals to child ids if needed)
             try:
-                for i, (a, b, p) in enumerate(steps):
-                    # 优先使用保存的 parent 坐标（支持 None 占位）
-                    if i < len(parent_pos_list) and parent_pos_list[i] is not None:
-                        pp = parent_pos_list[i]
-                        # 支持 dict 或 list/tuple
-                        if isinstance(pp, dict):
-                            tx = float(pp.get("cx", self.canvas_w/2))
-                            ty = float(pp.get("cy", self.base_y - (i+1)*self.level_gap))
-                        elif isinstance(pp, (list, tuple)) and len(pp) >= 2:
-                            tx = float(pp[0]); ty = float(pp[1])
-                        else:
-                            # fallback 自动计算
-                            va = self.node_vis.get(a.id); vb = self.node_vis.get(b.id)
-                            if va and vb:
-                                tx = (va['cx'] + vb['cx'])/2
-                                ty = min(va['cy'], vb['cy']) - self.level_gap
-                            else:
-                                tx = self.canvas_w/2
-                                ty = self.base_y - (i+1) * self.level_gap
-                    else:
-                        # 自动计算目标位置（与 build_direct 一致）
-                        va = self.node_vis.get(a.id)
-                        vb = self.node_vis.get(b.id)
-                        if va and vb:
-                            tx = (va['cx'] + vb['cx'])/2
-                            ty = min(va['cy'], vb['cy']) - self.level_gap
-                        else:
-                            tx = self.canvas_w/2
-                            ty = self.base_y - (i+1) * self.level_gap
+                self._link_parent_child(p, a)
+                self._link_parent_child(p, b)
+            except Exception:
+                pass
+            # mark merged children
+            try:
+                self._mark_merged(a)
+                self._mark_merged(b)
+            except Exception:
+                pass
 
-                    # create visual, link, mark merged
-                    self._create_node_visual(p, tx, ty)
-                    # connect to children (this will try to map leaf visuals to child ids if needed)
-                    try:
-                        self._link_parent_child(p, a)
-                        self._link_parent_child(p, b)
-                    except Exception:
-                        pass
-                    # mark merged children
-                    try:
-                        self._mark_merged(a)
-                        self._mark_merged(b)
-                    except Exception:
-                        pass
+            # fill Treeview after snapshot if available
+            if i < len(snaps_after):
+                self._tree_set_after(i, snaps_after[i])
 
-                    # fill Treeview after snapshot if available
-                    if i < len(snaps_after):
-                        self._tree_set_after(i, snaps_after[i])
-            except Exception as e:
-                print("绘制父节点失败:", e)
-                messagebox.showwarning("警告", f"绘制父节点时出错: {e}")
-
-            # 最后更新状态并通知成功
-            self.update_status("已通过权值恢复 Huffman（如有保存的视觉坐标则使用之）")
-            messagebox.showinfo("成功", f"已通过权值恢复 Huffman（共 {len(weights)} 个初始权值）")
-        except Exception as e:
-            print("load_tree error:", e)
-            messagebox.showerror("错误", f"加载失败：{e}")
-            self.update_status("加载失败")
+        # 最后更新状态并通知成功
+        self.update_status("已通过权值恢复 Huffman（如有保存的视觉坐标则使用之）")
+        messagebox.showinfo("成功", f"已通过权值恢复 Huffman（共 {len(weights)} 个初始权值）")
 
         
     def build_direct(self):

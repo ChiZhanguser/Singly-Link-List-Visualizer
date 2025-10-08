@@ -18,7 +18,7 @@ class BinaryTreeModel:
     def build_from_level_order(items: List[str]) -> Tuple[Optional[TreeNode], List[Optional[TreeNode]]]:
         if not items:
             return None, []
-
+    
         it = iter(items)
         first = next(it, None)
         if first is None or first == "#":
