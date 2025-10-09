@@ -1,11 +1,7 @@
-# queue/circular_queue_model.py
 from typing import Any, List, Optional, Dict
-
 
 class CircularQueueModel:
     """
-    Simple circular queue (ring buffer) model.
-
     Attributes:
         capacity: maximum number of elements the queue can hold
         buffer: list of length == capacity storing elements or None
@@ -151,22 +147,21 @@ class CircularQueueModel:
     def __repr__(self) -> str:
         return f"CircularQueueModel(cap={self.capacity}, head={self.head}, tail={self.tail}, size={self.size}, buffer={self.buffer})"
 
-
-# Quick smoke test when run directly
-if __name__ == "__main__":
-    q = CircularQueueModel(5)
-    assert q.is_empty()
-    assert not q.is_full()
-    for i in range(5):
-        ok = q.enqueue(i)
-        assert ok
-    assert q.is_full()
-    assert q.enqueue(99) is False
-    out = [q.dequeue() for _ in range(5)]
-    assert out == [0, 1, 2, 3, 4]
-    assert q.dequeue() is None
-    q.enqueue("a"); q.enqueue("b")
-    d = q.to_dict()
-    q2 = CircularQueueModel.from_dict(d)
-    assert q2.to_list() == q.to_list()
-    print("CircularQueueModel self-test passed.")
+# 自测代码
+# if __name__ == "__main__":
+#     q = CircularQueueModel(5)
+#     assert q.is_empty()
+#     assert not q.is_full()
+#     for i in range(5):
+#         ok = q.enqueue(i)
+#         assert ok
+#     assert q.is_full()
+#     assert q.enqueue(99) is False
+#     out = [q.dequeue() for _ in range(5)]
+#     assert out == [0, 1, 2, 3, 4]
+#     assert q.dequeue() is None
+#     q.enqueue("a"); q.enqueue("b")
+#     d = q.to_dict()
+#     q2 = CircularQueueModel.from_dict(d)
+#     assert q2.to_list() == q.to_list()
+#     print("CircularQueueModel self-test passed.")

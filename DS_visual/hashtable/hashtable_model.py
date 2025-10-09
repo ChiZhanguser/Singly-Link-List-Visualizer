@@ -17,14 +17,13 @@ class HashTableModel:
         return int(xi) % self.capacity
 
     def find(self, x: Any) -> int:
-        """查找值 x，若找到返回索引，否则返回 -1。探测到空位（None）则可终止。"""
         start = self._hash(x)
         i = start
         first_pass = True
         while True:
             val = self.table[i]
             if val is None:
-                return -1  # 直接遇到空位 => 不存在
+                return -1  
             if val is not self.tombstone and val == x:
                 return i
             i = (i + 1) % self.capacity
@@ -59,8 +58,7 @@ class HashTableModel:
             return first_tombstone
         return None
 
-    def delete(self, x: Any) -> Optional[int]:
-        """删除 x（用 tombstone 标记）。若不存在返回 None；否则返回被删除的索引。"""
+    def delete(self, x: Any) -> Optional[int]: #
         idx = self.find(x)
         if idx == -1:
             return None
@@ -68,15 +66,12 @@ class HashTableModel:
         return idx
 
     def clear(self):
-        """完全清空表（把 tombstone 都清除为 None）"""
         self.table = [None] * self.capacity
 
     def __len__(self):
-        # 统计实际存储的元素（不计 tombstone）
         return sum(1 for v in self.table if v is not None and v is not self.tombstone)
 
     def load_list(self, items: List[Any]):
-        """按顺序批量清空并插入 items（用于批量构建）"""
         self.clear()
         for x in items:
             self.insert(x)

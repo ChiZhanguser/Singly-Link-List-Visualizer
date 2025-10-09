@@ -45,8 +45,6 @@ class HuffmanVisualizer:
         bottom_right.pack(side=BOTTOM, fill=X, pady=8)
         Button(bottom_right, text="清空", command=self.clear_canvas, bg="#FFB74D").pack(side=LEFT, padx=6)
         Button(bottom_right, text="返回主界面", command=self.back_to_main, bg="#6EA8FE", fg="white").pack(side=RIGHT, padx=6)
-
-        # 模型
         self.model = HuffmanModel()
         self.steps: List[Tuple[HuffmanNode, HuffmanNode, HuffmanNode]] = []
         self.snap_before: List[List[float]] = []
@@ -72,8 +70,6 @@ class HuffmanVisualizer:
         self.entry = Entry(ctrl_frame, textvariable=self.input_var, width=36, font=("Arial",11))
         self.entry.pack(side=LEFT, padx=6)
         self.entry.insert(0, "1,2,3,4")
-
-        Button(ctrl_frame, text="一步生成(直接)", command=self.build_direct, bg="#47C17E", fg="white").pack(side=LEFT, padx=6)
         Button(ctrl_frame, text="逐步动画构建", command=self.start_animated_build, bg="#2E8B57", fg="white").pack(side=LEFT, padx=6)
 
         # ---------- 新增：保存 / 打开 按钮 ----------
@@ -158,7 +154,6 @@ class HuffmanVisualizer:
             return str(int(v))
         return f"{v:.2f}"
 
-    # ---------- input parsing ----------
     def parse_input(self) -> Optional[List[float]]:
         s = self.input_var.get().strip()
         if not s:
@@ -171,8 +166,7 @@ class HuffmanVisualizer:
             messagebox.showerror("错误", "请输入数字（用逗号分隔）")
             return None
         return nums
-
-    # ---------- 保存/打开 helpers ----------
+        
     def _ensure_huffman_folder(self) -> str:
         return storage.ensure_save_subdir("huffman")
     def save_tree(self):
@@ -185,7 +179,6 @@ class HuffmanVisualizer:
         if leaf_positions:
             leaf_positions.sort(key=lambda x: x[0])
             positions["leaves"] = [[cx, cy] for idx, cx, cy in leaf_positions]
-
         parent_positions = []
         for (a, b, p) in getattr(self, "steps", []):
             pv = self.node_vis.get(p.id)
@@ -195,7 +188,6 @@ class HuffmanVisualizer:
                 parent_positions.append(None)
         if parent_positions:
             positions["parents"] = parent_positions
-
         tree_dict = storage.tree_to_dict(getattr(self.model, "root", None))
         payload = {
             "type": "huffman",
@@ -207,7 +199,6 @@ class HuffmanVisualizer:
                 "node_count": len(tree_dict.get("nodes", [])) if isinstance(tree_dict, dict) else 0
             }
         }
-
         default_dir = self._ensure_huffman_folder()
         default_name = f"huffman_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         filepath = filedialog.asksaveasfilename(
@@ -217,10 +208,8 @@ class HuffmanVisualizer:
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             title="保存 Huffman 到文件"
         )
-
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
-
         messagebox.showinfo("成功", f"Huffman 已保存到：\n{filepath}")
         self.update_status("保存成功")
 
@@ -236,12 +225,7 @@ class HuffmanVisualizer:
         weights = [float(x) for x in obj.get("weights", [])]
 
         positions = {}
-        if isinstance(obj, dict) and "positions" in obj and isinstance(obj["positions"], dict):
-            positions = obj["positions"]
-        else:
-            # 兼容旧文件：可能把 positions 放到 top-level某处
-            positions = obj.get("positions", {}) if isinstance(obj, dict) else {}
-
+        positions = obj["positions"]
         leaf_pos_list = positions.get("leaves", []) if isinstance(positions, dict) else []
         parent_pos_list = positions.get("parents", []) if isinstance(positions, dict) else []
 
@@ -288,14 +272,9 @@ class HuffmanVisualizer:
             # 优先使用保存的 parent 坐标（支持 None 占位）
             if i < len(parent_pos_list) and parent_pos_list[i] is not None:
                 pp = parent_pos_list[i]
-                # 支持 dict 或 list/tuple
-                if isinstance(pp, dict):
-                    tx = float(pp.get("cx", self.canvas_w/2))
-                    ty = float(pp.get("cy", self.base_y - (i+1)*self.level_gap))
-                elif isinstance(pp, (list, tuple)) and len(pp) >= 2:
+                if isinstance(pp, (list, tuple)) and len(pp) >= 2:
                     tx = float(pp[0]); ty = float(pp[1])
-                else:
-                    # fallback 自动计算
+                else: # fallback 自动计算
                     va = self.node_vis.get(a.id); vb = self.node_vis.get(b.id)
                     if va and vb:
                         tx = (va['cx'] + vb['cx'])/2
@@ -316,60 +295,17 @@ class HuffmanVisualizer:
 
             # create visual, link, mark merged
             self._create_node_visual(p, tx, ty)
-            # connect to children (this will try to map leaf visuals to child ids if needed)
-            try:
-                self._link_parent_child(p, a)
-                self._link_parent_child(p, b)
-            except Exception:
-                pass
+            # connect to children (this will try to map leaf visuals to child ids if needed
+            self._link_parent_child(p, a)
+            self._link_parent_child(p, b)
             # mark merged children
-            try:
-                self._mark_merged(a)
-                self._mark_merged(b)
-            except Exception:
-                pass
-
+            self._mark_merged(a)
+            self._mark_merged(b)
             # fill Treeview after snapshot if available
             if i < len(snaps_after):
                 self._tree_set_after(i, snaps_after[i])
-
-        # 最后更新状态并通知成功
         self.update_status("已通过权值恢复 Huffman（如有保存的视觉坐标则使用之）")
         messagebox.showinfo("成功", f"已通过权值恢复 Huffman（共 {len(weights)} 个初始权值）")
-
-        
-    def build_direct(self):
-        nums = self.parse_input()
-        if nums is None:
-            return
-        # reset canvas & right panel
-        self._draw_subtle_grid()
-        self._draw_instructions()
-        self.node_vis.clear()
-        # initial leaves
-        self.draw_initial_leaves(nums)
-        root, steps, snaps_before, snaps_after = self.model.build_with_steps(nums)
-        # 填充 Treeview：先插入 before 列
-        self._tree_insert_steps(snaps_before)
-        # 逐步绘制父节点并填 after
-        for i, (a, b, p) in enumerate(steps):
-            va = self.node_vis.get(a.id)
-            vb = self.node_vis.get(b.id)
-            if va and vb:
-                tx = (va['cx'] + vb['cx'])/2
-                ty = min(va['cy'], vb['cy']) - self.level_gap
-            else:
-                tx = self.canvas_w/2
-                ty = self.base_y - (i+1)*self.level_gap
-            self._create_node_visual(p, tx, ty)
-            self._link_parent_child(p, a)
-            self._link_parent_child(p, b)
-            self._mark_merged(a)
-            self._mark_merged(b)
-            if i < len(snaps_after):
-                self._tree_set_after(i, snaps_after[i])
-        self.update_status("构建完成（直接）")
-
     # ---------- 动画构建 ----------
     def start_animated_build(self):
         if self.animating:
@@ -399,7 +335,6 @@ class HuffmanVisualizer:
             return
         self.animating = True
         self._animate_step(0)
-
 
     def _animate_step(self, idx: int):
         if idx >= len(self.steps):
@@ -473,7 +408,6 @@ class HuffmanVisualizer:
 
         move_step()
 
-    # ---------- drawing helpers ----------
     def draw_initial_leaves(self, weights: List[float]):
         # draw bottom row leaves and map ("leaf", i)
         self.canvas.delete("all")
@@ -543,7 +477,6 @@ class HuffmanVisualizer:
             except Exception:
                 pass
 
-    # ---------- clear & back ----------
     def clear_canvas(self):
         if self.animating:
             return

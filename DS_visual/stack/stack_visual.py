@@ -1,198 +1,12 @@
-# stack_visual.py
-# 完整版：栈可视化（含 DSL 插件点与回退兼容）
 from tkinter import *
 from tkinter import messagebox, filedialog
 import json
 import os
 from datetime import datetime
-
-# ---- 对 StackModel 做兼容性导入 ----
-StackModel = None
-try:
-    from stack.stack_model import StackModel  # 项目内可能的包结构
-except Exception:
-    try:
-        from stack_model import StackModel  # 如果直接放在工程根目录
-    except Exception:
-        StackModel = None
-
-# ---- storage 兼容导入（用于保存/加载默认目录） ----
-try:
-    import storage
-except Exception:
-    # 提供一个最小兼容接口
-    class _FakeStorage:
-        @staticmethod
-        def ensure_save_subdir(name: str):
-            base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "save")
-            p = os.path.join(base, name)
-            os.makedirs(p, exist_ok=True)
-            return p
-    storage = _FakeStorage()
-
-# ---- stack_api 可选兼容（供外部 programmatic 注册） ----
-try:
-    import stack.stack_api as stack_api
-except Exception:
-    stack_api = None
-
-# ---- DSL_utils 插件点导入（优先使用外部包） ----
-process_command = None
-try:
-    # 期望 DSL_utils/__init__.py 提供 process_command(visualizer, text)
-    from DSL_utils import process_command as _pc
-    process_command = _pc
-except Exception:
-    process_command = None
-
-# 如果没有外部 DSL_utils，则使用内置回退的解析器（功能等同于之前版本）
-def _fallback_process_command(visualizer, text):
-    """
-    回退实现：支持 push x | pop | clear | create 1 2 3 或 create 1,2,3
-    优先调用 visualizer 已有的动画方法（animate_push_left, pop, clear_stack, _batch_step）
-    """
-    if getattr(visualizer, "animating", False):
-        messagebox.showinfo("提示", "当前正在执行动画，请稍后再试")
-        return
-
-    text = (text or "").strip()
-    if not text:
-        return
-
-    parts = text.split()
-    cmd = parts[0].lower()
-    args = parts[1:]
-
-    if cmd == "push":
-        if not args:
-            messagebox.showerror("错误", "push 需要一个参数，例如：push 5")
-            return
-        value = " ".join(args)
-        # 检查栈满
-        try:
-            if hasattr(visualizer.model, "is_full") and visualizer.model.is_full():
-                messagebox.showwarning("栈满", "栈已满，无法入栈")
-                return
-        except Exception:
-            pass
-
-        if hasattr(visualizer, "animate_push_left"):
-            visualizer.animate_push_left(value)
-        else:
-            try:
-                visualizer.model.push(value)
-                visualizer.update_display()
-            except Exception as e:
-                messagebox.showerror("错误", f"入栈失败：{e}")
-        return
-
-    if cmd == "pop":
-        if hasattr(visualizer, "pop"):
-            visualizer.pop()
-            return
-        try:
-            visualizer.model.pop()
-            visualizer.update_display()
-        except Exception:
-            messagebox.showwarning("栈空/错误", "出栈失败或栈为空")
-        return
-
-    if cmd == "clear":
-        if hasattr(visualizer, "clear_stack"):
-            visualizer.clear_stack()
-            return
-        try:
-            if hasattr(visualizer.model, "clear"):
-                visualizer.model.clear()
-            else:
-                visualizer.model.data = []
-                visualizer.model.top = -1
-            visualizer.update_display()
-        except Exception as e:
-            messagebox.showerror("错误", f"清空失败：{e}")
-        return
-
-    if cmd == "create":
-        if not args:
-            messagebox.showerror("错误", "create 需要至少一个值，例如：create 1 2 3")
-            return
-        items = []
-        for a in args:
-            for part in a.split(","):
-                s = part.strip()
-                if s != "":
-                    items.append(s)
-        if not items:
-            messagebox.showerror("错误", "未解析到有效值")
-            return
-
-        # 优先使用 visualizer.create_from_list
-        if hasattr(visualizer, "create_from_list"):
-            try:
-                visualizer.create_from_list(items)
-            except Exception as e:
-                messagebox.showerror("错误", f"调用 create_from_list 失败：{e}")
-            return
-
-        cap = getattr(visualizer, "capacity", None)
-        if cap is not None and len(items) > cap:
-            ans = messagebox.askyesno("容量不足",
-                                      f"要创建的元素数量 {len(items)} 超过当前 capacity={cap}。\n选择【是】扩容并完整加载；选择【否】则只加载前 {cap} 个元素。")
-            if ans:
-                # 尝试扩容并重建 model
-                try:
-                    if StackModel is not None:
-                        visualizer.capacity = len(items)
-                        visualizer.model = StackModel(visualizer.capacity)
-                    else:
-                        visualizer.capacity = len(items)
-                        try:
-                            visualizer.model = type(visualizer.model)(visualizer.capacity)
-                        except Exception:
-                            pass
-                except Exception:
-                    visualizer.capacity = len(items)
-            else:
-                items = items[:cap]
-
-        # 清空并批量入栈（使用 batch 动画，如果存在）
-        try:
-            if hasattr(visualizer.model, "clear"):
-                visualizer.model.clear()
-            else:
-                visualizer.model.data = []
-                visualizer.model.top = -1
-        except Exception:
-            pass
-
-        try:
-            visualizer.update_display()
-            visualizer.batch_queue = items
-            visualizer.batch_index = 0
-            if hasattr(visualizer, "_set_buttons_state"):
-                visualizer._set_buttons_state("disabled")
-            if hasattr(visualizer, "_batch_step"):
-                visualizer._batch_step()
-            else:
-                for v in items:
-                    try:
-                        visualizer.model.push(v)
-                    except Exception:
-                        break
-                visualizer.update_display()
-                if hasattr(visualizer, "_set_buttons_state"):
-                    visualizer._set_buttons_state("normal")
-        except Exception as e:
-            messagebox.showerror("错误", f"创建失败：{e}")
-        return
-
-    messagebox.showinfo("未识别命令", "支持命令：push x, pop, clear, create 1 2 3（或 create 1,2,3）")
-    return
-
-if process_command is None:
-    process_command = _fallback_process_command
-
-# ---------------- StackVisualizer 类 ----------------
+from stack.stack_model import StackModel
+import storage
+import stack.stack_api as stack_api 
+from DSL_utils import process_command 
 class StackVisualizer:
     def __init__(self, root):
         self.window = root
@@ -202,14 +16,7 @@ class StackVisualizer:
 
         # 默认 capacity 与模型（若未能导入 StackModel，会在运行时尝试基础替代）
         self.capacity = 10
-        if StackModel is not None:
-            try:
-                self.model = StackModel(self.capacity)
-            except Exception:
-                # 如果 StackModel 构造异常，尝试一个最小模型
-                self.model = self._make_minimal_model()
-        else:
-            self.model = self._make_minimal_model()
+        self.model = StackModel(self.capacity)
 
         # 画布元素引用
         self.stack_rectangles = []
@@ -245,42 +52,8 @@ class StackVisualizer:
         self.create_buttons()
         self.update_display()
 
-        # 尝试注册到 stack_api（如果有）
-        try:
-            if stack_api is not None and hasattr(stack_api, "register"):
-                stack_api.register(self)
-        except Exception:
-            pass
-
-    # 最小模型（fallback）实现，兼容 push/pop/clear/top/is_full/is_empty/len/data
-    def _make_minimal_model(self):
-        class MinimalStack:
-            def __init__(self, capacity=10):
-                self.data = []
-                self.top = -1
-                self.capacity = capacity
-            def push(self, v):
-                if len(self.data) >= self.capacity:
-                    return False
-                self.data.append(v)
-                self.top = len(self.data) - 1
-                return True
-            def pop(self):
-                if not self.data:
-                    raise IndexError("pop from empty")
-                v = self.data.pop()
-                self.top = len(self.data) - 1
-                return v
-            def is_full(self):
-                return len(self.data) >= self.capacity
-            def is_empty(self):
-                return len(self.data) == 0
-            def clear(self):
-                self.data = []
-                self.top = -1
-            def __len__(self):
-                return len(self.data)
-        return MinimalStack(self.capacity)
+        # 注册到 stack_api
+        stack_api.register(self)
 
     def create_heading(self):
         heading = Label(self.window, text="栈(顺序栈)的可视化",
@@ -336,140 +109,57 @@ class StackVisualizer:
         Button(button_frame, text="打开栈", font=("Arial", 14), width=15, height=2, bg="#6C9EFF", fg="white",
                command=self.load_structure).grid(row=0, column=5, padx=20, pady=8)
 
-    # ----------------- DSL 调用桥接 -----------------
     def process_dsl(self, event=None):
         text = self.dsl_var.get().strip()
-        if not text:
-            return
         try:
             process_command(self, text)
         finally:
-            # 清空输入框（保留 UX）
             self.dsl_var.set("")
-    # ----------------- end DSL -----------------
 
     def _ensure_stack_folder(self):
-        try:
-            default_dir = storage.ensure_save_subdir("stack") if hasattr(storage, "ensure_save_subdir") else os.path.join(os.path.dirname(os.path.abspath(__file__)), "save", "stack")
-            os.makedirs(default_dir, exist_ok=True)
-            return default_dir
-        except Exception:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            default_dir = os.path.join(base_dir, "save", "stack")
-            os.makedirs(default_dir, exist_ok=True)
-            return default_dir
+        default_dir = storage.ensure_save_subdir("stack") if hasattr(storage, "ensure_save_subdir") else os.path.join(os.path.dirname(os.path.abspath(__file__)), "save", "stack")
+        os.makedirs(default_dir, exist_ok=True)
+        return default_dir
 
     def save_structure(self):
-        try:
-            data = list(self.model.data) if hasattr(self.model, "data") else []
-            meta = {"capacity": self.capacity, "top": getattr(self.model, "top", len(data) - 1)}
-
-            if len(data) == 0:
-                if not messagebox.askyesno("确认", "当前栈为空，是否仍然保存一个空栈文件？"):
-                    return
-
-            default_dir = self._ensure_stack_folder()
-            default_name = f"stack_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-
-            filepath = filedialog.asksaveasfilename(
-                initialdir=default_dir,
-                initialfile=default_name,
-                defaultextension=".json",
-                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-                title="保存栈到文件"
-            )
-            if not filepath:
-                return
-
-            payload = {"type": "stack", "data": data, "metadata": meta}
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2, ensure_ascii=False)
-
-            messagebox.showinfo("成功", f"栈已保存到：\n{filepath}")
-        except Exception as e:
-            print("save_structure error:", e)
-            messagebox.showerror("错误", f"保存失败：{e}")
+        data = list(self.model.data) if hasattr(self.model, "data") else []
+        meta = {"capacity": self.capacity, "top": getattr(self.model, "top", len(data) - 1)}
+        default_dir = self._ensure_stack_folder()
+        default_name = f"stack_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        filepath = filedialog.asksaveasfilename(
+            initialdir=default_dir,
+            initialfile=default_name,
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="保存栈到文件"
+        )
+        payload = {"type": "stack", "data": data, "metadata": meta}
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        messagebox.showinfo("成功", f"栈已保存到：\n{filepath}")
 
     def load_structure(self):
-        try:
-            default_dir = self._ensure_stack_folder()
-
-            filepath = filedialog.askopenfilename(
-                initialdir=default_dir,
-                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-                title="从文件加载栈"
-            )
-            if not filepath:
-                return
-
-            with open(filepath, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-
-            if isinstance(loaded, dict) and "data" in loaded:
-                data_list = loaded.get("data", [])
-            elif isinstance(loaded, list):
-                data_list = loaded
-            else:
-                messagebox.showerror("错误", "文件格式不被识别（需为 list 或包含 data 字段的 dict）")
-                return
-
-            if not isinstance(data_list, list):
-                messagebox.showerror("错误", "读取的数据不是列表")
-                return
-
-            if len(data_list) > self.capacity:
-                ans = messagebox.askyesno(
-                    "容量不足",
-                    f"要加载的文件包含 {len(data_list)} 个元素，当前 capacity = {self.capacity}。\n"
-                    "选择【是】以扩容并完整加载；选择【否】则只加载前 capacity 个元素。"
-                )
-                if ans:
-                    try:
-                        if StackModel is not None:
-                            self.capacity = len(data_list)
-                            self.model = StackModel(self.capacity)
-                        else:
-                            self.capacity = len(data_list)
-                            try:
-                                self.model = type(self.model)(self.capacity)
-                            except Exception:
-                                pass
-                    except Exception:
-                        self.capacity = len(data_list)
-                else:
-                    data_list = data_list[:self.capacity]
-
-            try:
-                # 尝试直接设定 model 的 data
-                self.model.data = list(data_list)
-                self.model.top = len(self.model.data) - 1
-            except Exception:
-                # 回退：重新 push 元素
-                self.model = StackModel(self.capacity) if StackModel is not None else self._make_minimal_model()
-                for v in data_list:
-                    try:
-                        self.model.push(v)
-                    except Exception:
-                        break
-
-            self.update_display()
-            messagebox.showinfo("成功", f"已加载 {len(self.model.data)} 个元素到栈")
-
-        except Exception as e:
-            print("load_structure error:", e)
-            messagebox.showerror("错误", f"加载失败：{e}")
+        default_dir = self._ensure_stack_folder()
+        filepath = filedialog.askopenfilename(
+            initialdir=default_dir,
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="从文件加载栈"
+        )
+        with open(filepath, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+        data_list = loaded.get("data", [])
+        self.model.data = list(data_list)
+        self.model.top = len(self.model.data) - 1
+        self.update_display()
+        messagebox.showinfo("成功", f"已加载 {len(self.model.data)} 个元素到栈")
 
     def prepare_push(self):
         if self.animating:
             return
-        try:
-            is_full = self.model.is_full()
-        except Exception:
-            is_full = len(self.model.data) >= self.capacity
+        is_full = self.model.is_full()
         if is_full:
             messagebox.showwarning("栈满", "栈已满，无法执行入栈操作")
             return
-
         if self.input_frame:
             try:
                 self.input_frame.destroy()
@@ -543,17 +233,9 @@ class StackVisualizer:
                     self.canvas.delete(text_id)
                 except Exception:
                     pass
-                try:
-                    pushed = self.model.push(value)
-                    if not pushed:
-                        messagebox.showwarning("栈满", "入栈失败：栈已满")
-                except Exception:
-                    # 若 model.push 抛出异常，尝试直接修改 data
-                    try:
-                        self.model.data.append(value)
-                        self.model.top = len(self.model.data) - 1
-                    except Exception:
-                        pass
+                pushed = self.model.push(value)
+                if not pushed:
+                    messagebox.showwarning("栈满", "入栈失败：栈已满")
 
                 self.update_display()
                 self.animating = False
@@ -567,10 +249,7 @@ class StackVisualizer:
     def pop(self):
         if self.animating:
             return
-        try:
-            empty = self.model.is_empty()
-        except Exception:
-            empty = len(self.model.data) == 0
+        empty = self.model.is_empty()
         if empty:
             messagebox.showwarning("栈空", "栈已空，无法执行出栈操作")
             return
@@ -588,38 +267,20 @@ class StackVisualizer:
             self._set_buttons_state("normal")
             return
 
-        try:
-            rect_id = self.stack_rectangles[top_idx]
-            text_id = self.stack_labels[top_idx]
-        except Exception:
-            try:
-                _ = self.model.pop()
-            except Exception:
-                pass
-            self.update_display()
-            self.animating = False
-            self._set_buttons_state("normal")
-            return
-
+        rect_id = self.stack_rectangles[top_idx]
+        text_id = self.stack_labels[top_idx]
         self.canvas.itemconfig(rect_id, fill="salmon")
-
         total_steps = 30
         dx = (1350 + self.cell_width) / total_steps
         step_delay = 12  # ms
 
         def step(step_i=0):
             if step_i < total_steps:
-                try:
-                    self.canvas.move(rect_id, dx, 0)
-                    self.canvas.move(text_id, dx, 0)
-                except Exception:
-                    pass
+                self.canvas.move(rect_id, dx, 0)
+                self.canvas.move(text_id, dx, 0)
                 self.window.after(step_delay, lambda: step(step_i + 1))
             else:
-                try:
-                    _ = self.model.pop()
-                except Exception:
-                    pass
+                _ = self.model.pop()
                 self.update_display()
                 self.animating = False
                 self._set_buttons_state("normal")
@@ -629,10 +290,7 @@ class StackVisualizer:
     def clear_stack(self):
         if self.animating:
             return
-        try:
-            empty = self.model.is_empty()
-        except Exception:
-            empty = len(self.model.data) == 0
+        empty = self.model.is_empty()
         if empty:
             messagebox.showinfo("信息", "栈已为空")
             return
@@ -686,7 +344,6 @@ class StackVisualizer:
         self.canvas.delete("all")
         self.stack_rectangles.clear()
         self.stack_labels.clear()
-
         frame_width = (self.cell_width + self.spacing) * self.capacity + 20
         frame_height = self.cell_height + 20
         self.canvas.create_rectangle(
@@ -698,21 +355,18 @@ class StackVisualizer:
             width=2,
             fill="lightgray"
         )
-
         self.canvas.create_text(
             self.start_x - 30,
             self.start_y + self.cell_height/2,
             text="栈底",
             font=("Arial", 12, "bold")
         )
-
         self.canvas.create_text(
             self.start_x + (self.cell_width + self.spacing) * self.capacity + 30,
             self.start_y + self.cell_height/2,
             text="栈顶",
             font=("Arial", 12, "bold")
         )
-
         for i in range(len(self.model.data)):
             x = self.start_x + i * (self.cell_width + self.spacing)
 
@@ -724,7 +378,6 @@ class StackVisualizer:
                 width=2
             )
             self.stack_rectangles.append(rect)
-
             label = self.canvas.create_text(
                 x + self.cell_width/2,
                 self.start_y + self.cell_height/2,
@@ -732,7 +385,6 @@ class StackVisualizer:
                 font=("Arial", 14, "bold")
             )
             self.stack_labels.append(label)
-
         if not getattr(self.model, "is_empty", lambda: len(self.model.data) == 0)():
             top_x = self.start_x + getattr(self.model, "top", len(self.model.data) - 1) * (self.cell_width + self.spacing)
             self.canvas.create_line(
@@ -780,8 +432,6 @@ class StackVisualizer:
             "5. DSL: 在下方 DSL 命令框输入：push x / pop / clear / create 1 2 3（或 create 1,2,3）并回车"
         )
         self.canvas.create_text(info_x + 6, info_y + 36, text=instruction_text, font=("Arial", 11), anchor="nw", width=info_width, justify=LEFT)
-        # ================== 结束修复 ==================
-
 
     def _set_buttons_state(self, state):
         try:
@@ -810,15 +460,8 @@ class StackVisualizer:
         if self.animating:
             messagebox.showinfo("提示", "正在动画构建，无法返回")
             return
-        try:
-            if stack_api is not None and hasattr(stack_api, "unregister"):
-                stack_api.unregister(self)
-        except Exception:
-            pass
-        try:
-            self.window.destroy()
-        except Exception:
-            pass
+        stack_api.unregister(self)
+        self.window.destroy()
 
 if __name__ == '__main__':
     window = Tk()

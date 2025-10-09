@@ -17,14 +17,7 @@ class HuffmanModel:
     def __init__(self):
         self.root: Optional[HuffmanNode] = None
         self.steps: List[Tuple[HuffmanNode, HuffmanNode, HuffmanNode]] = []
-
     def build_with_steps(self, weights: List[float]) -> Tuple[Optional[HuffmanNode], List[Tuple[HuffmanNode, HuffmanNode, HuffmanNode]], List[List[float]], List[List[float]]]:
-        """
-        构建 Huffman 树并记录每一步。
-        返回 (root, steps, snapshots_before, snapshots_after)
-        snapshots_before[i] 是第 i 步合并之前堆中的权值（已排序）
-        snapshots_after[i] 是第 i 步合并之后堆中的权值（已排序）
-        """
         self.steps = []
         snapshots_before: List[List[float]] = []
         snapshots_after: List[List[float]] = []

@@ -1,0 +1,29 @@
+{
+  "type": "tree",
+  "tree": {
+    "nodes": [
+      {
+        "id": "n1",
+        "val": "1",
+        "left": null,
+        "right": null,
+        "height": 1
+      },
+      {
+        "id": "n2",
+        "val": "3",
+        "left": null,
+        "right": null,
+        "height": 1
+      },
+      {
+        "id": "n0",
+        "val": "2",
+        "left": "n1",
+        "right": "n2",
+        "height": 2
+      }
+    ],
+    "root": "n0"
+  }
+}

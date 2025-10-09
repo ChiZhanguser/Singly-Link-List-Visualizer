@@ -5,11 +5,12 @@ from typing import Dict, Tuple, List, Optional
 from avl.avl_model import AVLModel, AVLNode, clone_tree
 import storage as storage
 from tkinter import filedialog
+from datetime import datetime
 
 class AVLVisualizer:
     def __init__(self, root):
         self.window = root
-        self.window.title("AVL 可视化（增强旋转动画）")
+        self.window.title("AVL 可视化")
         self.window.config(bg="#F7F9FB")
         self.canvas_w = 1200
         self.canvas_h = 560
@@ -35,22 +36,17 @@ class AVLVisualizer:
     def create_controls(self):
         frame = Frame(self.window, bg="#F7F4F8")
         frame.pack(pady=(0,6), fill=X)
-
         Label(frame, text="输入（按插入顺序，逗号分隔）:", bg="#F7F4F8", font=("Arial",11)).pack(side=LEFT, padx=6)
         entry = Entry(frame, textvariable=self.input_var, width=44, font=("Arial",11))
         entry.pack(side=LEFT, padx=6)
         entry.insert(0, "1,2,3")
-
         Button(frame, text="Insert (动画)", bg="#2E8B57", fg="white", command=self.start_insert_animated).pack(side=LEFT, padx=6)
         Button(frame, text="清空", bg="#FFB74D", command=self.clear_canvas).pack(side=LEFT, padx=6)
         Button(frame, text="返回主界面", bg="#6EA8FE", fg="white", command=self.back_to_main).pack(side=LEFT, padx=6)
         Button(frame, text="保存", bg="#6C9EFF", command=self.save_structure).pack(side=LEFT, padx=6)
         Button(frame, text="打开", bg="#6C9EFF", command=self.load_structure).pack(side=LEFT, padx=6)
-
-
         self.status_id = None
-
-
+        
     def draw_instructions(self):
         self.canvas.delete("all")
         self.node_vis.clear()
@@ -63,7 +59,6 @@ class AVLVisualizer:
         else:
             self.status_id = self.canvas.create_text(self.canvas_w - 12, 12, anchor="ne", text=txt, font=("Arial",11,"bold"), fill="darkgreen")
 
-    # ---------- small helper to draw edge ----------
     def _draw_connection(self, cx, cy, tx, ty):
         """Draw two-segment arrow from parent center (cx,cy) to child center (tx,ty)."""
         top = cy + self.node_h/2
@@ -73,7 +68,6 @@ class AVLVisualizer:
         l2 = self.canvas.create_line(cx, midy, tx, bot, arrow=LAST, width=2)
         return (l1, l2)
 
-    # ---------- helper: layout computation for ANY given root (snapshot) ----------
     def compute_positions_for_root(self, root: Optional[AVLNode]) -> Dict[str, Tuple[float, float]]:
         """
         Returns mapping key -> (cx,cy) for a given snapshot root.
@@ -279,12 +273,7 @@ class AVLVisualizer:
                 self.window.after(300, on_complete)
         step()
 
-    # ---------- rotation animation (precise interpolation) ----------
     def _animate_single_rotation(self, before_root: Optional[AVLNode], after_root: Optional[AVLNode], rotation_info: Dict, on_done):
-        """
-        animate nodes from before_root positions to after_root positions (interpolation).
-        rotation_info used to render label/arc.
-        """
         pos_before = self.compute_positions_for_root(before_root)
         pos_after = self.compute_positions_for_root(after_root)
 
@@ -326,7 +315,6 @@ class AVLVisualizer:
         frames = 24
         delay = 30
 
-        # Helper to get current center of rect
         def rect_center_coords(rect_id):
             coords = self.canvas.coords(rect_id)  # [x1,y1,x2,y2]
             if not coords or len(coords) < 4:
@@ -367,9 +355,6 @@ class AVLVisualizer:
         frame_step(0)
 
     def _animate_rotations_sequence(self, rotations: List[Dict], snapshots: List[Optional[AVLNode]], insertion_index: int, on_all_done):
-        """
-        rotations[i] corresponds to snapshots[i+2] (snapshots[0]=pre, [1]=after-insert)
-        """
         if not rotations:
             on_all_done(); return
 
@@ -395,7 +380,6 @@ class AVLVisualizer:
             self.window.after(300, lambda: self._insert_seq(insertion_idx+1))
         self._animate_rotations_sequence(rotations, snapshots, insertion_idx, done_all)
 
-    # ---------- clear & back ----------
     def clear_canvas(self):
         if self.animating:
             return
@@ -406,22 +390,38 @@ class AVLVisualizer:
         self.update_status("已清空")
 
     def back_to_main(self):
-        self.window.destroy()   
+        self.window.destroy()
+
+    def _ensure_avl_folder(self) -> str:
+        return storage.ensure_save_subdir("avl")
 
     def save_structure(self):
         root = self.model.root
-        ok = storage.save_tree_to_file(root)
-        if ok:
-            self.update_status("保存成功")
-    
+        default_dir = self._ensure_avl_folder()
+        default_name = f"avl_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        filepath = filedialog.asksaveasfilename(
+            initialdir=default_dir,
+            initialfile=default_name,
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="保存 AVL 到文件"
+        )
+        ok = storage.save_tree_to_file(root, filepath)
+        messagebox.showinfo("成功", f"AVL 已保存到：\n{filepath}")
+        if ok: self.update_status("保存成功")
     def load_structure(self):
-        tree_dict = storage.load_tree_from_file()
-        if not tree_dict:
-            return
-        from avl.avl_model import AVLNode as AVLNodeClass 
+        default_dir = self._ensure_avl_folder()
+        filepath = filedialog.askopenfilename(
+            initialdir=default_dir,
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="从文件加载 AVL"
+        )
+        tree_dict = storage.load_tree_from_file(filepath)
+        from avl.avl_model import AVLNode as AVLNodeClass
         newroot = storage.tree_dict_to_nodes(tree_dict, AVLNodeClass)
         self.model.root = newroot
         self.draw_tree_from_root(clone_tree(self.model.root))
+        messagebox.showinfo("成功", f"AVL 已从文件加载并恢复结构：\n{filepath}")
         self.update_status("已经从文件加载并恢复结构")
 
 if __name__ == '__main__':

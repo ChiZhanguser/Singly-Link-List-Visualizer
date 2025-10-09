@@ -1,4 +1,3 @@
-# DS_visual/binary_tree/binary_tree_visual.py
 from tkinter import *
 from tkinter import messagebox, filedialog
 from binary_tree.linked_storage.linked_storage_model import BinaryTreeModel, TreeNode
@@ -12,28 +11,16 @@ from datetime import datetime
 class BinaryTreeVisualizer:
     def __init__(self, root):
         self.window = root
-        # 更柔和的整体窗体背景（偏暖灰 + 微蓝）
         self.window.config(bg="#F3F6FA")
         self.window.title("二叉树可视化工具")
-        
-        try:
-            self.window.iconbitmap("binary_tree_icon.ico")
-        except:
-            pass
-        
         self.canvas_width = 1250
         self.canvas_height = 520
-        # 画布放在中间卡片上，用白色卡片和阴影突出
         self.canvas = Canvas(self.window, bg="#F3F6FA", width=self.canvas_width, height=self.canvas_height, 
                              relief=FLAT, bd=0, highlightthickness=0)
         self.canvas.pack(pady=(15, 0), padx=15, fill=BOTH, expand=True)
-
         self.root_node: Optional[TreeNode] = None
-
         self.node_items: List[int] = []
-
         self.node_to_rect: Dict[TreeNode, int] = {}
-
         # 布局参数
         self.node_w = 120
         self.node_h = 44
@@ -41,15 +28,12 @@ class BinaryTreeVisualizer:
         self.center_cell_w = 64
         self.right_cell_w = self.node_w - self.left_cell_w - self.center_cell_w
         self.level_gap = 100
-
         # 批量构建/动画状态
         self.input_var = StringVar()
         self.batch_queue: List[str] = []
         self.animating = False
-
         # 右上状态文本 id
         self.status_text_id: Optional[int] = None
-
         self.create_controls()
         # 初次绘制装饰（会在 redraw 时重绘）
         self.draw_decorations()
@@ -74,8 +58,6 @@ class BinaryTreeVisualizer:
     def draw_decorations(self):
         """在画布上绘制背景卡片、阴影和角落装饰。每次 redraw_tree 前调用以保持背景一致。"""
         self.canvas.delete("decor")  # 先清理老装饰（使用 tag）
-        # 背景底色（使用画布本身背景）
-        # 卡片阴影
         cx1, cy1 = 12, 12
         cx2, cy2 = self.canvas_width - 12, self.canvas_height - 12
         shadow_ids = []
@@ -89,7 +71,6 @@ class BinaryTreeVisualizer:
         for _id in card_ids:
             # 为了方便整体清理，重新加 tag
             self.canvas.addtag_withtag("decor", _id)
-
         # 角落装饰 —— 圆点与半透明带
         # 左上小圆
         dot1 = self.canvas.create_oval(cx1+18, cy1+18, cx1+58, cy1+58, fill="#E6F2FF", outline="", tags=("decor",))
@@ -181,121 +162,49 @@ class BinaryTreeVisualizer:
         hint_label.pack(pady=(5, 0))\
             
     def _ensure_tree_folder(self) -> str:
-        """
-        确保 save/tree 文件夹存在，优先使用 storage.ensure_save_subdir("tree")。
-        返回该目录的绝对路径。
-        """
-        try:
-            if hasattr(storage, "ensure_save_subdir"):
-                return storage.ensure_save_subdir("tree")
-            base_dir = os.path.dirname(os.path.abspath(storage.__file__))
-            default_dir = os.path.join(base_dir, "save", "tree")
-            os.makedirs(default_dir, exist_ok=True)
-            return default_dir
-        except Exception:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            default_dir = os.path.join(base_dir, "..", "save", "tree")
-            default_dir = os.path.normpath(default_dir)
-            os.makedirs(default_dir, exist_ok=True)
-            return default_dir
+        if hasattr(storage, "ensure_save_subdir"):
+            return storage.ensure_save_subdir("tree")
+        base_dir = os.path.dirname(os.path.abspath(storage.__file__))
+        default_dir = os.path.join(base_dir, "save", "tree")
+        os.makedirs(default_dir, exist_ok=True)
+        return default_dir
 
     def save_tree(self):
-        """
-        将当前 self.root_node（链式二叉树）保存为 JSON 文件。
-        格式: {"type":"tree","tree": <storage.tree_to_dict(root)>, "metadata": {...}}
-        """
-        try:
-            if not self.root_node:
-                if not messagebox.askyesno("确认", "当前画布为空，是否仍然保存一个空树文件？"):
-                    return
-
-            default_dir = self._ensure_tree_folder()
-            default_name = f"tree_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-
-            filepath = filedialog.asksaveasfilename(
-                initialdir=default_dir,
-                initialfile=default_name,
-                defaultextension=".json",
-                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-                title="保存树到文件"
-            )
-            if not filepath:
-                return
-
-            # 使用 storage.tree_to_dict 将链式节点图转换为字典描述
-            tree_dict = storage.tree_to_dict(self.root_node) if hasattr(storage, "tree_to_dict") else {}
-            metadata = {
-                "saved_at": datetime.now().isoformat(),
-                "node_count": len(tree_dict.get("nodes", [])) if isinstance(tree_dict, dict) else 0
-            }
-            payload = {"type": "tree", "tree": tree_dict, "metadata": metadata}
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2, ensure_ascii=False)
-
-            messagebox.showinfo("成功", f"二叉树已保存到：\n{filepath}")
-            self.update_status("保存成功", "#48BB78")
-        except Exception as e:
-            print("save_tree error:", e)
-            messagebox.showerror("错误", f"保存失败：{e}")
-            self.update_status("保存失败", "#E53E3E")
+        default_dir = self._ensure_tree_folder()
+        default_name = f"tree_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        filepath = filedialog.asksaveasfilename(
+            initialdir=default_dir,
+            initialfile=default_name,
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="保存树到文件"
+        )
+        tree_dict = storage.tree_to_dict(self.root_node) if hasattr(storage, "tree_to_dict") else {}
+        metadata = {
+            "saved_at": datetime.now().isoformat(),
+            "node_count": len(tree_dict.get("nodes", [])) if isinstance(tree_dict, dict) else 0
+        }
+        payload = {"type": "tree", "tree": tree_dict, "metadata": metadata}
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        messagebox.showinfo("成功", f"二叉树已保存到：\n{filepath}")
+        self.update_status("保存成功", "#48BB78")
     
     def load_tree(self):
-        """
-        从文件加载链式二叉树并恢复为 TreeNode 实例图（快速恢复，无动画）。
-        支持文件两种情况：
-          1) {"type":"tree","tree": {...}, ...}
-          2) 直接 {"nodes": [...], "root": "n0"}（旧格式）
-        """
-        try:
-            default_dir = self._ensure_tree_folder()
-            filepath = filedialog.askopenfilename(
-                initialdir=default_dir,
-                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-                title="从文件加载二叉树"
-            )
-            if not filepath:
-                return
-
-            with open(filepath, "r", encoding="utf-8") as f:
-                obj = json.load(f)
-            if not obj:
-                messagebox.showerror("错误", "文件内容为空或无法解析")
-                return
-
-            # 兼容两种格式
-            if isinstance(obj, dict) and obj.get("type") == "tree" and "tree" in obj:
-                tree_dict = obj.get("tree", {})
-            elif isinstance(obj, dict) and "nodes" in obj:
-                tree_dict = obj  # 直接是 tree_dict
-            else:
-                messagebox.showerror("错误", "文件格式不被识别（需为 tree 类型或包含 nodes/root 字段）")
-                return
-
-            # 使用 storage.tree_dict_to_nodes 构建 TreeNode 实例图（需要传入 TreeNode 类）
-            if hasattr(storage, "tree_dict_to_nodes"):
-                try:
-                    new_root = storage.tree_dict_to_nodes(tree_dict, TreeNode)
-                except Exception as e:
-                    # 若 storage 内转换有问题，回退为 caller 自行处理
-                    print("tree_dict_to_nodes error:", e)
-                    new_root = None
-            else:
-                new_root = None
-
-            if new_root is None:
-                messagebox.showwarning("警告", "加载成功但无法自动重建节点（storage.tree_dict_to_nodes 不可用），请手工检查。")
-                self.update_status("加载但未重建节点", "#E6A23C")
-                return
-
-            # 成功重建，赋值并重绘
-            self.root_node = new_root
-            self.redraw_tree()
-            messagebox.showinfo("成功", "二叉树已成功加载并恢复")
-            self.update_status("加载成功", "#48BB78")
-        except Exception as e:
-            print("load_tree error:", e)
-            messagebox.showerror("错误", f"加载失败：{e}")
-            self.update_status("加载失败", "#E53E3E")
+        default_dir = self._ensure_tree_folder()
+        filepath = filedialog.askopenfilename(
+            initialdir=default_dir,
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="从文件加载二叉树"
+        )
+        with open(filepath, "r", encoding="utf-8") as f:
+            obj = json.load(f)
+        tree_dict = obj.get("tree",{})
+        new_root = storage.tree_dict_to_nodes(tree_dict, TreeNode)
+        self.root_node = new_root
+        self.redraw_tree()
+        messagebox.showinfo("成功", "二叉树已成功加载并恢复")
+        self.update_status("加载成功", "#48BB78")
     
     # ---------- 状态 ----------
     def draw_instructions(self):
@@ -308,10 +217,7 @@ class BinaryTreeVisualizer:
                                anchor="w", font=("Segoe UI", 10), fill="#4A5568", tags=("instr",))
         # 初始化右上状态文本 id
         if self.status_text_id:
-            try:
-                self.canvas.delete(self.status_text_id)
-            except Exception:
-                pass
+            self.canvas.delete(self.status_text_id)
         self.status_text_id = self.canvas.create_text(
             self.canvas_width - 30, 20, text="就绪", anchor="ne", 
             font=("Segoe UI", 11, "bold"), fill="#4299E1", tags=("instr",)
@@ -413,13 +319,10 @@ class BinaryTreeVisualizer:
         self._animated_step(0)
 
     def _animated_step(self, idx: int):
-        # 结束条件
         if idx >= len(self.batch_queue):
             self.animating = False
             self.update_status("构建完成", "#48BB78")
             return
-
-        # parts 包含当前要插入的项
         parts_sofar = self.batch_queue[:idx+1]
         # prev_parts 是插入前已有的项（用于在插入前显示当前树并高亮父节点）
         prev_parts = self.batch_queue[:idx]
@@ -637,14 +540,5 @@ class BinaryTreeVisualizer:
         self.window.destroy()
         
 if __name__ == '__main__':
-    window = Tk()
-    window.title("二叉树可视化工具")
-    window.geometry("1350x780")
-    window.configure(bg="#F3F6FA")
-    # 设置窗口图标（如果有的话）
-    try:
-        window.iconbitmap("binary_tree_icon.ico")
-    except:
-        pass
-    BinaryTreeVisualizer(window)
-    window.mainloop()
+    window = Tk();window.title("二叉树可视化工具");window.geometry("1350x780");window.configure(bg="#F3F6FA")
+    BinaryTreeVisualizer(window);window.mainloop()

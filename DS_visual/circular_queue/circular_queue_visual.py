@@ -15,7 +15,7 @@ class CircularQueueVisualizer:
     def __init__(self, root):
         self.window = root
         self.window.config(bg="#F0FFF5")
-        self.window.title("循环队列（Circular Queue）可视化")
+        self.window.title("循环队列可视化")
         self.canvas = Canvas(self.window, bg="white", width=1350, height=520, relief=RAISED, bd=8)
         self.canvas.pack()
         self.capacity = 8
@@ -104,13 +104,9 @@ class CircularQueueVisualizer:
     def save_structure(self):
         data = list(self.model.buffer)
         meta = {"capacity": self.capacity, "head": self.model.head, "tail": self.model.tail, "size": self.model.size}
-        if all(x is None for x in data) and not messagebox.askyesno("确认", "当前队列为空，是否仍然保存一个空队列文件？"):
-            return
         default_dir = self._ensure_folder()
         default_name = f"cqueue_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         filepath = filedialog.asksaveasfilename(initialdir=default_dir, initialfile=default_name, defaultextension=".json", filetypes=[("JSON files","*.json")])
-        if not filepath:
-            return
         payload = {"type":"circular_queue","buffer":data,"meta":meta}
         with open(filepath,"w",encoding="utf-8") as f:
             json.dump(payload,f,ensure_ascii=False,indent=2)
@@ -119,16 +115,10 @@ class CircularQueueVisualizer:
     def load_structure(self):
         default_dir = self._ensure_folder()
         filepath = filedialog.askopenfilename(initialdir=default_dir, filetypes=[("JSON files","*.json")])
-        if not filepath:
-            return
         with open(filepath,"r",encoding="utf-8") as f:
             loaded = json.load(f)
         buf = loaded.get("buffer", [])
         meta = loaded.get("meta", {})
-        if len(buf) > self.capacity:
-            if messagebox.askyesno("容量不足", f"文件包含 {len(buf)} 个槽位，是否扩容到此长度？"):
-                self.capacity = len(buf)
-                self.model = CircularQueueModel(self.capacity)
         self.model.buffer = list(buf)[:self.capacity]
         self.model.capacity = self.capacity
         self.model.head = int(meta.get("head", 0))
@@ -272,7 +262,6 @@ class CircularQueueVisualizer:
         self.box_ids.clear()
         self.text_ids.clear()
 
-        # info
         info_x, info_y, info_w = 24, 18, 360
         self.canvas.create_rectangle(info_x-8, info_y-8, info_x+info_w+8, info_y+140, fill="#F7FFF6", outline="#DDD")
         sz = self.model.size

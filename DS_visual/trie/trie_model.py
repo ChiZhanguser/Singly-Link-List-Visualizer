@@ -1,4 +1,3 @@
-# trie_model.py
 from typing import Dict, List, Tuple, Optional
 
 class TrieNode:
@@ -14,7 +13,6 @@ class TrieNode:
 
 class TrieModel:
     """
-    简单 Trie 数据结构，支持：
       - insert(word) -> 返回插入时访问/创建的节点路径（从 root 开始，不包含虚拟 root 的 char）
       - search(word) -> (found: bool, path: List[TrieNode])  path 为访问到的节点列表（不包括 root）
       - clear() -> 重置 trie
