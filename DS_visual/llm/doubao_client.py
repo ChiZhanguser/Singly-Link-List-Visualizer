@@ -6,7 +6,6 @@ from typing import Any, Generator, Optional, List, Dict, Union
 
 class DoubaoClient:
     def __init__(self, api_key: str = None, api_base: str = None, model: str = None, timeout: int = 60):
-        # 优先使用传入参数，其次使用环境变量（不要把真实 key 提交到仓库）
         self.model = model or os.environ.get("DOUBAO_MODEL", "doubao-seed-1-6-250615")
         self.api_key = api_key or os.environ.get("DOUBAO_API_KEY") or "3a7533ff-aefd-4915-aa7c-80311e7d51a4"
         self.api_url = os.environ.get("DOUBAO_API_URL") or "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
@@ -52,21 +51,6 @@ class DoubaoClient:
         temperature: Optional[float] = 0.0,
         timeout_read: Optional[int] = None
     ) -> Dict[str, Any]:
-        """
-        发送非流式消息，支持 function-calling。
-
-        参数：
-          - text: 兼容旧 API，如果 messages 未提供，会把 text 放到 user 内容里。
-          - messages: 完整 messages 列表（role: system/user/...），优先使用。
-          - functions: 可选函数 schema 列表，会被包含到请求体中。
-          - temperature: 控制随机性，建议在调用时传 0。
-          - timeout_read: 可选读超时覆盖实例 timeout。
-
-        返回：
-            {"type": "function_call", "name": ..., "arguments": ...}
-            或 {"type": "assistant_text", "text": "..."}
-        """
-        # 构造 messages：优先使用调用方传入的 messages，否则用默认 system + user(text)
         if messages and isinstance(messages, list):
             msgs = messages
         else:
@@ -136,14 +120,10 @@ class DoubaoClient:
         except Exception:
             # 忽略解析异常，走下面的兜底
             pass
-
         # 兜底：返回原始 JSON（截断以避免超长）
         return {"type": "assistant_text", "text": json.dumps(resp_json, ensure_ascii=False)[:2000]}
 
     def send_message(self, text: str, messages: Optional[List[Dict[str, Any]]] = None, temperature: Optional[float] = None) -> str:
-        """
-        简单非函数调用版本的发送（向后兼容）。如果传 messages 则优先使用。
-        """
         if messages and isinstance(messages, list):
             msgs = messages
         else:

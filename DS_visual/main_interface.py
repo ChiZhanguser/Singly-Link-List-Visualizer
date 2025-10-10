@@ -40,9 +40,6 @@ def lighten_hex(h, amount=0.12):
     b = min(255, int(b + (255 - b) * amount))
     return rgb_to_hex((r, g, b))
 
-# -------------------------
-# Tooltip (unchanged)
-# -------------------------
 class ToolTip:
     def __init__(self, widget, text):
         self.widget = widget
@@ -68,10 +65,7 @@ class ToolTip:
         if self.tip:
             self.tip.destroy()
             self.tip = None
-
-# -------------------------
-# Main Interface (buttons restored to original simple Buttons)
-# -------------------------
+            
 class MainInterface:
     def __init__(self, root):
         self.window = root
@@ -79,44 +73,30 @@ class MainInterface:
         # 放大窗口以容纳更多按钮与更大卡片区
         self.window.geometry("1280x880")
         self.window.minsize(1000, 700)
-        try:
-            style = ttk.Style(self.window)
-            style.theme_use('clam')
-        except Exception:
-            pass
-        # set a pleasant light background for the window frame to contrast the header
+        style = ttk.Style(self.window)
+        style.theme_use('clam')
         self.window.configure(bg="#EAF5FF")
-
-        # header with animated gradient + particles (高度略增)
         header_h = 200
         self.header = Canvas(self.window, height=header_h, bd=0, highlightthickness=0, bg=self.window['bg'])
         self.header.pack(fill=X)
-        # animation state
         self._anim_phase = 0.0
-        # 粒子范围随 header 宽度扩展
         self._particle_positions = [(random.uniform(40, 1180), random.uniform(18, header_h-18),
                                      random.uniform(6, 26), random.uniform(0.12, 0.6)) for _ in range(12)]
         self._draw_header_gradient(self.header, header_h, "#3a8dde", "#70b7ff")
         self._animate_header()
-
-        # Header Text (keeps original look)
         self.header.create_text(48, 52, anchor='w', text="数据结构可视化工具",
                                 font=("Helvetica", 36, "bold"), fill="#062A4A", tags="title")
         self.header.create_text(48, 120, anchor='w',
                                 text="交互、演示与教学 — 支持链表/顺序表/栈/多种树结构",
                                 font=("Helvetica", 14), fill="#EAF6FF", tags="subtitle")
-
-        # Shadow and Card (增大卡片面积)
         shadow = Frame(self.window, bg="#d7e9ff", bd=8)
         shadow.place(relx=0.5, y=header_h - 12, anchor='n', relwidth=0.92, height=560)
-
         card = Frame(self.window, bg="white", relief="flat", bd=0, highlightthickness=0)
         card.place(relx=0.5, y=header_h - 16, anchor='n', relwidth=0.92, height=540)
         card.grid_propagate(False)
         card.grid_rowconfigure(0, weight=0)
         card.grid_rowconfigure(1, weight=1)
         card.grid_columnconfigure(0, weight=1)
-
         top_frame = Frame(card, bg="white", bd=0)
         top_frame.grid(row=0, column=0, sticky="ew", padx=28, pady=(24, 12))
         subtitle = Label(top_frame, text="选择可视化模块", font=("Helvetica", 22, "bold"), bg="white", fg="#0b3a66")
@@ -124,15 +104,11 @@ class MainInterface:
         desc = Label(top_frame, text="点击下面的按钮进入对应数据结构的交互演示。支持键盘/鼠标/DSL/自然语言交互。",
                      font=("Helvetica", 12), bg="white", fg="#4d6b88")
         desc.grid(row=1, column=0, sticky="w", pady=(6, 0))
-
         btn_frame = Frame(card, bg="white")
         btn_frame.grid(row=1, column=0, sticky="nsew", padx=28, pady=14)
-        # 更改为 3 列布局以容纳更多按钮且不覆盖
         cols = 3
         for i in range(cols):
             btn_frame.grid_columnconfigure(i, weight=1)
-
-        # revert to original simple Buttons (新增更多项)
         btns = [
             ("单链表", "#FF8C42", "🔗", self.open_linked_list, "单链表（单向）可视化与操作"),
             ("顺序表", "#2ECC71", "📋", self.open_sequence_list, "基于数组的顺序表演"),
@@ -147,8 +123,6 @@ class MainInterface:
             ("循环队列", "#F1C40F", "🔁", self.open_circular_queue, "循环队列（Ring Buffer）可视化 — 入队/出队/环绕示意"),
             ("散列表", "#2C3E50", "🔑", self.open_hashtable, "散列表（Hash Table）可视化 — 键值对存储")
         ]
-
-        # 按钮尺寸与间距略微调小，以适配三列同时保持良好触控面积
         for idx, (label, color, emoji, cmd, tip) in enumerate(btns):
             col = idx % cols
             row = idx // cols
@@ -159,8 +133,6 @@ class MainInterface:
             btn_frame.grid_rowconfigure(row, weight=1, minsize=84)
             self._attach_hover_effect(btn, color)
             ToolTip(btn, tip)
-
-        # bottom bar (original)
         bottom_bar = Frame(self.window, bg="#F4F8FF", height=44)
         bottom_bar.pack(fill=X, side=BOTTOM)
         copyright_label = Label(bottom_bar, text="© 张驰 的 数据结构可视化工具", bg="#F4F8FF", fg="#7a8897",
@@ -168,15 +140,11 @@ class MainInterface:
         copyright_label.pack(side=LEFT, padx=12)
         status_label = Label(bottom_bar, text="23070215", bg="#F4F8FF", fg="#7a8897", font=("Arial", 10))
         status_label.pack(side=RIGHT, padx=12)
-
-        # key bindings remain (并新增快捷键 4/5 给 Trie / B+Tree)
         self.window.bind("<Key-1>", lambda e: self.open_linked_list())
         self.window.bind("<Key-2>", lambda e: self.open_sequence_list())
         self.window.bind("<Key-3>", lambda e: self.open_stack())
         self.window.bind("<Key-4>", lambda e: self.open_trie())
         self.window.bind("<Key-5>", lambda e: self.open_bplustree())
-
-        # chat button: original simple Button but placed on header
         chat_btn = Button(self.header, text="🤖 聊天", font=("Helvetica", 14, "bold"),
                           bg="#1FA2FF", fg="white", bd=0, relief='flat', cursor="hand2",
                           command=lambda: ChatWindow(self.window))

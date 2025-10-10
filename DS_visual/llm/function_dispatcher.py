@@ -6,7 +6,7 @@ import importlib.util
 import re
 from typing import Any, Dict, Optional
 from llm.function_aliases import _ALIAS_MAP  
-
+import sys
 
 stack_api = None
 sequence_api = None
@@ -54,7 +54,6 @@ def _try_import_stack_api():
             if loader is None:
                 raise ImportError("spec.loader is None for stack_api")
             loader.exec_module(module)  # type: ignore
-            import sys
             sys.modules["stack_api"] = module
             stack_api = module
             return stack_api
@@ -104,7 +103,6 @@ def _try_import_sequence_api():
             if loader is None:
                 raise ImportError("spec.loader is None for sequence_api")
             loader.exec_module(module)  # type: ignore
-            import sys
             sys.modules["sequence_api"] = module
             sequence_api = module
             return sequence_api
@@ -154,7 +152,6 @@ def _try_import_linked_list_api():
             if loader is None:
                 raise ImportError("spec.loader is None for linked_list_api")
             loader.exec_module(module)  # type: ignore
-            import sys
             sys.modules["linked_list_api"] = module
             linked_list_api = module
             return linked_list_api
