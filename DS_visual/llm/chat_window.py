@@ -1,4 +1,3 @@
-# chat_window.py (带非单调背景的美化版)
 import threading
 import time
 import tkinter as tk
@@ -12,13 +11,13 @@ from llm.function_schemas import get_function_schemas
 import json
 import re
 
-# ================= Styling constants (可集中修改) =================
+
 USER_BG = "#E6F8EE"         # 用户气泡（淡绿）
 ASSIST_BG = "#FFFFFF"       # 助手气泡（白）
 BG_COLOR = "#F3F6F9"        # 窗口背景（浅灰蓝）
 BG_GRAD_2 = "#EEF9F4"       # 渐变第二色（浅绿偏白）
 INPUT_BG = "#FFFFFF"
-ACCENT = "#0F9370"          # 主色（按钮 / 亮色）
+ACCENT = "#0F9370"          
 ACCENT_DARK = "#0d7b5e"
 TEXT_COLOR = "#0F1724"
 META_COLOR = "#6B7280"

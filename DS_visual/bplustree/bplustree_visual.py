@@ -6,9 +6,6 @@ from bplustree.bplustree_model import BPlusTree, BPlusNode
 import math
 
 class BPlusVisualizer:
-    """
-    改进版：自动放大/拉伸布局 + 左侧控制折叠（占满画布空间）
-    """
     def __init__(self, root):
         self.window = root
         self.window.title("B+ 树 可视化 - 插入与分裂演示 (自适应布局)")

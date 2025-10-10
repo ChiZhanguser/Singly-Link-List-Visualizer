@@ -20,16 +20,13 @@ def _fallback_process_command(visualizer, text):
             return
         visualizer.animate_enqueue(arg)
         return
-
     if cmd in ("dequeue", "deq", "pop"):
         if visualizer.model.is_empty():
             messagebox.showwarning("队列空", "队列为空，无法出队")
             return
         visualizer.animate_dequeue()
         return
-
     if cmd == "clear":
         visualizer.clear_queue()
         return
-
     messagebox.showinfo("未识别命令", "仅支持命令：enqueue <value>、dequeue、clear。")

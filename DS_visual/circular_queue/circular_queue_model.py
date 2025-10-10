@@ -9,7 +9,6 @@ class CircularQueueModel:
         tail: index of the next insertion slot (next to enqueue)
         size: current number of elements
     """
-
     def __init__(self, capacity: int = 8):
         if capacity < 1:
             raise ValueError("capacity must be >= 1")
@@ -18,8 +17,6 @@ class CircularQueueModel:
         self.head: int = 0
         self.tail: int = 0
         self.size: int = 0
-
-    # Basic operations
 
     def enqueue(self, value: Any) -> bool:
         """
@@ -31,7 +28,7 @@ class CircularQueueModel:
         self.tail = (self.tail + 1) % self.capacity
         self.size += 1
         return True
-
+    
     def dequeue(self) -> Optional[Any]:
         """
         Remove and return front element. Returns None if the queue is empty.

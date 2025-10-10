@@ -26,6 +26,6 @@ def process_command(visualizer, text):
             return bst_dsl.process(visualizer, text)
     except Exception:
         pass
-
+    
     from tkinter import messagebox
     messagebox.showinfo("未识别可视化类型", "当前 DSL 只支持单链表（linked list）的命令。")

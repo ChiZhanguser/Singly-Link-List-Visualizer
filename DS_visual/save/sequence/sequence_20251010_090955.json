@@ -1,0 +1,11 @@
+{
+  "type": "sequence",
+  "data": [
+    "1",
+    "2",
+    "3"
+  ],
+  "metadata": {
+    "length": 3
+  }
+}

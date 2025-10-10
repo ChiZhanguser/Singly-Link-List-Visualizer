@@ -1,4 +1,3 @@
-# DSL_utils/sequence_dsl.py
 from tkinter import messagebox
 
 def _split_items(args):
@@ -11,16 +10,6 @@ def _split_items(args):
     return items
 
 def process(vis, text):
-    """
-    支持命令：
-      insert x        -> 尾部插入（append / insert_last）
-      insert_at i x   -> 在第 i 个位置插入（1-based），也支持 insert_at 0 插入头部
-      delete i        -> 删除第 i 个（1-based）；支持 delete first / delete last
-      clear           -> 清空顺序表
-      create 1 2 3    -> 清空并创建这些元素（支持逗号或空格分隔）
-    """
-    if not text or not vis:
-        return
     parts = text.split()
     if not parts:
         return
@@ -29,11 +18,7 @@ def process(vis, text):
 
     # insert x -> append / insert_last
     if cmd == "insert":
-        if not args:
-            messagebox.showerror("错误", "insert 需要一个参数，例如：insert 5")
-            return
         val = " ".join(args)
-        # 优先使用可视化提供的接口以保留动画
         if hasattr(vis, "perform_insert") and hasattr(vis, "animate_insert"):
             try:
                 # 默认尾部插入
@@ -43,7 +28,6 @@ def process(vis, text):
                 return
             except Exception:
                 pass
-        # 回退：直接写 model 或 data_store 并刷新
         if hasattr(vis, "model") and hasattr(vis.model, "append"):
             try:
                 vis.model.append(val)
