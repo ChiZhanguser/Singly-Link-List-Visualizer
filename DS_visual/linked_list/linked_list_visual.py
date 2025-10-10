@@ -73,7 +73,6 @@ class LinkList:
         self.temp_label_x = 40; self.temp_label_y = 150
         self.temp_pointer_left = 50; self.temp_pointer_up = 180
         self.pointing_line_temp_left = 65; self.pointing_line_temp_up = 195
-
         # dynamic handles
         self.pointing_line_start = None
         self.pointing_line_temp = None

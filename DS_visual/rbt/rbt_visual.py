@@ -400,7 +400,6 @@ class RBTVisualizer:
             self.window.after(300, lambda: self._insert_seq(insertion_idx+1))
         self._animate_events_sequence(events, snapshots, insertion_idx, done_all)
 
-    # ---------- clear & back ----------
     def clear_canvas(self):
         if self.animating:
             return

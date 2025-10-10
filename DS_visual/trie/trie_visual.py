@@ -13,7 +13,6 @@ class TrieVisualizer:
         main = Frame(self.window, bg="#F3F6FB")
         main.pack(fill=BOTH, expand=True)
         self.status_text_var = StringVar(value="就绪：可插入 / 查找 / 清空。")
-        # 左侧控制面板
         self.left_panel = Frame(main, width=self.left_width, bg="#F8FAFF")
         self.left_panel.pack(side=LEFT, fill=Y)
         self.left_panel.pack_propagate(False)
@@ -49,7 +48,6 @@ class TrieVisualizer:
         # animation state
         self.animating = False
         self.redraw()
-    # ---------------- left panel ----------------
     def _build_left_panel(self):
         pad = 12
         title = Label(self.left_panel, text="Trie 可视化", font=("Helvetica", 14, "bold"), bg="#F8FAFF")
@@ -95,10 +93,8 @@ class TrieVisualizer:
                      "• 当节点很多时，使用滚动条或按住鼠标左键拖动画布查看。\n"
                      "• 查找会高亮遍历路径（黄色），命中末尾为绿色。")
         Label(self.left_panel, text=help_text, bg="#F8FAFF", fg="#555", justify=LEFT, wraplength=self.left_width-24).pack(padx=pad, pady=(6,10))
-    # ---------------- status ----------------
     def update_status(self, txt: str):
         self.status_text_var.set(txt)
-    # ---------------- layout computation ----------------
     def compute_positions(self) -> Dict[TrieNode, Tuple[float,float]]:
         pos: Dict[TrieNode, Tuple[float,float]] = {}
         levels = self.model.nodes_by_level()

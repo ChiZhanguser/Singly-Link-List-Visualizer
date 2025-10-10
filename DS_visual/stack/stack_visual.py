@@ -13,28 +13,23 @@ class StackVisualizer:
         self.window.config(bg="#E6F3FF")
         self.canvas = Canvas(self.window, bg="white", width=1350, height=500, relief=RAISED, bd=8)
         self.canvas.pack()
-
         # 默认 capacity 与模型（若未能导入 StackModel，会在运行时尝试基础替代）
         self.capacity = 10
         self.model = StackModel(self.capacity)
-
         # 画布元素引用
         self.stack_rectangles = []
         self.stack_labels = []
-
         # 布局参数
         self.start_x = 200
         self.start_y = 300
         self.cell_width = 80
         self.cell_height = 60
         self.spacing = 10
-
         # 控件状态与变量
         self.value_entry = StringVar()
         self.batch_entry_var = StringVar()
         self.dsl_var = StringVar()
         self.input_frame = None
-
         self.push_btn = None
         self.pop_btn = None
         self.clear_btn = None
@@ -422,7 +417,6 @@ class StackVisualizer:
         info_text = f"栈状态: {'满' if getattr(self.model, 'is_full', lambda: False)() else '空' if getattr(self.model, 'is_empty', lambda: len(self.model.data) == 0)() else '非空'}， 大小: {len(self.model)}/{self.capacity}"
         # 使用 anchor='nw'（左上角锚点）和 width 使文本自动换行，justify=LEFT 左对齐
         self.canvas.create_text(info_x, info_y + 6, text=info_text, font=("Arial", 12), anchor="nw", width=info_width, justify=LEFT)
-
         instruction_text = (
             "操作说明：\n"
             "1. 入栈(Push): 在栈顶添加元素（左侧飞入）\n"

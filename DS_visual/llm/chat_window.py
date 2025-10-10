@@ -313,7 +313,6 @@ class ChatWindow:
                 if isinstance(item, dict) and 'choices' in item:
                     resp = item
                     break
-
         if isinstance(resp, dict):
             if 'type' in resp:
                 return resp
