@@ -4,128 +4,9 @@ from tkinter import messagebox, filedialog
 import json
 import os
 from datetime import datetime
-
-# 兼容导入 HashTableModel，如果项目结构不同时允许导入失败后回退内部简单实现
-HashTableModel = None
-try:
-    from hashtable.hashtable_model import HashTableModel, TOMBSTONE
-except Exception:
-    HashTableModel = None
-    TOMBSTONE = object()
-
-# 提供一个最小回退模型（若没有 hash_model.py）
-def _make_minimal_model(capacity=11):
-    class Minimal:
-        def __init__(self, capacity=11):
-            self.capacity = capacity
-            self.table = [None] * capacity
-            self.tombstone = TOMBSTONE
-        def _hash(self, x):
-            try:
-                xi = int(x)
-            except Exception:
-                xi = hash(x)
-            return int(xi) % self.capacity
-        def find(self, x):
-            start = self._hash(x)
-            i = start
-            while True:
-                val = self.table[i]
-                if val is None:
-                    return -1
-                if val is not self.tombstone and val == x:
-                    return i
-                i = (i + 1) % self.capacity
-                if i == start:
-                    break
-            return -1
-        def insert(self, x):
-            if self.find(x) != -1:
-                return self.find(x)
-            start = self._hash(x)
-            i = start
-            first_tomb = -1
-            while True:
-                val = self.table[i]
-                if val is None:
-                    target = first_tomb if first_tomb != -1 else i
-                    self.table[target] = x
-                    return target
-                if val is self.tombstone and first_tomb == -1:
-                    first_tomb = i
-                i = (i + 1) % self.capacity
-                if i == start:
-                    break
-            if first_tomb != -1:
-                self.table[first_tomb] = x
-                return first_tomb
-            return None
-        def delete(self, x):
-            idx = self.find(x)
-            if idx == -1:
-                return None
-            self.table[idx] = self.tombstone
-            return idx
-        def clear(self):
-            self.table = [None] * self.capacity
-        def load_list(self, items):
-            self.clear()
-            for v in items:
-                self.insert(v)
-    return Minimal(capacity)
-
-# DSL fallback解析（与 stack_visual 风格保持一致）
-def _fallback_process_command(visualizer, text):
-    if getattr(visualizer, "animating", False):
-        messagebox.showinfo("提示", "当前正在执行动画，请稍后再试")
-        return
-    text = (text or "").strip()
-    if not text:
-        return
-    parts = text.split()
-    cmd = parts[0].lower()
-    args = parts[1:]
-    if cmd in ("insert", "put", "add"):
-        if not args:
-            messagebox.showerror("错误", "insert 需要一个参数，例如：insert 5")
-            return
-        visualizer.prepare_insert(args[0])
-        return
-    if cmd in ("find", "search", "lookup"):
-        if not args:
-            messagebox.showerror("错误", "find 需要一个参数，例如：find 5")
-            return
-        visualizer.find_value(args[0])
-        return
-    if cmd in ("delete", "del", "remove"):
-        if not args:
-            messagebox.showerror("错误", "delete 需要一个参数，例如：delete 5")
-            return
-        visualizer.delete_value(args[0])
-        return
-    if cmd == "clear":
-        visualizer.clear_table()
-        return
-    if cmd == "create":
-        if not args:
-            messagebox.showerror("错误", "create 需要参数，例如：create 1,2,3")
-            return
-        s = " ".join(args)
-        parts = []
-        for seg in s.replace(",", " ").split():
-            if seg.strip() != "":
-                parts.append(seg.strip())
-        visualizer.create_from_list(parts)
-        return
-    messagebox.showinfo("未识别命令", "支持命令：insert x / find x / delete x / clear / create 1,2,3")
-
-# 如果有外部 process_command 可用则优先使用（和 stack_visual 保持一致）
-process_command = None
-try:
-    from DSL_utils import process_command as _pc
-    process_command = _pc
-except Exception:
-    process_command = _fallback_process_command
+from hashtable.hashtable_model import HashTableModel, TOMBSTONE
+from DSL_utils import process_command as _pc
+process_command = _pc
 
 class HashtableVisualizer:
     def __init__(self, root, capacity: int = 11):
@@ -135,13 +16,7 @@ class HashtableVisualizer:
         self.canvas.pack()
 
         self.capacity = capacity
-        if HashTableModel is not None:
-            try:
-                self.model = HashTableModel(self.capacity)
-            except Exception:
-                self.model = _make_minimal_model(self.capacity)
-        else:
-            self.model = _make_minimal_model(self.capacity)
+        self.model = HashTableModel(self.capacity)
 
         # 可视元素引用
         self.cell_rects = []
@@ -206,104 +81,69 @@ class HashtableVisualizer:
         dsl_entry.bind("<Return>", lambda e: self.process_dsl())
         Button(button_frame, text="执行", command=self.process_dsl).grid(row=2, column=5, padx=6)
 
-        # 保存/加载结构（可选）
         Button(button_frame, text="保存", command=self.save_structure).grid(row=0, column=6, padx=8)
         Button(button_frame, text="打开", command=self.load_structure).grid(row=1, column=6, padx=8)
 
     def process_dsl(self):
         text = self.dsl_var.get().strip()
-        if not text:
-            return
         try:
             process_command(self, text)
         finally:
             self.dsl_var.set("")
 
     def _ensure_folder(self):
-        try:
-            base = os.path.dirname(os.path.abspath(__file__))
-            p = os.path.join(base, "save", "hashtable")
-            os.makedirs(p, exist_ok=True)
-            return p
-        except Exception:
-            return os.getcwd()
+        base = os.path.dirname(os.path.abspath(__file__))
+        p = os.path.join(base, "save", "hashtable")
+        os.makedirs(p, exist_ok=True)
+        return p
 
     def save_structure(self):
-        try:
-            payload = {"type": "hashtable", "capacity": self.capacity, "data": self.model.table}
-            default_dir = self._ensure_folder()
-            default_name = f"hashtable_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            filepath = filedialog.asksaveasfilename(initialdir=default_dir, initialfile=default_name, defaultextension=".json", filetypes=[("JSON","*.json")])
-            if not filepath:
-                return
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False, indent=2)
-            messagebox.showinfo("保存成功", f"已保存到 {filepath}")
-        except Exception as e:
-            messagebox.showerror("保存失败", str(e))
+        payload = {"type": "hashtable", "capacity": self.capacity, "data": self.model.table}
+        default_dir = self._ensure_folder()
+        default_name = f"hashtable_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        filepath = filedialog.asksaveasfilename(initialdir=default_dir, initialfile=default_name, defaultextension=".json", filetypes=[("JSON","*.json")])
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        messagebox.showinfo("保存成功", f"已保存到 {filepath}")
 
     def load_structure(self):
-        try:
-            default_dir = self._ensure_folder()
-            filepath = filedialog.askopenfilename(initialdir=default_dir, filetypes=[("JSON","*.json")])
-            if not filepath:
-                return
-            with open(filepath, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-            if not isinstance(loaded, dict) or "data" not in loaded:
-                messagebox.showerror("错误", "文件格式不被识别 (需包含 data 字段)")
-                return
-            data = loaded["data"]
-            if not isinstance(data, list):
-                messagebox.showerror("错误", "data 字段需为列表")
-                return
-            # 校验并加载
-            if len(data) != self.capacity:
-                if messagebox.askyesno("容量不符", f"文件容量 {len(data)} 与当前 capacity {self.capacity} 不符，是否以文件容量为准并重建？"):
-                    self.capacity = len(data)
-                    # 重新构造 model
-                    if HashTableModel is not None:
-                        self.model = HashTableModel(self.capacity)
-                    else:
-                        self.model = _make_minimal_model(self.capacity)
-                else:
-                    # 尽量 fit 到当前容量：截断或补 None
-                    data = (data + [None] * self.capacity)[:self.capacity]
-            # 直接赋值（注意 tombstone 字符需转换回对象）
-            conv = []
-            for v in data:
-                if v == "__TOMBSTONE__":
-                    conv.append(self.model.tombstone)
-                else:
-                    conv.append(v)
-            self.model.table = conv
-            self.update_display()
-            messagebox.showinfo("加载成功", "已加载散列表")
-        except Exception as e:
-            messagebox.showerror("加载失败", str(e))
+        default_dir = self._ensure_folder()
+        filepath = filedialog.askopenfilename(initialdir=default_dir, filetypes=[("JSON","*.json")])
+        with open(filepath, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+        data = loaded["data"]
+        # 校验并加载
+        if len(data) != self.capacity:
+            if messagebox.askyesno("容量不符", f"文件容量 {len(data)} 与当前 capacity {self.capacity} 不符，是否以文件容量为准并重建？"):
+                self.capacity = len(data)
+                self.model = HashTableModel(self.capacity)
+            else:
+                # 尽量 fit 到当前容量：截断或补 None
+                data = (data + [None] * self.capacity)[:self.capacity]
+        conv = []
+        for v in data:
+            if v == "__TOMBSTONE__":
+                conv.append(self.model.tombstone)
+            else:
+                conv.append(v)
+        self.model.table = conv
+        self.update_display()
+        messagebox.showinfo("加载成功", "已加载散列表")
 
-    # ---------- 输入准备与回调 ----------
     def prepare_insert(self, default_value: str = ""):
-        if self.animating:
-            return
+        if self.animating: return
         self._open_input("插入的值", default_value, action="insert")
 
     def prepare_find(self, default_value: str = ""):
-        if self.animating:
-            return
+        if self.animating: return
         self._open_input("查找的值", default_value, action="find")
 
     def prepare_delete(self, default_value: str = ""):
-        if self.animating:
-            return
+        if self.animating: return
         self._open_input("删除的值", default_value, action="delete")
 
     def _open_input(self, label_text, default_value, action):
         if self.input_frame:
-            try:
-                self.input_frame.destroy()
-            except Exception:
-                pass
             self.input_frame = None
         self.value_entry.set(default_value)
         self.input_frame = Frame(self.window, bg="#F0F8FF")
@@ -319,11 +159,7 @@ class HashtableVisualizer:
             messagebox.showerror("错误", "请输入一个值")
             return
         if self.input_frame:
-            try:
-                self.input_frame.destroy()
-            except Exception:
-                pass
-            self.input_frame = None
+            self.input_frame=None
         if action == "insert":
             self.insert_value(val)
         elif action == "find":
@@ -350,7 +186,6 @@ class HashtableVisualizer:
             return
         self.animating = True
         self._set_buttons_state("disabled")
-
         # 起点：画布左侧外面飞入
         start_x = - (self.cell_width + 40)
         start_y = self.start_y
@@ -361,7 +196,6 @@ class HashtableVisualizer:
         target_x = self.start_x + (self.cell_width + self.spacing) * (target_idx if target_idx is not None else (len(probe_path)-1))
         dx = (target_x - start_x) / total_steps
         step_delay = 12
-
         # 在移动之前先做探测高亮动画
         def probe_and_move_then_place():
             # probe_path 高亮（逐个闪烁）
@@ -678,7 +512,6 @@ class HashtableVisualizer:
                 txt = str(val)
             text_id = self.canvas.create_text(x + self.cell_width/2, self.start_y + self.cell_height/2, text=txt, font=("Arial", 12))
             self.cell_texts.append(text_id)
-
         # 右侧注释
         self.canvas.create_text(self.start_x + total_width + 40, self.start_y + self.cell_height/2, text="散列表格", font=("Arial", 12, "bold"))
 
@@ -709,5 +542,5 @@ if __name__ == "__main__":
     root.title("散列表可视化")
     root.geometry("1350x770")
     root.minsize(1350, 770)
-    HashVisualizer(root, capacity=13)
+    HashtableVisualizer(root, capacity=13)
     root.mainloop()

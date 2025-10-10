@@ -9,69 +9,53 @@ class TrieVisualizer:
         self.window.title("Trie（字典树）可视化")
         self.window.config(bg="#F3F6FB")
         self.window.geometry("1200x720")
-
         self.left_width = 320
-
         main = Frame(self.window, bg="#F3F6FB")
         main.pack(fill=BOTH, expand=True)
-        
         self.status_text_var = StringVar(value="就绪：可插入 / 查找 / 清空。")
-
         # 左侧控制面板
         self.left_panel = Frame(main, width=self.left_width, bg="#F8FAFF")
         self.left_panel.pack(side=LEFT, fill=Y)
         self.left_panel.pack_propagate(False)
         self._build_left_panel()
-
         # 右侧画布区域（含滚动条）
         right = Frame(main, bg="#F3F6FB")
         right.pack(side=LEFT, fill=BOTH, expand=True, padx=(10,12), pady=10)
-
         # canvas + scrollbars
         self.canvas = Canvas(right, bg="white", bd=4, relief=RIDGE)
         self.h_scroll = Scrollbar(right, orient=HORIZONTAL, command=self.canvas.xview)
         self.v_scroll = Scrollbar(right, orient=VERTICAL, command=self.canvas.yview)
         self.canvas.configure(xscrollcommand=self.h_scroll.set, yscrollcommand=self.v_scroll.set)
-
         # place
         self.canvas.grid(row=0, column=0, sticky="nsew")
         self.v_scroll.grid(row=0, column=1, sticky="ns")
         self.h_scroll.grid(row=1, column=0, sticky="ew")
         right.grid_rowconfigure(0, weight=1)
         right.grid_columnconfigure(0, weight=1)
-
         # enable panning by mouse drag
         self.canvas.bind("<ButtonPress-1>", lambda e: self.canvas.scan_mark(e.x, e.y))
         self.canvas.bind("<B1-Motion>", lambda e: self.canvas.scan_dragto(e.x, e.y, gain=1))
-
         # model
         self.model = TrieModel()
-
         # drawing bookkeeping
         self.node_items: Dict[TrieNode, int] = {}
         self.edge_items: List[int] = []
-
         # layout params (visual)
         self.node_w = 72
         self.node_h = 44
         self.level_gap = 120
         self.margin_x = 40
         self.top_margin = 36
-
         # animation state
         self.animating = False
-
         self.redraw()
-
     # ---------------- left panel ----------------
     def _build_left_panel(self):
         pad = 12
         title = Label(self.left_panel, text="Trie 可视化", font=("Helvetica", 14, "bold"), bg="#F8FAFF")
         title.pack(pady=(18,6))
-
         subtitle = Label(self.left_panel, text="逐字动画 · 创建/查找/清空", bg="#F8FAFF", fg="#555")
         subtitle.pack(pady=(0,10))
-
         # 输入框
         frm = Frame(self.left_panel, bg="#F8FAFF")
         frm.pack(padx=pad, pady=(6,8), fill=X)
@@ -80,7 +64,6 @@ class TrieVisualizer:
         entry = Entry(frm, textvariable=self.input_var, font=("Arial", 12))
         entry.pack(fill=X, pady=(6,0))
         entry.insert(0, "apple, app, bat")
-
         # 按钮
         btn_frame = Frame(self.left_panel, bg="#F8FAFF")
         btn_frame.pack(padx=pad, pady=(12,10), fill=X)
@@ -92,36 +75,29 @@ class TrieVisualizer:
                           command=self.start_search_animated, **style_btn)
         b_clear = Button(btn_frame, text="清空", bg="#E04E3F", fg="white",
                          command=self.clear_trie, **style_btn)
-
         b_insert.pack(fill=X, pady=(0,6))
         b_search.pack(fill=X, pady=(0,6))
         b_clear.pack(fill=X)
-
         # 分割线
         Frame(self.left_panel, height=1, bg="#E6E9F2").pack(fill=X, padx=pad, pady=(14,12))
-
         # 当前词表（右侧自动刷新）
         Label(self.left_panel, text="当前已插入单词：", bg="#F8FAFF").pack(anchor="w", padx=pad)
         self.word_listbox = Listbox(self.left_panel, height=8)
         self.word_listbox.pack(fill=X, padx=pad, pady=(6,0))
-
         # 状态栏（使用在 __init__ 先定义好的 status_text_var）
         Frame(self.left_panel, height=1, bg="#E6E9F2").pack(fill=X, padx=pad, pady=(12,8))
         status_lbl = Label(self.left_panel, textvariable=self.status_text_var, wraplength=self.left_width-24,
                            bg="#F8FAFF", justify=LEFT, fg="#2D6A4F")
         status_lbl.pack(padx=pad, pady=(4,12), anchor="w")
-
         # 帮助与说明
         help_text = ("提示：\n"
                      "• 请使用插入按钮查看逐字创建/遍历动画。\n"
                      "• 当节点很多时，使用滚动条或按住鼠标左键拖动画布查看。\n"
                      "• 查找会高亮遍历路径（黄色），命中末尾为绿色。")
         Label(self.left_panel, text=help_text, bg="#F8FAFF", fg="#555", justify=LEFT, wraplength=self.left_width-24).pack(padx=pad, pady=(6,10))
-
     # ---------------- status ----------------
     def update_status(self, txt: str):
         self.status_text_var.set(txt)
-
     # ---------------- layout computation ----------------
     def compute_positions(self) -> Dict[TrieNode, Tuple[float,float]]:
         pos: Dict[TrieNode, Tuple[float,float]] = {}
@@ -148,7 +124,6 @@ class TrieVisualizer:
                 y = self.top_margin + (depth-1) * self.level_gap
                 pos[node] = (x, y)
         return pos
-
     # ---------------- drawing ----------------
     def redraw(self, highlight: Optional[Dict[TrieNode, str]] = None):
         self.canvas.delete("all")
@@ -208,7 +183,7 @@ class TrieVisualizer:
             left, top, right, bottom = bbox
             pad = 60
             self.canvas.config(scrollregion=(left-pad, top-pad, right+pad, bottom+pad))
-
+            
     def _draw_node(self, node: TrieNode, cx: float, cy: float, fill_color: Optional[str] = None):
         left = cx - self.node_w/2
         top = cy - self.node_h/2
@@ -222,15 +197,12 @@ class TrieVisualizer:
         self.canvas.create_text(cx - 12, cy, text=node.char, font=("Arial",12,"bold"), fill="#0b1220")
         if node.is_end:
             self.canvas.create_oval(right-16, top+8, right-6, top+18, fill="#ef4444", outline="")
-
-    # ---------------- user actions ----------------
     def parse_input_words(self) -> List[str]:
         text = self.input_var.get().strip()
         if not text:
             return []
         parts = [p.strip() for p in text.replace(",", " ").split() if p.strip()]
         return parts
-
     def clear_trie(self):
         if self.animating:
             return
@@ -239,7 +211,6 @@ class TrieVisualizer:
         self.redraw()
         self.update_status("已清空 Trie")
 
-    # ---------------- insert animation ----------------
     def start_insert_animated(self):
         if self.animating:
             return
@@ -247,14 +218,12 @@ class TrieVisualizer:
         if not words:
             messagebox.showinfo("提示", "请输入单词（或逗号/空格分隔多个）")
             return
-
         for w in words:
             self.word_listbox.insert(END, w)
 
         self.animating = True
         word_idx = 0
         total_inserted = 0
-
         def process_next_word():
             nonlocal word_idx, total_inserted
             if word_idx >= len(words):
@@ -295,7 +264,6 @@ class TrieVisualizer:
                     self.redraw()
                     callback(len(created_nodes))
                 return
-
             ch = word[i]
             if ch in cur.children:
                 cur = cur.children[ch]
@@ -321,7 +289,6 @@ class TrieVisualizer:
 
         step()
 
-    # ---------------- search animation ----------------
     def start_search_animated(self):
         if self.animating:
             return
@@ -334,7 +301,6 @@ class TrieVisualizer:
             self.redraw()
             self.update_status(f"查找：未找到 '{word}'")
             return
-
         self.animating = True
         i = 0
         def step():
@@ -357,7 +323,6 @@ class TrieVisualizer:
             i += 1
             self.window.after(380, step)
         step()
-
 
 if __name__ == '__main__':
     root = Tk()

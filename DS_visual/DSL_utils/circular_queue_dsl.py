@@ -10,7 +10,6 @@ def _fallback_process_command(visualizer, text):
     parts = text.split(maxsplit=1)
     cmd = parts[0].lower()
     arg = parts[1].strip() if len(parts) > 1 else ""
-
     if cmd in ("enqueue", "enq", "push"):
         if arg == "":
             messagebox.showerror("错误", "enqueue 需要一个参数，例如：enqueue 5")
