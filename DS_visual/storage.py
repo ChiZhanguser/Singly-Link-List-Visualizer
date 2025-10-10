@@ -1,6 +1,3 @@
-# DS_visual/storage.py
-# 通用保存/加载工具（JSON），支持二叉树(保存节点图) 与 线性结构（数组）
-
 import json
 from typing import Optional, Dict, Any, List
 from tkinter import filedialog
@@ -9,22 +6,12 @@ from datetime import datetime
 
 
 def ensure_save_subdir(subdir: str) -> str:
-    """
-    确保 storage.py 同目录下的 save/<subdir> 文件夹存在，返回该目录的绝对路径。
-    例如: ensure_save_subdir('stack') -> .../save/stack
-    """
     base_dir = os.path.dirname(os.path.abspath(__file__))
     target = os.path.join(base_dir, "save", subdir)
     os.makedirs(target, exist_ok=True)
     return target
-# ---------- helpers for tree -> dict and dict -> tree ----------
+
 def tree_to_dict(root) -> Dict[str, Any]:
-    """
-    将链式二叉树转换为字典：
-    { "nodes": [ { "id": "n0", "val": value, "left": "n1" or None, "right": "n2" or None, "height": maybe }, ... ],
-      "root": "n0" }
-    root: 任意对象，要求存在 .val, .left, .right, 可选 .height 属性。
-    """
     if root is None:
         return {"nodes": [], "root": None}
     id_map = {}
@@ -48,7 +35,6 @@ def tree_to_dict(root) -> Dict[str, Any]:
             "left": left_id,
             "right": right_id
         }
-        # include height if present
         if hasattr(node, "height"):
             node_dict["height"] = getattr(node, "height")
         nodes.append(node_dict)
@@ -185,9 +171,6 @@ def save_linked_list_to_file(node_values: List, filepath: Optional[str] = None) 
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             title="保存链表到文件"
         )
-        if not filepath:
-            return False
-
     linked_list_data = {
         "type": "linked_list",
         "data": node_values,
@@ -218,8 +201,6 @@ def load_linked_list_from_file(filepath: Optional[str] = None) -> Optional[List]
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             title="从文件加载链表"
         )
-        if not filepath:
-            return None
 
     try:
         with open(filepath, "r", encoding="utf-8") as f:

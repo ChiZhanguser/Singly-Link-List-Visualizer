@@ -141,18 +141,18 @@ class ChatWindow:
                 text = msg.get('text', '') or ''
                 self.win.after(0, lambda: assistant_var.set(text))
 
-                # try to find JSON markers...
                 m = re.search(r"<\|FunctionCallBegin\|\>(.*?)<\|FunctionCallEnd\|>", text, re.S)
                 if m:
                     payload = m.group(1).strip()
                     parsed_obj = None
-                    try:
-                        parsed_obj = json.loads(payload)
-                    except Exception:
-                        try:
-                            parsed_obj = json.loads(payload.replace("'", '"'))
-                        except Exception:
-                            parsed_obj = None
+                    parsed_obj = json.loads(payload)
+                    # try:
+                    #     parsed_obj = json.loads(payload)
+                    # except Exception:
+                    #     try:
+                    #         parsed_obj = json.loads(payload.replace("'", '"'))
+                    #     except Exception:
+                    #         parsed_obj = None
 
                     if isinstance(parsed_obj, dict) and 'name' in parsed_obj:
                         name = parsed_obj.get('name')
@@ -166,13 +166,14 @@ class ChatWindow:
                 json_m = re.search(r"(\{.*\"name\".*\})", text, re.S)
                 if json_m:
                     payload = json_m.group(1)
-                    try:
-                        obj = json.loads(payload)
-                    except Exception:
-                        try:
-                            obj = json.loads(payload.replace("'", '"'))
-                        except Exception:
-                            obj = None
+                    obj = json.loads(payload)
+                    # try:
+                    #     obj = json.loads(payload)
+                    # except Exception:
+                    #     try:
+                    #         obj = json.loads(payload.replace("'", '"'))
+                    #     except Exception:
+                    #         obj = None
                     if isinstance(obj, dict) and 'name' in obj:
                         name = obj.get('name')
                         params = obj.get('parameters') or obj.get('arguments') or {}
@@ -181,7 +182,6 @@ class ChatWindow:
                         res_msg = result.get('message') if isinstance(result, dict) else str(result)
                         self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n执行结果: {res_msg}"))
                         return
-
                 self.win.after(0, lambda: assistant_var.set(assistant_var.get() + "\n\n（未检测到可执行操作；未触发可视化）"))
                 return
 
@@ -189,7 +189,7 @@ class ChatWindow:
             return
         except Exception as e:
             print("worker error:", e)
-            self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n注: 调用失败：{e}"))
+            self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n注: 调用失败"))
         finally:
             self.win.after(0, self._finish_stream)
     def _finish_stream(self):

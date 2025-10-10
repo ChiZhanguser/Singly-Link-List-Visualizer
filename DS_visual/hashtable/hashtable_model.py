@@ -58,7 +58,7 @@ class HashTableModel:
             return first_tombstone
         return None
 
-    def delete(self, x: Any) -> Optional[int]: #
+    def delete(self, x: Any) -> Optional[int]: 
         idx = self.find(x)
         if idx == -1:
             return None
