@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 import sys
 import sequence_api as sequence_api
-
+from sequence_list.sequence_ui import create_heading, create_buttons
 
 class SequenceListVisualizer:
     def __init__(self, root):
@@ -41,96 +41,14 @@ class SequenceListVisualizer:
         self.buttons = []  # 初始化按钮列表
         
         # 初始化界面
-        self.create_heading()
-        self.create_buttons()
+        create_heading(self)        
+        create_buttons(self)
         self.update_display()
     
     @property
     def data_store(self):
         """动态返回当前模型的数据列表，避免旧引用不同步问题。"""
         return getattr(self.model, "data", [])
-    
-    def create_heading(self):
-        heading = Label(self.window, text="顺序表(线性表)的可视化", 
-                       font=("Arial", 30, "bold"), bg="lightgreen", fg="darkblue")
-        heading.place(x=400, y=20)
-        
-        info = Label(self.window, text="顺序表在内存中连续存储，插入和删除操作需要移动元素", 
-                    font=("Arial", 16), bg="lightgreen", fg="black")
-        info.place(x=400, y=80)
-    
-    def create_buttons(self):
-        # 操作按钮框架
-        button_frame = Frame(self.window, bg="lightgreen")
-        button_frame.place(x=50, y=540, width=1250, height=150)  # 增加高度以容纳更多按钮
-        
-        # 构建顺序表按钮 - 新增
-        build_list_btn = Button(button_frame, text="构建顺序表", font=("Arial", 12), 
-                              bg="teal", fg="white", command=self.prepare_build_list)
-        build_list_btn.grid(row=0, column=0, padx=10, pady=5)
-        self.buttons.append(build_list_btn)
-        
-        # 插入按钮
-        insert_first_btn = Button(button_frame, text="头部插入", font=("Arial", 12), 
-                                bg="orange", command=lambda: self.prepare_insert(0))
-        insert_first_btn.grid(row=0, column=1, padx=10, pady=5)
-        self.buttons.append(insert_first_btn)
-        
-        insert_last_btn = Button(button_frame, text="尾部插入", font=("Arial", 12), 
-                               bg="orange", command=lambda: self.prepare_insert(len(self.data_store)))
-        insert_last_btn.grid(row=0, column=2, padx=10, pady=5)
-        self.buttons.append(insert_last_btn)
-        
-        insert_pos_btn = Button(button_frame, text="指定位置插入", font=("Arial", 12), 
-                              bg="orange", command=self.prepare_insert_with_position)
-        insert_pos_btn.grid(row=0, column=3, padx=10, pady=5)
-        self.buttons.append(insert_pos_btn)
-        
-        # 删除按钮
-        delete_first_btn = Button(button_frame, text="头部删除", font=("Arial", 12), 
-                                bg="red", fg="white", command=self.delete_first)
-        delete_first_btn.grid(row=1, column=0, padx=10, pady=5)
-        self.buttons.append(delete_first_btn)
-        
-        delete_last_btn = Button(button_frame, text="尾部删除", font=("Arial", 12), 
-                               bg="red", fg="white", command=self.delete_last)
-        delete_last_btn.grid(row=1, column=1, padx=10, pady=5)
-        self.buttons.append(delete_last_btn)
-        
-        delete_pos_btn = Button(button_frame, text="指定位置删除", font=("Arial", 12), 
-                              bg="red", fg="white", command=self.prepare_delete_with_position)
-        delete_pos_btn.grid(row=1, column=2, padx=10, pady=5)
-        self.buttons.append(delete_pos_btn)
-        
-        # 清空按钮
-        clear_btn = Button(button_frame, text="清空顺序表", font=("Arial", 12), 
-                         bg="purple", fg="white", command=self.clear_list)
-        clear_btn.grid(row=1, column=3, padx=10, pady=5)
-        self.buttons.append(clear_btn)
-        
-        # 返回主界面按钮
-        back_btn = Button(button_frame, text="返回主界面", font=("Arial", 12), 
-                        bg="blue", fg="white", command=self.back_to_main)
-        back_btn.grid(row=1, column=4, padx=10, pady=5)
-        self.buttons.append(back_btn)
-        
-        # 保存 / 打开 按钮
-        save_btn = Button(button_frame, text="保存顺序表", font=("Arial", 12),
-                          bg="#6C9EFF", fg="white", command=self.save_sequence)
-        save_btn.grid(row=0, column=5, padx=10, pady=5)
-        self.buttons.append(save_btn)
-        
-        load_btn = Button(button_frame, text="打开顺序表", font=("Arial", 12),
-                          bg="#6C9EFF", fg="white", command=self.load_sequence)
-        load_btn.grid(row=0, column=6, padx=10, pady=5)
-        self.buttons.append(load_btn)
-        dsl_label = Label(button_frame, text="DSL 命令:", font=("Arial", 12), bg="lightgreen")
-        dsl_label.grid(row=2, column=0, padx=(10,2), pady=8, sticky="w")
-        dsl_entry = Entry(button_frame, textvariable=self.dsl_var, font=("Arial", 12), width=40)
-        dsl_entry.grid(row=2, column=1, columnspan=3, padx=4, pady=8, sticky="w")
-        dsl_entry.bind("<Return>", lambda e: self.process_dsl())
-        dsl_btn = Button(button_frame, text="执行 DSL", font=("Arial", 12), bg="#4CAF50", fg="white", command=self.process_dsl)
-        dsl_btn.grid(row=2, column=4, padx=10, pady=8)
 
     def _ensure_sequence_folder(self):
         if hasattr(storage, "ensure_save_subdir"):

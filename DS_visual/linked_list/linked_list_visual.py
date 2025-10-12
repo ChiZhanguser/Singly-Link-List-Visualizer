@@ -4,17 +4,19 @@ import time
 from linked_list.linked_list_model import LinkedListModel
 import storage as storage
 from llm import function_dispatcher
-
+from linked_list.ui_utils import heading_with_label_subheading, make_start_with_other, make_btn, make_batch_create_ui, draw_gradient
+from DSL_utils import process_command
 class LinkList:
     def __init__(self, root):
         self.window = root
+        self.chat_window = None
         self.window.config(bg="#F5F7FA")
         self.canvas_width, self.canvas_height = 1350, 500
         self.canvas_make = Canvas(self.window, bg="#0575E6",
                                   width=self.canvas_width, height=self.canvas_height,
                                   relief=RAISED, bd=8)
         self.canvas_make.pack()
-        self.draw_gradient(self.canvas_make, self.canvas_width, self.canvas_height,
+        draw_gradient(self.canvas_make, self.canvas_width, self.canvas_height,
                            start_color="#021B79", end_color="#89CFF0", steps=200)
 
         # model & stores
@@ -25,14 +27,12 @@ class LinkList:
         self.linked_list_position = []
         self.linked_list_data_next_store = []
 
-        # inputs
         self.value_entry = StringVar(value=" ")
         self.position_entry = StringVar(value=" ")
         self.delete_entry = StringVar(value=" ")
         self.batch_entry_var = StringVar(value=" ")
         self.dsl_var = StringVar(value="")
 
-        # coordinates / small state initialized via helper
         self._init_coords()
 
         # many widget attributes set to None generically (previous代码大量显式声明)
@@ -45,10 +45,10 @@ class LinkList:
             setattr(self, name, None)
 
         # build UI
-        self.heading_with_label_subheading()
-        self.make_btn()
-        self.make_start_with_other()
-        self.make_batch_create_ui()
+        heading_with_label_subheading(self)
+        make_btn(self)
+        make_start_with_other(self)
+        make_batch_create_ui(self)
 
         # register visualizer if possible
         try:
@@ -64,6 +64,9 @@ class LinkList:
         except Exception as e:
             print("linked_list_api bind failed:", e)
 
+    def set_chat_window(self, chat_window):
+        self.chat_window = chat_window  
+    
     def _init_coords(self):
         # initial coordinates (kept names from original for compatibility)
         self.start_left = 50; self.start_up = 380
@@ -105,195 +108,73 @@ class LinkList:
             if b:
                 try: b.config(state=state)
                 except: pass
-
-    # -------- gradient & heading --------
-    def draw_gradient(self, canvas, width, height, start_color="#000000", end_color="#FFFFFF", steps=100):
-        def hex_to_rgb(h): h = h.lstrip('#'); return tuple(int(h[i:i+2],16) for i in (0,2,4))
-        def rgb_to_hex(r,g,b): return f'#{r:02x}{g:02x}{b:02x}'
-        (r1,g1,b1),(r2,g2,b2) = hex_to_rgb(start_color), hex_to_rgb(end_color)
-        for i in range(steps):
-            t = i / max(steps - 1,1)
-            r = int(r1 + (r2 - r1) * t); g = int(g1 + (g2 - g1) * t); b = int(b1 + (b2 - b1) * t)
-            color = rgb_to_hex(r,g,b)
-            y0 = int(i * (height / steps)); y1 = int((i + 1) * (height / steps))
-            canvas.create_rectangle(0, y0, width, y1, outline="", fill=color)
-
-    def heading_with_label_subheading(self):
-        self.head_name = self.make_label(self.window, text="单链表的可视化",
-                                         font=("Arial",35,"bold","italic"),
-                                         bg="chocolate", fg="yellow")
-        self.head_name.place(x=350,y=20)
-        self.information = self.make_label(self.window,
-            text="start是指向第一个节点的指针\ntemp指针在insert_last和delete_last的时候用于遍历找到目标位置",
-            font=("Arial",20,"bold","italic"), bg="chocolate", fg="#00FF00")
-        self.information.place(x=150,y=380)
-
-    def make_start_with_other(self):
-        self.start_pointer = self.make_rect(self.start_left,self.start_up,self.start_left+30,self.start_up+30,
-                                           fill="blue", outline="black", width=3)
-        self.start_label = self.make_label(self.canvas_make, text="start", font=("Arial",15,"bold"),
-                                           bg="chocolate", fg="green")
-        self.start_label.place(x=40,y=410)
-        self.pointing_line_start = self.canvas_make.create_line(65,327,65,395,width=2,fill="green")
-        self.start_initial_point_null = self.make_label(self.canvas_make, text="NULL",
-                                                        font=("Arial",15,"bold"), bg="chocolate", fg="blue")
-        self.start_initial_point_null.place(x=40, y=300)
-        self.temp_label = self.make_label(self.canvas_make, text="temp", font=("Arial",15,"bold"), bg="chocolate", fg="green")
-        self.temp1_label = self.make_label(self.canvas_make, text="temp1", font=("Arial",15,"bold"), bg="chocolate", fg="green")
-
-    def make_btn(self):
-        btns = [
-            ("Insert first", lambda: self.make_node_with_label(1), 20,540),
-            ("Insert last",  lambda: self.make_node_with_label(0), 220,540),
-            ("Delete first", self.delete_first_node, 420,540),
-            ("Delete last",  lambda: self.delete_last_node(0), 620,540),
-            ("Insert after node", self.set_of_input_method, 830,540),
-            ("Delete particular node", self.delete_single_node_infrastructure, 1090,540),
-            ("返回主界面", self.back_to_main, 1090,600),
-            ("保存链表", self.save_structure, 900,600),
-            ("打开链表", self.load_structure, 900,650),
-        ]
-        for text, cmd, x, y in btns:
-            btn = self.make_button(self.window, text=text, bg=("black" if text.startswith(("Insert","Delete")) else "blue"),
-                                   fg="red" if text.startswith(("Insert","Delete")) else "white",
-                                   font=("Arial", 15 if len(text)>6 else 12, "bold"),
-                                   relief=RAISED, bd=10 if len(text)>6 else 6, command=cmd)
-            btn.place(x=x, y=y)
-            # attach to attr by cleaned name for later toggling
-            attr = text.lower().split()[0] if " " in text else text.lower()
-            # ensure names same as original where needed
-            if text == "Insert first": self.insert_at_beg = btn
-            if text == "Insert last": self.insert_at_last = btn
-            if text == "Delete first": self.delete_at_first = btn
-            if text == "Delete last": self.delete_at_last = btn
-            if text == "Insert after node": self.insert_after_node = btn
-            if text == "Delete particular node": self.delete_particular_node = btn
-            if text == "返回主界面": self.back_to_main_btn = btn
-            if text == "保存链表": self.save_btn = btn
-            if text == "打开链表": self.load_btn = btn
-
-    def make_batch_create_ui(self):
-        Label(self.window, text="批量创建（以逗号分隔）", font=("Arial", 12, "bold"), bg="lightgray").place(x=20, y=610)
-        Entry(self.window, font=("Arial", 12), bg="white", textvar=self.batch_entry_var, width=40).place(x=200, y=610)
-        Button(self.window, text="Create List", font=("Arial", 10, "bold"), bg="green", fg="white",
-               relief=RAISED, bd=3, command=self.create_list_from_string).place(x=620, y=607)
-
-        Label(self.window, text="DSL 命令:", font=("Arial", 12, "bold"), bg="lightgray").place(x=20, y=650)
-        dsl_entry = Entry(self.window, font=("Arial", 12), bg="white", textvar=self.dsl_var, width=40)
-        dsl_entry.place(x=200, y=650); dsl_entry.bind("<Return>", lambda e: self.process_dsl())
-        Button(self.window, text="执行 DSL", font=("Arial", 10, "bold"), bg="green", fg="white",
-               command=self.process_dsl).place(x=620, y=647)
-
-    # -------- DSL & storage --------
     def process_dsl(self, event=None):
         txt = self.dsl_var.get().strip()
-        if not txt: return
         try:
-            try:
-                from DSL_utils import process_command
-            except Exception:
-                process_command = None
-
-            if process_command is not None:
-                process_command(self, txt)
-            else:
-                # fallback minimal commands
-                if txt.startswith("create "):
-                    parts = [p.strip() for p in txt[len("create "):].replace(",", " ").split() if p.strip()]
-                    if parts:
-                        self.clear_visualization()
-                        for v in parts: self.programmatic_insert_last(v)
-                elif txt == "clear":
-                    self.clear_visualization()
-                elif txt.startswith("insert "):
-                    v = txt[len("insert "):].strip()
-                    if v: self.programmatic_insert_last(v)
-                elif txt.startswith("delete "):
-                    messagebox.showinfo("提示", "已收到 delete 请求，请安装 DSL_utils 获取更完整行为")
-                else:
-                    messagebox.showinfo("未识别命令", "支持 insert/delete/clear/create 等 (推荐安装 DSL_utils)")
+            process_command(self,txt)
         finally:
             try: self.dsl_var.set("")
             except: pass
 
     def save_structure(self):
         node_values = self.node_value_store
-        if not node_values:
-            messagebox.showinfo("提示", "链表为空，无需保存")
-            return
         success = storage.save_linked_list_to_file(node_values)
         if success:
             messagebox.showinfo("成功", "链表结构已保存")
         else:
             messagebox.showerror("错误", "保存失败")
 
-    # -------- clear / load --------
     def clear_visualization(self):
-        try:
-            # clear data_next_store
-            for entry in self.linked_list_data_next_store:
-                try: entry[0].place_forget()
-                except: pass
-                try: self.canvas_make.delete(entry[1])
-                except: pass
-                try: entry[2].place_forget()
-                except: pass
-            self.linked_list_data_next_store.clear()
+        for entry in self.linked_list_data_next_store:
+            try: entry[0].place_forget()
+            except: pass
+            try: self.canvas_make.delete(entry[1])
+            except: pass
+            try: entry[2].place_forget()
+            except: pass
+        self.linked_list_data_next_store.clear()
 
-            # clear widget rectangles
-            for widgets in self.linked_list_canvas_small_widget:
-                for wid in widgets:
-                    try: self.canvas_make.delete(wid)
-                    except: 
-                        try: wid.place_forget()
-                        except: pass
-            self.linked_list_canvas_small_widget.clear()
-
-            # clear small labels
-            for labels in self.linked_list_canvas_small_widget_label:
-                for lab in labels:
-                    try: lab.place_forget()
+        for widgets in self.linked_list_canvas_small_widget:
+            for wid in widgets:
+                try: self.canvas_make.delete(wid)
+                except: 
+                    try: wid.place_forget()
                     except: pass
-            self.linked_list_canvas_small_widget_label.clear()
+        self.linked_list_canvas_small_widget.clear()
 
-            self.linked_list_position.clear()
-            self.node_value_store.clear()
-            try: self.model.node_value_store.clear()
-            except: pass
+        for labels in self.linked_list_canvas_small_widget_label:
+            for lab in labels:
+                try: lab.place_forget()
+                except: pass
+        self.linked_list_canvas_small_widget_label.clear()
 
-            try: self.start_initial_point_null.place(x=40, y=300)
-            except: pass
+        self.linked_list_position.clear()
+        self.node_value_store.clear()
+        try: self.model.node_value_store.clear()
+        except: pass
 
-            self.reset_coords()
-            self.information.config(text="已清空当前可视化")
-            self.window.update()
-        except Exception as e:
-            print("clear_visualization error:", e)
+        try: self.start_initial_point_null.place(x=40, y=300)
+        except: pass
+
+        self.reset_coords()
+        self.information.config(text="已清空当前可视化")
+        self.window.update()
 
     def reset_coords(self):
-        # reset many coordinates to initial defaults
         self._init_coords()
         self.node_helpers_reset()
 
     def load_structure(self):
         loaded = storage.load_linked_list_from_file()
-        if loaded is None: return
-        if not isinstance(loaded, list) or len(loaded) == 0:
-            messagebox.showerror("错误", "未从文件中读取到有效链表数据"); return
         self.clear_visualization()
         self.toggle_action_buttons(DISABLED)
-        try:
-            for val in loaded:
-                self.programmatic_insert_last(val)
-                self.window.update()
-        except Exception as e:
-            print("load_structure error during insert:", e)
-            messagebox.showerror("错误", f"加载时出错：{e}")
+        for val in loaded:
+            self.programmatic_insert_last(val)
+            self.window.update()
         self.toggle_action_buttons(NORMAL)
         self.information.config(text="加载完成")
         messagebox.showinfo("成功", "链表已从文件加载并重建可视化")
 
-    # -------- node creation & input --------
     def set_of_input_method(self):
         self.information.config(text="First node position: 1")
         self.position_label = Label(self.window, text="Enter the node position after you want to insert new node",
@@ -362,7 +243,6 @@ class LinkList:
         self.next_set.place(x=self.data_left+102, y=self.data_up + 3)
         self.insert_node(take_notation)
 
-    # -------- core insertion flow (保留原逻辑，但重用函数) --------
     def insert_node(self, take_notation):
         try:
             self.information.config(text=" ")
@@ -370,9 +250,7 @@ class LinkList:
             try: self.start_initial_point_null.place_forget()
             except: pass
 
-            # vertical drop animation (shared of original)
             while self.main_node_up + 65 < 320:
-                # delete/recreate to simulate movement
                 self.canvas_make.delete(self.main_container_node, self.data, self.next, self.arrow)
                 self.next_label.place_forget(); self.data_label.place_forget()
                 self.value_set.place_forget(); self.next_set.place_forget()
@@ -387,8 +265,6 @@ class LinkList:
                 self.next_set.place(x=self.data_left+102, y=self.data_up + 2)
 
                 time.sleep(0.04); self.window.update()
-
-            # traversal temp pointer if needed (insert_last or insert_after)
             if len(self.linked_list_data_next_store) > 1 and (take_notation == 0 or take_notation == 2):
                 self.next_set.place_forget()
                 self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
@@ -409,9 +285,7 @@ class LinkList:
                     self.pointing_line_temp = self.canvas_make.create_line(self.pointing_line_temp_left, self.pointing_line_temp_up, self.pointing_line_temp_left, self.pointing_line_temp_up + 65, width=2)
                     time.sleep(0.05); self.window.update()
 
-            # horizontal approach to append position
             if len(self.linked_list_data_next_store) > 0:
-                # remove last NULL of previous tail
                 try:
                     self.linked_list_data_next_store[-1].pop().place_forget()
                 except: pass
@@ -432,30 +306,21 @@ class LinkList:
                     elif take_notation == 2:
                         self.information.config(text="New node added after the targeting node")
                     time.sleep(0.04); self.window.update()
-
-            # store widgets & positions (same structure as旧版)
             self.linked_list_canvas_small_widget_label.append([self.data_label, self.next_label])
             self.linked_list_canvas_small_widget.append([self.data, self.next, self.main_container_node])
             loc = [self.data_left, self.data_up, self.data_left+50, self.data_up, self.main_node_left, self.main_node_up]
             self.linked_list_position.append(loc)
-
-            # cleanup temp pointer
             try:
                 self.temp_label.place_forget()
                 self.canvas_make.delete(self.pointing_line_temp, self.temp_pointer)
             except: pass
             self.temp_label_x = 40; self.pointing_line_temp_left = 65; self.temp_pointer_left = 50
-
-            # record to model store & reset UI bits
             if take_notation == 0 or take_notation == 1 or take_notation == 2:
-                # reuse reset_with_store semantics
                 self.reset_with_store(take_notation)
         except Exception as e:
             print("insert_node error:", e)
 
-    # -------- programmatic insert (批量时复用) --------
     def programmatic_insert_last(self, value):
-        # 复用 make_main_container... + insert_node 的流程，但直接使用给定 value
         try:
             self.new_node_label = Label(self.canvas_make, text="New node", font=("Arial", 13, "bold"), bg="chocolate", fg="green")
             self.new_node_label.place(x=30, y=90)
@@ -488,7 +353,6 @@ class LinkList:
                 self.next_set.place(x=self.data_left+102, y=self.data_up + 2)
                 time.sleep(0.04); self.window.update()
 
-            # temp traverse if needed
             if len(self.linked_list_data_next_store) > 1:
                 self.next_set.place_forget()
                 self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
@@ -503,7 +367,6 @@ class LinkList:
                     self.pointing_line_temp = self.canvas_make.create_line(self.pointing_line_temp_left, self.pointing_line_temp_up, self.pointing_line_temp_left, self.pointing_line_temp_up + 65, width=2)
                     time.sleep(0.05); self.window.update()
 
-            # horizontal approach & store (same as insert_node)
             if len(self.linked_list_data_next_store) > 0:
                 try: self.linked_list_data_next_store[-1].pop().place_forget()
                 except: pass
@@ -521,8 +384,6 @@ class LinkList:
                     self.next_set.place(x=self.data_left+102, y=self.data_up + 2)
                     self.information.config(text="New node added to the last node")
                     time.sleep(0.04); self.window.update()
-
-            # store to internal lists
             self.linked_list_canvas_small_widget_label.append([self.data_label, self.next_label])
             self.linked_list_canvas_small_widget.append([self.data, self.next, self.main_container_node])
             loc = [self.data_left, self.data_up, self.data_left+50, self.data_up, self.main_node_left, self.main_node_up]
@@ -537,7 +398,6 @@ class LinkList:
             self.node_value_store.append(str(value))
             self.linked_list_data_next_store.append([self.value_set, self.arrow, self.next_set])
 
-            # reset positions for next insert
             self.reset_coords()
             if len(self.linked_list_data_next_store) == 1:
                 try: self.start_initial_point_null.place_forget()
@@ -546,20 +406,15 @@ class LinkList:
         except Exception as e:
             print("programmatic_insert_last error:", e)
 
-    # -------- store reset & value shifting --------
     def reset_with_store(self, take_notation):
-        # 保存输入值
         self.node_value_store.append(self.value_entry.get())
         self.linked_list_data_next_store.append([self.value_set, self.arrow, self.next_set])
-        # debug prints (保留)
         print(self.linked_list_data_next_store); print(self.linked_list_canvas_small_widget)
         print(self.linked_list_position); print(self.linked_list_canvas_small_widget_label); print(self.node_value_store)
 
-        # cleanup input widgets
         try: self.element_take_label.place_forget(); self.value_entry.set(" "); self.element_take_entry.place_forget(); self.add_btn.place_forget()
         except: pass
 
-        # insert first value shifting（行为与原版一致）
         if take_notation == 1 and len(self.linked_list_data_next_store) > 1:
             temp_val = self.node_value_store[-1]
             for i in range(len(self.node_value_store)-2, -1, -1):
@@ -567,8 +422,6 @@ class LinkList:
             self.node_value_store[0] = temp_val
             for i in range(len(self.node_value_store)):
                 self.linked_list_data_next_store[i][0].config(text=self.node_value_store[i])
-
-        # insert after node shifting
         if take_notation == 2:
             temp_value = self.node_value_store[-1]
             pos = int(self.position_entry.get())
@@ -577,19 +430,15 @@ class LinkList:
             self.node_value_store[pos] = temp_value
             for i in range(pos, len(self.linked_list_data_next_store)):
                 self.linked_list_data_next_store[i][0].config(text=self.node_value_store[i])
-
-        # reset coords and buttons
         self.reset_coords()
         self.toggle_action_buttons(NORMAL)
-
-    # -------- deletions (保留所有外部调用签名) --------
+        
     def delete_last_node(self, locator):
         print(self.linked_list_data_next_store, self.linked_list_canvas_small_widget, self.linked_list_position, self.linked_list_canvas_small_widget_label, self.node_value_store)
         if len(self.linked_list_data_next_store) == 0:
             messagebox.showerror("Underflow", "Link list is empty"); return
         self.toggle_action_buttons(DISABLED)
 
-        # temp traversal for penultimate
         if (locator == 0 or locator==3) and len(self.linked_list_data_next_store)>1:
             self.temp_pointer = self.make_rect(self.temp_pointer_left, self.temp_pointer_up, self.temp_pointer_left + 30, self.temp_pointer_up + 30, fill="blue", outline="black", width=3)
             self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
@@ -610,7 +459,6 @@ class LinkList:
                     self.pointing_line_temp = self.canvas_make.create_line(self.pointing_line_temp_left, self.pointing_line_temp_up, self.pointing_line_temp_left, self.pointing_line_temp_up + 65, width=2)
                     time.sleep(0.04); self.window.update()
 
-            # pause
             for _ in range(3): time.sleep(0.125); self.window.update()
             if locator == 0:
                 self.information.config(text="Temp pointing node contains the address that present in the next part of last node and\nand Last node deleted")
@@ -618,7 +466,6 @@ class LinkList:
                 self.information.config(text="Targeting node deleted")
 
         if locator == 3:
-            # temp1 creation and value shift for delete particular node
             self.temp1_pointer = self.make_rect(self.temp_pointer_left+120, self.temp_pointer_up, self.temp_pointer_left + 150, self.temp_pointer_up + 30, fill="blue", outline="black", width=3)
             self.temp1_label.place(x=self.temp_label_x+120, y=self.temp_label_y)
             self.pointing_line_temp1 = self.canvas_make.create_line(self.pointing_line_temp_left+120, self.pointing_line_temp_up, self.pointing_line_temp_left+120, self.pointing_line_temp_up + 65, width=2)
@@ -628,8 +475,6 @@ class LinkList:
                 self.linked_list_data_next_store[i-1][0].config(text=self.node_value_store[i])
             for i in range(int(self.delete_entry.get()), len(self.node_value_store)):
                 self.node_value_store[i-1] = self.node_value_store[i]
-
-        # pop physical widgets (always remove last node)
         if len(self.linked_list_data_next_store) > 0:
             temp1 = self.linked_list_data_next_store.pop()
             try: temp1[0].place_forget()
@@ -638,14 +483,11 @@ class LinkList:
             except: pass
             try: temp1[2].place_forget()
             except: pass
-
             temp2 = self.linked_list_canvas_small_widget.pop()
             for i in temp2: 
                 try: self.canvas_make.delete(i)
                 except: pass
             self.linked_list_position.pop()
-
-            # set NULL on new last node
             if len(self.linked_list_data_next_store) > 0:
                 temp3 = self.linked_list_position[-1]
                 self.next_set = Label(self.canvas_make, text="NULL", font=("Arial", 15, "bold"), fg="green", bg="chocolate")
@@ -657,7 +499,6 @@ class LinkList:
                 try: widget_label.place_forget()
                 except: pass
 
-            # pop value store
             try: self.node_value_store.pop()
             except: pass
 
@@ -696,7 +537,6 @@ class LinkList:
             self.delete_last_node(1)
             self.information.config(text="Now start pointer is containing NULL and first node deleted")
             return
-        # shift left then delete last
         for i in range(1,len(self.node_value_store)): self.node_value_store[i-1] = self.node_value_store[i]
         self.delete_last_node(1)
         for i in range(len(self.linked_list_data_next_store)):

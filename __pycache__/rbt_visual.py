@@ -1,9 +1,10 @@
-# DS_visual/binary_tree/rbt_visual.py
+# rbt_visual.py
 from tkinter import *
 from tkinter import messagebox, filedialog
 from typing import Dict, Tuple, List, Optional
 from rbt.rbt_model import RBModel, RBNode, clone_tree
 import storage as storage
+from rbt_ui import create_controls, draw_instructions
 
 
 class RBTVisualizer:
@@ -15,44 +16,33 @@ class RBTVisualizer:
         self.canvas_h = 560
         self.canvas = Canvas(self.window, bg="white", width=self.canvas_w, height=self.canvas_h, bd=6, relief=RAISED)
         self.canvas.pack(padx=10, pady=8)
+
         self.model = RBModel()
         self.node_vis: Dict[str, Dict] = {}
         self.animating = False
+
+        # layout params
         self.node_w = 120
         self.node_h = 44
         self.level_gap = 100
         self.margin_x = 40
+
+        # controls
         self.input_var = StringVar()
-        self.create_controls()
-        self.draw_instructions()
-
-    def create_controls(self):
-        frame = Frame(self.window, bg="#F7F4F8")
-        frame.pack(pady=(0,6), fill=X)
-        Label(frame, text="输入（按插入顺序，逗号分隔）:", bg="#F7F4F8", font=("Arial",11)).pack(side=LEFT, padx=6)
-        entry = Entry(frame, textvariable=self.input_var, width=44, font=("Arial",11))
-        entry.pack(side=LEFT, padx=6)
-        entry.insert(0, "1,2,3,4,5")
-        Button(frame, text="Insert (动画)", bg="#C62828", fg="white", command=self.start_insert_animated).pack(side=LEFT, padx=6)
-        Button(frame, text="清空", bg="#FFB74D", command=self.clear_canvas).pack(side=LEFT, padx=6)
-        Button(frame, text="返回主界面", bg="#6EA8FE", fg="white", command=self.back_to_main).pack(side=LEFT, padx=6)
-        Button(frame, text="保存", bg="#6C9EFF", command=self.save_structure).pack(side=LEFT, padx=6)
-        Button(frame, text="打开", bg="#6C9EFF", command=self.load_structure).pack(side=LEFT, padx=6)
-        self.status_id = None
-
-    def draw_instructions(self):
-        self.canvas.delete("all")
-        self.node_vis.clear()
-        self.canvas.create_text(12, 12, anchor="nw", text="红黑树插入演示：展示搜索路径、插入为红节点、重染色与旋转修复（逐步快照）", font=("Arial",11))
-        self.status_id = self.canvas.create_text(self.canvas_w - 12, 12, anchor="ne", text="", font=("Arial",11,"bold"), fill="darkred")
+        # 使用外部 UI 函数创建控件与说明
+        create_controls(self)
+        draw_instructions(self)
 
     def update_status(self, txt: str):
-        if self.status_id:
-            self.canvas.itemconfig(self.status_id, text=txt)
+        if getattr(self, "status_id", None):
+            try:
+                self.canvas.itemconfig(self.status_id, text=txt)
+            except Exception:
+                # safety: recreate if something went wrong
+                self.status_id = self.canvas.create_text(self.canvas_w - 12, 12, anchor="ne", text=txt, font=("Arial",11,"bold"), fill="darkred")
         else:
             self.status_id = self.canvas.create_text(self.canvas_w - 12, 12, anchor="ne", text=txt, font=("Arial",11,"bold"), fill="darkred")
 
-    # ---------- small helper to draw edge ----------
     def _draw_connection(self, cx, cy, tx, ty):
         top = cy + self.node_h/2
         bot = ty - self.node_h/2
@@ -61,7 +51,6 @@ class RBTVisualizer:
         l2 = self.canvas.create_line(cx, midy, tx, bot, arrow=LAST, width=2)
         return (l1, l2)
 
-    # ---------- layout computation (same style as AVL visualizer) ----------
     def compute_positions_for_root(self, root: Optional[RBNode]) -> Dict[str, Tuple[float, float]]:
         res: Dict[str, Tuple[float,float]] = {}
         if not root:
@@ -96,12 +85,6 @@ class RBTVisualizer:
         return res
 
     def _build_key_maps_from_root(self, root: Optional[RBNode]) -> Tuple[Dict[int,str], Dict[str, RBNode]]:
-        """
-        返回两个映射：
-          - orig_id_to_key: 快照中每个克隆节点的 orig_id -> key（key 是 draw 布局使用的标识）
-          - key_to_node: key -> 克隆节点对象
-        便于通过原始 model 节点 id 找到在该快照中的 key 位置。
-        """
         orig_id_to_key: Dict[int,str] = {}
         key_to_node: Dict[str, RBNode] = {}
         if not root:
@@ -128,8 +111,8 @@ class RBTVisualizer:
         return orig_id_to_key, key_to_node
 
     def draw_tree_from_root(self, root: Optional[RBNode]):
-        self.canvas.delete("all")
-        self.draw_instructions()
+        # 清屏并写说明（使用外部 draw_instructions）
+        draw_instructions(self)
         if root is None:
             self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text="空树", font=("Arial",18), fill="gray")
             return
@@ -181,7 +164,6 @@ class RBTVisualizer:
             self.canvas.create_line(x2, top, x2, bottom, width=1)
             txt_fill = "black" if node.color == "R" else "white"
             txt = self.canvas.create_text((x1+x2)/2, (top+bottom)/2, text=str(node.val), font=("Arial",12,"bold"), fill=txt_fill)
-            # also show color letter
             color_label = self.canvas.create_text(left+10, (top+bottom)/2, text=node.color, font=("Arial",9,"bold"))
             self.node_vis[key] = {'rect':rect, 'text':txt, 'cx':cx, 'cy':cy, 'val':str(node.val), 'color_label': color_label}
 
@@ -223,9 +205,11 @@ class RBTVisualizer:
             node = path_nodes[i]
             node_id = getattr(node, 'id', None)
             key = origid_to_key_pre.get(node_id)
-            self.draw_tree_from_root(snap_pre)
+            # draw instructions + highlight
+            draw_instructions(self)
             if key:
                 try:
+                    self.draw_tree_from_root(snap_pre)
                     self.canvas.itemconfig(self.node_vis[key]['rect'], outline="orange", width=4)
                 except Exception:
                     pass
@@ -238,12 +222,9 @@ class RBTVisualizer:
         if not snap_after_insert:
             on_complete(); return
         pos_after = self.compute_positions_for_root(snap_after_insert)
-        # build orig_id->key map to find newly inserted clone
         origid_to_key_after, _ = self._build_key_maps_from_root(snap_after_insert)
         candidate_keys = [k for id_, k in origid_to_key_after.items() if k and k.split('#')[0] == str(val_str)]
-        # better: prefer last occurrence (right-most) as new insert generally appears at that key
         if not candidate_keys:
-            # fallback: match by value keys
             candidate_keys = [k for k in pos_after.keys() if k.split('#')[0] == str(val_str)]
         if not candidate_keys:
             on_complete(); return
@@ -397,7 +378,7 @@ class RBTVisualizer:
         self.model = RBModel()
         self.node_vis.clear()
         self.canvas.delete("all")
-        self.draw_instructions()
+        draw_instructions(self)
         self.update_status("已清空")
 
     def back_to_main(self):
@@ -418,7 +399,7 @@ class RBTVisualizer:
         self.model.root = newroot
         self.draw_tree_from_root(clone_tree(self.model.root))
         self.update_status("已经从文件加载并恢复结构")
-        
+
 
 if __name__ == '__main__':
     w = Tk()

@@ -227,16 +227,7 @@ def _get_visualizer(kind: str):
         return None
     return wr()
 
-# ---------------- helpers ----------------
 def _normalize_name(raw):
-    """
-    Normalize model returned function name:
-    - convert camelCase -> snake_case
-    - remove illegal chars -> underscores, lowercased
-    - collapse repeated underscores
-    - remove common prefixes demo/do/action_
-    - apply alias map
-    """
     if not isinstance(raw, str):
         return raw
     s = raw.strip()
@@ -247,10 +238,8 @@ def _normalize_name(raw):
     s = re.sub(r'_+', '_', s).strip('_')
     # remove prefixes
     s = re.sub(r'^(demo|do|action)_', '', s)
-    # alias
     return _ALIAS_MAP.get(s, s)
 
-# ---------------- dispatch ----------------
 def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
     """
     Dispatch model function call. Returns a dict describing the outcome or API return.
@@ -274,7 +263,6 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
     except Exception:
         pass
 
-    # ---------------- stack handlers ----------------
     try:
         if name in ("stack_push", "push"):
             if stack_api is None:
@@ -317,7 +305,6 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
     except Exception as e:
         return {"ok": False, "error": f"stack dispatch error: {e}"}
 
-    # ---------------- sequence handlers ----------------
     try:
         # ensure sequence_api loaded
         if sequence_api is None:

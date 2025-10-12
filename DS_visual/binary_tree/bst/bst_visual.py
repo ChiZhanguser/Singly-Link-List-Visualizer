@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 import os
 from DSL_utils import process_command
+from binary_tree.bst.bst_ui import draw_instructions, create_controls
 
 class BSTVisualizer:
     def __init__(self, root):
@@ -37,37 +38,8 @@ class BSTVisualizer:
 
         # 输入框
         self.input_var = StringVar()
-        self.create_controls()
-        self.draw_instructions()
-        
-    def create_controls(self):  # 创建控制按钮
-        top_frame = Frame(self.window, bg="#F7F9FB")
-        top_frame.pack(pady=6, fill=X)
-        op_frame = Frame(top_frame, bg="#F7F9FB")
-        op_frame.pack(fill=X, padx=6)
-        Label(op_frame, text="值输入（单值或逗号/空格批量）:", font=("Arial",12), bg="#F7F9FB").pack(side=LEFT, padx=(0,6))
-        entry = Entry(op_frame, textvariable=self.input_var, width=36, font=("Arial",12))
-        entry.pack(side=LEFT, padx=(0,8))
-        entry.insert(0, "15,6,23,4,7,71,5")
-        Button(op_frame, text="Insert (直接)", command=self.insert_direct, bg="green", fg="white").pack(side=LEFT, padx=4)
-        Button(op_frame, text="Insert (动画)", command=self.start_insert_animated, bg="#2E8B57", fg="white").pack(side=LEFT, padx=4)
-        Button(op_frame, text="Search (动画)", command=self.start_search_animated, bg="#FFA500").pack(side=LEFT, padx=4)
-        Button(op_frame, text="Delete (动画)", command=self.start_delete_animated, bg="red", fg="white").pack(side=LEFT, padx=4)
-        Button(op_frame, text="清空", command=self.clear_canvas, bg="orange").pack(side=LEFT, padx=4)
-        Button(op_frame, text="返回主界面", command=self.back_to_main, bg="blue", fg="white").pack(side=LEFT, padx=4)
-        bottom_frame = Frame(self.window, bg="#F7F9FB")
-        bottom_frame.pack(pady=(4,8), fill=X, padx=6)
-        left_ops = Frame(bottom_frame, bg="#F7F9FB")
-        left_ops.pack(side=LEFT, anchor="w")
-        Button(left_ops, text="保存树", command=self.save_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
-        Button(left_ops, text="打开树", command=self.load_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
-        dsl_ops = Frame(bottom_frame, bg="#F7F9FB")
-        dsl_ops.pack(side=RIGHT, anchor="e")
-        Label(dsl_ops, text="DSL 命令:", font=("Arial",11), bg="#F7F9FB").pack(side=LEFT, padx=(0,6))
-        self.dsl_entry = Entry(dsl_ops, width=36, font=("Arial",11), textvariable=self.dsl_var)
-        self.dsl_entry.pack(side=LEFT, padx=(0,6))
-        self.dsl_entry.bind("<Return>", lambda e: self.process_dsl())
-        Button(dsl_ops, text="执行DSL", command=self.process_dsl).pack(side=LEFT)
+        create_controls(self)
+        draw_instructions(self)
     def process_dsl(self, event=None):
         text = (self.dsl_var.get() or "").strip()
         if not text:
@@ -78,14 +50,6 @@ class BSTVisualizer:
         process_command(self,text)
         self.dsl_var.set("")
     
-    def draw_instructions(self):  # 绘制操作说明
-        self.canvas.delete("all")
-        self.node_items.clear()
-        self.node_to_rect.clear()
-        self.canvas.create_text(10, 10, anchor="nw", text="BST：插入 / 查找 / 删除 动态演示。中序位置用于横向布局。", font=("Arial",11))
-        if self.status_text_id:
-            self.canvas.delete(self.status_text_id)
-        self.status_text_id = self.canvas.create_text(self.canvas_width-10, 10, anchor="ne", text="", font=("Arial",12,"bold"), fill="darkgreen")
     def update_status(self, text: str):
         if not self.status_text_id:
             self.status_text_id = self.canvas.create_text(self.canvas_width-10, 10, anchor="ne", text=text, font=("Arial",12,"bold"), fill="darkgreen")
@@ -169,7 +133,7 @@ class BSTVisualizer:
         self.canvas.delete("all")
         self.node_items.clear()
         self.node_to_rect.clear()
-        self.draw_instructions()
+        draw_instructions(self)
         if self.model.root is None:
             self.canvas.create_text(self.canvas_width/2, self.canvas_height/2, text="空树", font=("Arial",18), fill="gray")
             return
@@ -210,8 +174,7 @@ class BSTVisualizer:
         v2 = self.canvas.create_line(x2, top, x2, bottom, width=1)
         self.node_items += [v1, v2]
         self.canvas.create_text((x1+x2)/2, (top+bottom)/2, text=str(node.val), font=("Arial",12,"bold"))
-
-    # ---------- user actions ----------
+        
     def insert_direct(self):
         text = self.input_var.get().strip()
         if not text:
@@ -223,7 +186,6 @@ class BSTVisualizer:
         self.redraw()
         self.update_status(f"已插入 {len(items)} 个节点")
 
-    # ---------- animated insert seq ----------
     def start_insert_animated(self):
         if self.animating:
             return
@@ -243,21 +205,16 @@ class BSTVisualizer:
             self.update_status("插入完成")
             return
         val = items[idx]
-        # stepwise highlight path for this insert
         self._animate_search_path_for_insert(val, lambda: self._finalize_insert_and_continue(val, items, idx))
 
     def _finalize_insert_and_continue(self, val, items, idx):
-        # create the node in model (so compute_positions will include it)
         new_node = self.model.insert(val)
-        # animate fly-in to computed position
         pos_map = self.compute_positions()
         if new_node not in pos_map:
-            # fallback - redraw and continue
             self.redraw()
             self.window.after(300, lambda: self._insert_seq(items, idx+1))
             return
         tx, ty = pos_map[new_node]
-        # create temp visual at top
         sx, sy = self.canvas_width/2, 20
         left = sx - self.node_w/2; top = sy - self.node_h/2; right = sx + self.node_w/2; bottom = sy + self.node_h/2
         temp_rect = self.canvas.create_rectangle(left, top, right, bottom, fill="#C6F6D5", outline="black", width=2)
@@ -301,11 +258,6 @@ class BSTVisualizer:
 
     # ---------- animated search (used for insert path highlight and user search) ----------
     def _animate_search_path_for_insert(self, val: str, on_complete):
-        """
-        模拟插入时的比较路径：每个访问节点高亮（黄色），根据比较走 left/right。
-        on_complete 在访问到插入点（节点为 None 的位置）时调用（此时模型尚未插入节点）
-        """
-        # simulate walk without modifying model: traverse until we reach None where insert would happen
         path_nodes = []
         cur = self.model.root
         if cur is None:
@@ -482,25 +434,18 @@ class BSTVisualizer:
                     self.animating = False
                 self.window.after(600, do_transplant)
             else:
-                # two children: find successor
                 succ = self.model.find_min(node.right)
-                # highlight successor path
                 self.redraw()
                 if succ in self.node_to_rect:
                     self.canvas.itemconfig(self.node_to_rect[succ], fill="orange")
                 self.update_status(f"删除：找到后继 {succ.val}，将其值替换到目标节点")
                 def swap_and_delete():
-                    # swap values in model (visual will reflect after redraw)
                     node.val, succ.val = succ.val, node.val
                     self.redraw()
-                    # highlight swapped node (the node now contains successor value)
                     if node in self.node_to_rect:
                         self.canvas.itemconfig(self.node_to_rect[node], fill="lightgreen")
                     self.update_status(f"已交换值，接下来删除后继节点 {val}（其已移至 succ 位置）")
-                    # then delete the successor (which has at most one child)
                     def final_del():
-                        # successor's value equals original node's value? careful: we swapped
-                        # delete by value of original target (which is now in succ) — simpler: delete succ.val (the old node.val)
                         self.model.delete(val)
                         self.redraw()
                         self.update_status(f"删除完成（两子节点情况）")

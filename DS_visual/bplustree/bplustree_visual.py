@@ -1,4 +1,3 @@
-# bplustree_visual.py
 from tkinter import *
 from tkinter import messagebox
 from typing import Dict, Tuple, List, Optional, Any

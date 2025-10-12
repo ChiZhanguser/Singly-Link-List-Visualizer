@@ -194,15 +194,12 @@ class MainInterface:
         widget.bind("<Leave>", on_leave)
 
     def _animate_header(self):
-        # update animation phase and particle positions and redraw header gradient
         self._anim_phase = (self._anim_phase + 0.006) % 1.0
         new_positions = []
         for (x, y, r, a) in self._particle_positions:
             nx = x + math.sin(time.time() * 0.18 + x) * 0.4
-            # wrap horizontally
             if nx < 20: nx = 1240
             if nx > 1240: nx = 20
-            # slight vertical bobbing
             ny = y + math.sin(time.time() * 0.85 + x) * 4 * a
             new_positions.append((nx, ny, r, a))
         self._particle_positions = new_positions
@@ -212,7 +209,6 @@ class MainInterface:
             pass
         self.window.after(40, self._animate_header)
 
-    # Visualization Window functions unchanged
     def open_linked_list(self):
         linked_list_window = Toplevel(self.window)
         linked_list_window.title("单链表可视化")
@@ -221,6 +217,10 @@ class MainInterface:
         linked_list_window.minsize(1350, 730)
         ll = LinkList(linked_list_window)
         register_visualizer("linked_list", ll)
+        chat_window = ChatWindow(self.window)
+        chat_window.win.transient(linked_list_window)  # 设置为主窗口的子窗口
+        chat_window.win.geometry("200x300")  # 缩小尺寸
+        ll.set_chat_window(chat_window)
         linked_list_window.mainloop()
 
     def open_sequence_list(self):

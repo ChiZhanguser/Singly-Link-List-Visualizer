@@ -28,7 +28,15 @@ class ChatUI:
         # window
         self.win = Toplevel(parent)
         self.win.title("LLM 聊天窗口")
-        self.win.geometry("880x660")
+        
+        parent_x  = parent.winfo_x()
+        parent_y = parent.winfo_y()
+        parent_width = parent.winfo_width() or 1350
+        window_width = 880
+        x_pos = parent_x + parent_width + 10
+        y_pos = parent_y
+     
+        self.win.geometry(f"{window_width}x660+{x_pos}+{y_pos}")
         self.win.configure(bg=BG_COLOR)
         self.win.minsize(560, 420)
 
