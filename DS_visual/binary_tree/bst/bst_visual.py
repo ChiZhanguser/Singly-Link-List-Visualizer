@@ -74,6 +74,7 @@ class BSTVisualizer:
             title="保存树到文件"
         )
         tree_dict = storage.tree_to_dict(self.model.root)
+        
         metadata = {
             "saved_at": datetime.now().isoformat(),
             "node_count": len(tree_dict.get("nodes", [])) if isinstance(tree_dict, dict) else 0
@@ -256,15 +257,12 @@ class BSTVisualizer:
 
         step()
 
-    # ---------- animated search (used for insert path highlight and user search) ----------
     def _animate_search_path_for_insert(self, val: str, on_complete):
         path_nodes = []
         cur = self.model.root
         if cur is None:
-            # inserting as root
             self.redraw()
             self.update_status(f"准备插入 val={val} 到 root (index=0)")
-            # short delay then complete
             self.window.after(400, on_complete)
             return
 
@@ -272,13 +270,11 @@ class BSTVisualizer:
         while cur:
             steps.append(cur)
             if str(val) == str(cur.val):
-                # treat as go-right (or consider duplicates as right)
                 cur = cur.right
             elif str(val) < str(cur.val):
                 cur = cur.left
             else:
                 cur = cur.right
-        # now steps is list of visited nodes
         self._play_highlight_sequence(steps, f"插入 val={val}", on_complete)
 
     def _play_highlight_sequence(self, nodes: List[TreeNode], label_prefix: str, on_complete):
@@ -289,11 +285,9 @@ class BSTVisualizer:
         def step():
             nonlocal i
             if i >= len(nodes):
-                # done
                 on_complete()
                 return
             node = nodes[i]
-            # redraw tree and highlight this node
             self.redraw()
             if node in self.node_to_rect:
                 rid = self.node_to_rect[node]
@@ -303,7 +297,6 @@ class BSTVisualizer:
             self.window.after(520, step)
         step()
 
-    # ---------- animated search by user ----------
     def start_search_animated(self):
         if self.animating:
             return
@@ -312,7 +305,6 @@ class BSTVisualizer:
             messagebox.showinfo("提示", "请输入要查找的值")
             return
         self.animating = True
-        # use search path
         path_nodes = []
         cur = self.model.root
         while cur:
@@ -323,7 +315,6 @@ class BSTVisualizer:
                 cur = cur.left
             else:
                 cur = cur.right
-        # play
         found = (path_nodes and str(path_nodes[-1].val) == str(val))
         i = 0
         def step():
@@ -332,7 +323,6 @@ class BSTVisualizer:
                 self.animating = False
                 if found:
                     self.update_status(f"查找完成: 找到 {val}")
-                    # highlight found node red briefly
                     node = path_nodes[-1]
                     self.redraw()
                     if node in self.node_to_rect:
@@ -352,7 +342,6 @@ class BSTVisualizer:
             self.window.after(520, step)
         step()
 
-    # ---------- animated delete ----------
     def start_delete_animated(self):
         if self.animating:
             return
@@ -360,7 +349,6 @@ class BSTVisualizer:
         if not val:
             messagebox.showinfo("提示", "请输入要删除的值")
             return
-        # find path first (visualize)
         self.animating = True
         path_nodes = []
         cur = self.model.root
@@ -378,12 +366,10 @@ class BSTVisualizer:
         def step():
             nonlocal i
             if i >= len(path_nodes):
-                # finished scanning path
                 if not found:
                     self.animating = False
                     self.update_status(f"删除：未找到 {val}")
                     return
-                # now animate deletion process (visualize)
                 self._animate_deletion_process(val)
                 return
             node = path_nodes[i]
@@ -398,30 +384,22 @@ class BSTVisualizer:
         step()
 
     def _animate_deletion_process(self, val):
-        # perform deletion but visualize key steps:
-        # 1) find node (already highlighted), 2) if two children -> find successor & highlight, animate swap, then remove successor; otherwise show transplant
         node, path = self.model.search_with_path(val)
         if node is None:
             self.animating = False
             self.update_status(f"删除失败：未找到 {val}")
             return
-        # highlight to show deleting node
         self.redraw()
         if node in self.node_to_rect:
             self.canvas.itemconfig(self.node_to_rect[node], fill="red")
         self.update_status(f"准备删除 {val}")
-        # Delay then handle cases
         def after_highlight():
-            # case analysis
             if node.left is None and node.right is None:
-                # leaf
                 self.model.delete(val)
                 self.redraw()
                 self.update_status(f"删除叶子节点 {val}")
                 self.animating = False
             elif node.left is None or node.right is None:
-                # one child
-                # show transplant visually: highlight child then transplant
                 child = node.left if node.left else node.right
                 self.redraw()
                 if child in self.node_to_rect:

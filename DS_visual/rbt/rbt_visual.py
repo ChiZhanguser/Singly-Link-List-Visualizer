@@ -1,4 +1,3 @@
-# DS_visual/binary_tree/rbt_visual.py
 from tkinter import *
 from tkinter import messagebox, filedialog
 from typing import Dict, Tuple, List, Optional
@@ -52,7 +51,6 @@ class RBTVisualizer:
         else:
             self.status_id = self.canvas.create_text(self.canvas_w - 12, 12, anchor="ne", text=txt, font=("Arial",11,"bold"), fill="darkred")
 
-    # ---------- small helper to draw edge ----------
     def _draw_connection(self, cx, cy, tx, ty):
         top = cy + self.node_h/2
         bot = ty - self.node_h/2
@@ -61,7 +59,6 @@ class RBTVisualizer:
         l2 = self.canvas.create_line(cx, midy, tx, bot, arrow=LAST, width=2)
         return (l1, l2)
 
-    # ---------- layout computation (same style as AVL visualizer) ----------
     def compute_positions_for_root(self, root: Optional[RBNode]) -> Dict[str, Tuple[float, float]]:
         res: Dict[str, Tuple[float,float]] = {}
         if not root:
@@ -96,12 +93,6 @@ class RBTVisualizer:
         return res
 
     def _build_key_maps_from_root(self, root: Optional[RBNode]) -> Tuple[Dict[int,str], Dict[str, RBNode]]:
-        """
-        返回两个映射：
-          - orig_id_to_key: 快照中每个克隆节点的 orig_id -> key（key 是 draw 布局使用的标识）
-          - key_to_node: key -> 克隆节点对象
-        便于通过原始 model 节点 id 找到在该快照中的 key 位置。
-        """
         orig_id_to_key: Dict[int,str] = {}
         key_to_node: Dict[str, RBNode] = {}
         if not root:
@@ -181,11 +172,9 @@ class RBTVisualizer:
             self.canvas.create_line(x2, top, x2, bottom, width=1)
             txt_fill = "black" if node.color == "R" else "white"
             txt = self.canvas.create_text((x1+x2)/2, (top+bottom)/2, text=str(node.val), font=("Arial",12,"bold"), fill=txt_fill)
-            # also show color letter
             color_label = self.canvas.create_text(left+10, (top+bottom)/2, text=node.color, font=("Arial",9,"bold"))
             self.node_vis[key] = {'rect':rect, 'text':txt, 'cx':cx, 'cy':cy, 'val':str(node.val), 'color_label': color_label}
 
-    # ---------- insertion flow (search path highlight -> fly-in -> events playback) ----------
     def start_insert_animated(self):
         if self.animating:
             return
@@ -238,12 +227,9 @@ class RBTVisualizer:
         if not snap_after_insert:
             on_complete(); return
         pos_after = self.compute_positions_for_root(snap_after_insert)
-        # build orig_id->key map to find newly inserted clone
         origid_to_key_after, _ = self._build_key_maps_from_root(snap_after_insert)
         candidate_keys = [k for id_, k in origid_to_key_after.items() if k and k.split('#')[0] == str(val_str)]
-        # better: prefer last occurrence (right-most) as new insert generally appears at that key
         if not candidate_keys:
-            # fallback: match by value keys
             candidate_keys = [k for k in pos_after.keys() if k.split('#')[0] == str(val_str)]
         if not candidate_keys:
             on_complete(); return
@@ -282,12 +268,10 @@ class RBTVisualizer:
                 self.window.after(300, on_complete)
         step()
 
-    # ---------- animate a single event (recolor or rotation) ----------
     def _animate_single_event(self, before_root: Optional[RBNode], after_root: Optional[RBNode], event: Dict, on_done):
         pos_before = self.compute_positions_for_root(before_root)
         pos_after = self.compute_positions_for_root(after_root)
 
-        # 画 before 快照，并建立快照内的 orig_id -> key 映射
         self.draw_tree_from_root(before_root)
         origid_to_key_before, key_to_node_before = self._build_key_maps_from_root(before_root)
         origid_to_key_after, key_to_node_after = self._build_key_maps_from_root(after_root)

@@ -52,7 +52,6 @@ class BSTModel:
             cur = cur.left
         return cur
 
-    # 保留你已有的 transplant 实现（如果已经存在则无需重复）
     def transplant(self, u: TreeNode, v: Optional[TreeNode]):
         if u.parent is None:
             self.root = v

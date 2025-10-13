@@ -70,7 +70,7 @@ class MainInterface:
         self.window = root
         self.window.title("数据结构可视化工具 — 张驰")
         # 放大窗口以容纳更多按钮与更大卡片区
-        self.window.geometry("1280x880")
+        self.window.geometry("1380x980")
         self.window.minsize(1000, 700)
         style = ttk.Style(self.window)
         style.theme_use('clam')
@@ -86,7 +86,7 @@ class MainInterface:
         self.header.create_text(48, 52, anchor='w', text="数据结构可视化工具",
                                 font=("Helvetica", 36, "bold"), fill="#062A4A", tags="title")
         self.header.create_text(48, 120, anchor='w',
-                                text="交互、演示与教学 — 支持链表/顺序表/栈/多种树结构",
+                                text="",
                                 font=("Helvetica", 14), fill="#EAF6FF", tags="subtitle")
         shadow = Frame(self.window, bg="#d7e9ff", bd=8)
         shadow.place(relx=0.5, y=header_h - 12, anchor='n', relwidth=0.92, height=560)
@@ -216,8 +216,8 @@ class MainInterface:
         ll = LinkList(linked_list_window)
         register_visualizer("linked_list", ll)
         chat_window = ChatWindow(self.window)
-        chat_window.win.transient(linked_list_window)  # 设置为主窗口的子窗口
-        chat_window.win.geometry("200x300")  # 缩小尺寸
+        chat_window.win.transient(linked_list_window)  
+        chat_window.win.geometry("200x300")  
         ll.set_chat_window(chat_window)
         linked_list_window.mainloop()
 
@@ -229,8 +229,8 @@ class MainInterface:
         sequence_list_window.minsize(1350, 730)
         SequenceListVisualizer(sequence_list_window)
         chat_window = ChatWindow(self.window)
-        chat_window.win.transient(sequence_list_window)  # 设置为主窗口的子窗口
-        chat_window.win.geometry("200x300")  # 缩小尺寸
+        chat_window.win.transient(sequence_list_window)  
+        chat_window.win.geometry("200x300") 
         sequence_list_window.mainloop()
 
     def open_stack(self):
@@ -241,8 +241,8 @@ class MainInterface:
         stack_window.minsize(1350, 730)
         StackVisualizer(stack_window)
         chat_window = ChatWindow(self.window)
-        chat_window.win.transient(stack_window)  # 设置为主窗口的子窗口
-        chat_window.win.geometry("200x300")  # 缩小尺寸
+        chat_window.win.transient(stack_window)  
+        chat_window.win.geometry("200x300")  
         stack_window.mainloop()
 
     def open_binary_tree(self):

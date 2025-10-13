@@ -1,4 +1,3 @@
-# DS_visual/binary_tree/rbt_model.py
 from typing import Any, Optional, List, Dict, Tuple
 
 
@@ -10,7 +9,6 @@ class RBNode:
         self.parent: Optional['RBNode'] = None
         self.color: str = color  # "R" or "B"
         self.id = id(self)       # stable identifier for this runtime node
-        # 当节点被 clone_tree 克隆时，克隆节点会设置 .orig_id = 原节点.id
         self.orig_id: Optional[int] = None
 
     def __repr__(self):
@@ -18,10 +16,6 @@ class RBNode:
 
 
 def clone_tree(node: Optional[RBNode]) -> Optional[RBNode]:
-    """
-    深拷贝一棵红黑树（复制 val, color, 结构；并在克隆节点上记录 orig_id=原节点.id）
-    克隆节点的 parent 指向克隆结构内的父节点（保持内部一致性）
-    """
     if node is None:
         return None
     new_node = RBNode(node.val, color=node.color)
@@ -39,9 +33,7 @@ class RBModel:
     def __init__(self):
         self.root: Optional[RBNode] = None
 
-    # ---------- rotations (maintain parent pointers carefully) ----------
     def _rotate_left(self, x: RBNode) -> RBNode:
-        """Left rotate at node x, return new subtree root (y)."""
         y = x.right
         if y is None:
             return x

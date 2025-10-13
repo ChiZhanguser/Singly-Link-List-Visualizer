@@ -241,9 +241,6 @@ def _normalize_name(raw):
     return _ALIAS_MAP.get(s, s)
 
 def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
-    """
-    Dispatch model function call. Returns a dict describing the outcome or API return.
-    """
     global stack_api, sequence_api, linked_list_api
     # ensure api modules available (lazy)
     if stack_api is None:
@@ -306,7 +303,6 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
         return {"ok": False, "error": f"stack dispatch error: {e}"}
 
     try:
-        # ensure sequence_api loaded
         if sequence_api is None:
             _try_import_sequence_api()
 
@@ -314,7 +310,6 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
             if sequence_api is None:
                 return {"ok": False, "error": "sequence_api not available"}
             value = args.get("value") if isinstance(args, dict) and "value" in args else args
-            # try common methods
             if hasattr(sequence_api, "insert_last"):
                 res = sequence_api.insert_last(value)
                 print(f"dispatch -> sequence.insert_last result={res!r}")
@@ -327,7 +322,6 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
                 res = sequence_api.push(value)
                 print(f"dispatch -> sequence.push result={res!r}")
                 return res
-            # fallback: if model object exposes `data` list, try to append
             if hasattr(sequence_api, "data") and isinstance(getattr(sequence_api, "data"), list):
                 getattr(sequence_api, "data").append(value)
                 return {"ok": True, "message": "appended raw to sequence_api.data", "state": getattr(sequence_api, "data")}

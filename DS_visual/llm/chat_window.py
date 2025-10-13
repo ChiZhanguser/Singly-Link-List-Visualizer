@@ -10,11 +10,7 @@ from llm.chat_ui import ChatUI
 import os
 class ChatWindow:
     def __init__(self, parent):
-        try:
-            self.client = DoubaoClient()
-        except Exception as e:
-            messagebox.showerror("配置错误", str(e))
-            return
+        self.client = DoubaoClient()
         self.ui = ChatUI(parent,
                          on_send=self._on_send,
                          on_clear=self._clear_messages,
@@ -140,20 +136,11 @@ class ChatWindow:
             if msg.get('type') == 'assistant_text':
                 text = msg.get('text', '') or ''
                 self.win.after(0, lambda: assistant_var.set(text))
-
                 m = re.search(r"<\|FunctionCallBegin\|\>(.*?)<\|FunctionCallEnd\|>", text, re.S)
                 if m:
                     payload = m.group(1).strip()
                     parsed_obj = None
                     parsed_obj = json.loads(payload)
-                    # try:
-                    #     parsed_obj = json.loads(payload)
-                    # except Exception:
-                    #     try:
-                    #         parsed_obj = json.loads(payload.replace("'", '"'))
-                    #     except Exception:
-                    #         parsed_obj = None
-
                     if isinstance(parsed_obj, dict) and 'name' in parsed_obj:
                         name = parsed_obj.get('name')
                         params = parsed_obj.get('parameters') or parsed_obj.get('arguments') or {}
@@ -167,13 +154,6 @@ class ChatWindow:
                 if json_m:
                     payload = json_m.group(1)
                     obj = json.loads(payload)
-                    # try:
-                    #     obj = json.loads(payload)
-                    # except Exception:
-                    #     try:
-                    #         obj = json.loads(payload.replace("'", '"'))
-                    #     except Exception:
-                    #         obj = None
                     if isinstance(obj, dict) and 'name' in obj:
                         name = obj.get('name')
                         params = obj.get('parameters') or obj.get('arguments') or {}

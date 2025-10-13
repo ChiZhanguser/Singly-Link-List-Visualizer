@@ -94,6 +94,7 @@ def process(visualizer, text: str):
 
     if cmd == "clear":
         visualizer.clear_visualization()
+        return
 
     if cmd == "create":
         items = _parse_items(args)

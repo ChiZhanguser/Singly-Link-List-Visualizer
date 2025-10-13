@@ -1,11 +1,4 @@
-"""
-集中维护函数名别名映射表，便于扩展和管理。
-被 llm.function_dispatcher._normalize_name 调用。
-尽量把常见的模型输出变体都列上，优先把 linked-list 的变体映射到 linked_list_*。
-"""
-
 _ALIAS_MAP = {
-    # ---- stack aliases ----
     "push_to_stack": "stack_push",
     "push_stack": "stack_push",
     "push": "stack_push",
@@ -16,7 +9,6 @@ _ALIAS_MAP = {
     "clearstack": "stack_clear",
     "clear": "stack_clear",
 
-    # ---- sequence/list aliases (顺序表/数组) ----
     "list_insert": "sequence_insert_last",
     "list_append": "sequence_insert_last",
     "list_push": "sequence_insert_last",
@@ -44,8 +36,6 @@ _ALIAS_MAP = {
     "clear_sequence_list": "sequence_clear",
     "clear_list_sequence": "sequence_clear",
 
-    # ---- linked list aliases (优先映射到 linked_list_*) ----
-    # common variants
     "linked_list_insert_tail": "linked_list_insert_last",
     "linked_list_insert_last": "linked_list_insert_last",
     "linked_list_insert": "linked_list_insert_last",

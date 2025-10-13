@@ -1,4 +1,3 @@
-# linked_list_model.py
 from typing import Any, Iterable, Iterator, Optional
 
 class _Node:
@@ -58,8 +57,8 @@ class _NodeList:
             raise IndexError("index out of range")
         cur = self.head
         for _ in range(idx):
-            cur = cur.next  # type: ignore
-        return cur  # type: ignore
+            cur = cur.next  
+        return cur  
 
     def __getitem__(self, idx: int) -> Any:
         node = self._node_at(idx)
@@ -77,7 +76,6 @@ class _NodeList:
             idx += n
         if idx < 0 or idx >= n:
             raise IndexError("pop index out of range")
-        # pop head
         if idx == 0:
             node = self.head
             assert node is not None
@@ -85,7 +83,6 @@ class _NodeList:
             node.next = None
             self._size -= 1
             return node.value
-        # find previous
         prev = self._node_at(idx - 1)
         assert prev.next is not None
         node = prev.next
@@ -96,7 +93,6 @@ class _NodeList:
 
     def insert(self, idx: int, value: Any) -> None:
         if idx <= 0:
-            # head insert
             new = _Node(value)
             new.next = self.head
             self.head = new
@@ -105,7 +101,6 @@ class _NodeList:
         if idx >= self._size:
             self.append(value)
             return
-        # 插入到 idx（prev = idx-1）
         prev = self._node_at(idx - 1)
         new = _Node(value)
         new.next = prev.next
@@ -138,7 +133,6 @@ class LinkedListModel:
         return repr(self.node_value_store)
 
     def insert_first(self, value: Any) -> None:
-        # 等价于 insert(0, value)
         self.node_value_store.insert(0, value)
 
     def insert_last(self, value: Any) -> None:

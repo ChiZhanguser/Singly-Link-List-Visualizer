@@ -35,7 +35,6 @@ class LinkList:
 
         self._init_coords()
 
-        # many widget attributes set to None generically (previous代码大量显式声明)
         for name in ("head_name","information","insert_at_beg","insert_at_last","delete_at_first",
                      "delete_at_last","position_label","start_label","temp_label","temp1_label",
                      "data_label","next_label","element_take_label","element_take_entry","add_btn",
@@ -43,14 +42,11 @@ class LinkList:
                      "position_take_entry","find_btn","insert_after_node","delete_particular_node",
                      "save_btn","load_btn","back_to_main_btn"):
             setattr(self, name, None)
-
-        # build UI
         heading_with_label_subheading(self)
         make_btn(self)
         make_start_with_other(self)
         make_batch_create_ui(self)
 
-        # register visualizer if possible
         try:
             function_dispatcher.register_visualizer("linked_list", self)
             print("linked list visualizer registered.")
@@ -68,7 +64,6 @@ class LinkList:
         self.chat_window = chat_window  
     
     def _init_coords(self):
-        # initial coordinates (kept names from original for compatibility)
         self.start_left = 50; self.start_up = 380
         self.main_node_left = 25; self.main_node_up = 120
         self.data_left = 30; self.data_up = 150
@@ -76,7 +71,6 @@ class LinkList:
         self.temp_label_x = 40; self.temp_label_y = 150
         self.temp_pointer_left = 50; self.temp_pointer_up = 180
         self.pointing_line_temp_left = 65; self.pointing_line_temp_up = 195
-        # dynamic handles
         self.pointing_line_start = None
         self.pointing_line_temp = None
         self.pointing_line_temp1 = None
@@ -86,7 +80,6 @@ class LinkList:
         self.node_helpers_reset()
 
     def node_helpers_reset(self):
-        # placeholders used during animations & creation
         self.data = None; self.next = None; self.main_container_node = None
         self.arrow = None; self.value_set = None; self.next_set = None
 
@@ -206,7 +199,6 @@ class LinkList:
         self.toggle_action_buttons(DISABLED)
         self.new_node_label = Label(self.canvas_make, text="New node", font=("Arial",13,"bold"), bg="chocolate", fg="green")
         self.new_node_label.place(x=30, y=90)
-        # rectangles for data/next and outer node
         self.data = self.make_rect(self.data_left,self.data_up,self.data_left+40,self.data_up+30, outline="green", fill="yellow", width=3)
         self.data_label = Label(self.canvas_make, text="data", font=("Arial",13,"bold"), bg="chocolate", fg="green")
         self.data_label.place(x=self.data_label_x, y=self.data_label_y)
@@ -217,7 +209,6 @@ class LinkList:
         self.input_take(take_notation)
 
     def input_take(self, take_notation):
-        # create shared entry & add button
         self.element_take_label = Label(self.window, text="Enter the element value", bg="orange", fg="brown", font=("Arial", 12, "bold"))
         self.element_take_label.place(x=10, y=620)
         self.element_take_entry = Entry(self.window, font=("Arial", 13, "bold"), bg="white", state=NORMAL,

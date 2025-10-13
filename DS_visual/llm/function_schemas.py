@@ -1,4 +1,3 @@
-# llm/function_schemas.py
 """
 Function schemas for LLM function-calling.
 Provides STACK_FUNCTIONS, SEQUENCE_FUNCTIONS and a convenience getter get_function_schemas()
@@ -211,5 +210,5 @@ def get_function_schemas(kind: str = "stack"):
     if kind == "all":
         # 合并并返回
         return STACK_FUNCTIONS + SEQUENCE_FUNCTIONS + LINKED_LIST_FUNCTIONS
-    # 默认回退为 stack（向后兼容）
+    # 默认回退为 stack
     return STACK_FUNCTIONS
