@@ -52,7 +52,8 @@ class BSTModel:
             cur = cur.left
         return cur
 
-    def transplant(self, u: TreeNode, v: Optional[TreeNode]):  # 用子树 v 替换子树 u
+    # 保留你已有的 transplant 实现（如果已经存在则无需重复）
+    def transplant(self, u: TreeNode, v: Optional[TreeNode]):
         if u.parent is None:
             self.root = v
         else:
@@ -63,11 +64,13 @@ class BSTModel:
         if v:
             v.parent = u.parent
 
-    def delete(self, val: Any) -> Tuple[bool, List[TreeNode]]:
-        node, path = self.search_with_path(val)
+    def delete_node(self, node: Optional[TreeNode]) -> bool:
         if node is None:
-            return False, path
-        if node.left is None and node.right is None:  # 叶子结点
+            return False
+
+        # 三种情形：无子、仅一子、两子
+        if node.left is None and node.right is None:
+            # 叶子节点
             if node.parent is None:
                 self.root = None
             else:
@@ -75,19 +78,32 @@ class BSTModel:
                     node.parent.left = None
                 else:
                     node.parent.right = None
-        elif node.left is None:                # 右边有孩子
+        elif node.left is None:
+            # 只有右子
             self.transplant(node, node.right)
-        elif node.right is None:                     # 左边有孩子
+        elif node.right is None:
+            # 只有左子
             self.transplant(node, node.left)
-        else:                                   # 两个子节点
+        else:
+            # 两个子节点：用右子树的最小节点（后继）替换
             successor = self.find_min(node.right)
-            if successor.parent is not node:
+            if successor is not node.right:
+                # 将 successor 用其右子替换（从原位置摘下）
                 self.transplant(successor, successor.right)
                 successor.right = node.right
                 if successor.right:
                     successor.right.parent = successor
+            # 将 node 替换为 successor
             self.transplant(node, successor)
             successor.left = node.left
             if successor.left:
                 successor.left.parent = successor
-        return True, path
+        return True
+
+    def delete(self, val: Any) -> Tuple[bool, List[TreeNode]]:
+        node, path = self.search_with_path(val)
+        if node is None:
+            return False, path
+        ok = self.delete_node(node)
+        return ok, path
+

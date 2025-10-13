@@ -33,7 +33,7 @@ def draw_instructions(self):  # 绘制操作说明
     self.canvas.delete("all")
     self.node_items.clear()
     self.node_to_rect.clear()
-    self.canvas.create_text(10, 10, anchor="nw", text="BST：插入 / 查找 / 删除 动态演示。中序位置用于横向布局。", font=("Arial",11))
+    self.canvas.create_text(10, 10, anchor="nw", text="BST：插入 / 查找 / 删除 动态演示", font=("Arial",11))
     if self.status_text_id:
         self.canvas.delete(self.status_text_id)
     self.status_text_id = self.canvas.create_text(self.canvas_width-10, 10, anchor="ne", text="", font=("Arial",12,"bold"), fill="darkgreen")

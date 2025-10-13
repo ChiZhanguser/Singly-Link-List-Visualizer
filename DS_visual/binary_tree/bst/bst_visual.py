@@ -446,7 +446,7 @@ class BSTVisualizer:
                         self.canvas.itemconfig(self.node_to_rect[node], fill="lightgreen")
                     self.update_status(f"已交换值，接下来删除后继节点 {val}（其已移至 succ 位置）")
                     def final_del():
-                        self.model.delete(val)
+                        self.model.delete_node(succ)  
                         self.redraw()
                         self.update_status(f"删除完成（两子节点情况）")
                         self.animating = False

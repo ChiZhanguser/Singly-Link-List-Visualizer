@@ -15,7 +15,6 @@ from circular_queue.circular_queue_visual import CircularQueueVisualizer
 from trie.trie_visual import TrieVisualizer
 from bplustree.bplustree_visual import BPlusVisualizer
 from hashtable.hashtable_visual import HashtableVisualizer
-
 import random
 import time
 
@@ -172,7 +171,6 @@ class MainInterface:
             points.append(x)
             points.append(y)
         canvas.create_polygon(*points, fill=blend_hex(c2, "#ffffff", 0.12), outline='', tags="grad")
-        # draw particle circles (static at draw time; _animate_header will update by redrawing)
         for i, (px, py, rad, alpha) in enumerate(self._particle_positions):
             canvas.create_oval(px-rad, py-rad, px+rad, py+rad, fill=blend_hex("#ffffff", c2, 0.7), outline="", tags="grad")
         canvas.tag_raise("title")
@@ -230,6 +228,9 @@ class MainInterface:
         sequence_list_window.maxsize(1350, 730)
         sequence_list_window.minsize(1350, 730)
         SequenceListVisualizer(sequence_list_window)
+        chat_window = ChatWindow(self.window)
+        chat_window.win.transient(sequence_list_window)  # 设置为主窗口的子窗口
+        chat_window.win.geometry("200x300")  # 缩小尺寸
         sequence_list_window.mainloop()
 
     def open_stack(self):
@@ -239,6 +240,9 @@ class MainInterface:
         stack_window.maxsize(1350, 730)
         stack_window.minsize(1350, 730)
         StackVisualizer(stack_window)
+        chat_window = ChatWindow(self.window)
+        chat_window.win.transient(stack_window)  # 设置为主窗口的子窗口
+        chat_window.win.geometry("200x300")  # 缩小尺寸
         stack_window.mainloop()
 
     def open_binary_tree(self):
