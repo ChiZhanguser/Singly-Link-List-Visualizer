@@ -7,8 +7,8 @@ class RBNode:
         self.left: Optional['RBNode'] = None
         self.right: Optional['RBNode'] = None
         self.parent: Optional['RBNode'] = None
-        self.color: str = color  # "R" or "B"
-        self.id = id(self)       # stable identifier for this runtime node
+        self.color: str = color  # 是红节点还是黑节点
+        self.id = id(self)    
         self.orig_id: Optional[int] = None
 
     def __repr__(self):
@@ -52,8 +52,6 @@ class RBModel:
                 parent.left = y
             else:
                 parent.right = y
-
-        # 如果 x 原来是根（parent 为 None），调用者需要检查并设置 self.root = y
         return y
 
     def _rotate_right(self, x: RBNode) -> RBNode:
@@ -78,30 +76,16 @@ class RBModel:
                 parent.right = y
 
         return y
-
-    # ---------- insertion with rich step recording ----------
+    
     def insert_with_steps(self, val: Any) -> Tuple[RBNode, List[RBNode], List[Dict], List[Optional[RBNode]]]:
-        """
-        Insert val and return:
-          - inserted_node (model node)
-          - path_nodes: list of nodes visited during BST insert (for visualizing search path)
-          - events: list of events (recolor/rotation) in order; each event is a dict describing it but
-                    referencing node identities via integer ids (e.g. parent_id, uncle_id, x_id, ...)
-          - snapshots: list of cloned roots capturing tree states:
-              snapshots[0] = before insertion (clone)
-              snapshots[1] = after raw BST insertion (new node inserted, colored RED)
-              snapshots[2..] = after each recolor/rotation step (clones)
-        """
         events: List[Dict] = []
         path_nodes: List[RBNode] = []
         snapshots: List[Optional[RBNode]] = []
 
-        # snapshot before any change
         snapshots.append(clone_tree(self.root))
 
-        # BST insert
         if self.root is None:
-            new_node = RBNode(val, color="B")  # root must be black
+            new_node = RBNode(val, color="B")  # 根节点必须是黑的
             self.root = new_node
             path_nodes.append(new_node)
             snapshots.append(clone_tree(self.root))
@@ -125,20 +109,16 @@ class RBModel:
             parent.right = new_node
         path_nodes.append(new_node)
 
-        # snapshot after raw insert
         snapshots.append(clone_tree(self.root))
 
-        # fixup
         node = new_node
         while node is not self.root and node.parent and node.parent.color == "R":
             p = node.parent
             g = p.parent
             if g is None:
                 break
-            # determine uncle
             if g.left is p:
                 uncle = g.right
-                # case 1: uncle red -> recolor parent+uncle black, grand red, move up
                 if uncle and uncle.color == "R":
                     p.color = "B"
                     uncle.color = "B"
@@ -153,15 +133,9 @@ class RBModel:
                     node = g
                     continue
                 else:
-                    # case 2/3: uncle black
-                    # if node is right child -> left-rotate parent (convert to left-left)
                     if p.right is node:
-                        # rotate left at p
                         new_subroot = self._rotate_left(p)
-                        # fix parent pointers around new_subroot
-                        # if p had parent (g), we already adjusted parent children in _rotate_left
                         if new_subroot.parent is None:
-                            # new_subroot may become overall root
                             if g.parent is None:
                                 self.root = new_subroot
                         events.append({
@@ -172,9 +146,7 @@ class RBModel:
                             'new_root_id': new_subroot.id
                         })
                         snapshots.append(clone_tree(self.root))
-                        # after rotation, node.parent was updated; update p reference for next steps
                         p = node.parent
-                    # recolor and right-rotate grand
                     p.color = "B"
                     g.color = "R"
                     new_subroot = self._rotate_right(g)

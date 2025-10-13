@@ -54,35 +54,27 @@ def process(visualizer, text: str):
             messagebox.showerror("错误", "delete 参数需为 'first'/'last' 或 正整数位置，例如：delete 3")
             return
 
-        # 检查范围
         n = len(visualizer.node_value_store) if hasattr(visualizer, "node_value_store") else (len(visualizer.model.node_value_store) if hasattr(visualizer, "model") and hasattr(visualizer.model, "node_value_store") else 0)
         if pos < 1 or pos > n:
             messagebox.showerror("错误", f"位置越界：当前链表长度 {n}")
             return
 
-        # 执行删除（数据层面），然后用 programmatic_insert_last 逐个重建可视化（以保留动画）
         try:
-            # 剔除指定项（1-based -> index pos-1）
             if hasattr(visualizer, "node_value_store"):
-                # 拷贝剩余元素
                 remaining = visualizer.node_value_store[:pos-1] + visualizer.node_value_store[pos:]
-                # 清空并重建
                 visualizer.clear_visualization()
                 for v in remaining:
                     visualizer.programmatic_insert_last(v)
                 return
             else:
-                # 如果没有 node_value_store，尝试在 model 操作然后重建（若 model 支持 to_list）
                 if hasattr(visualizer, "model") and hasattr(visualizer.model, "to_list"):
                     lst = visualizer.model.to_list()
                     remaining = lst[:pos-1] + lst[pos:]
-                    # 尝试把 model 清空并重新填充
                     if hasattr(visualizer.model, "clear"):
                         visualizer.model.clear()
                     for v in remaining:
                         if hasattr(visualizer.model, "append"):
                             visualizer.model.append(v)
-                    # 尝试可视化重建
                     if hasattr(visualizer, "clear_visualization") and hasattr(visualizer, "programmatic_insert_last"):
                         visualizer.clear_visualization()
                         for v in remaining:
