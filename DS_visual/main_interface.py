@@ -69,7 +69,6 @@ class MainInterface:
     def __init__(self, root):
         self.window = root
         self.window.title("数据结构可视化工具 — 张驰")
-        # 放大窗口以容纳更多按钮与更大卡片区
         self.window.geometry("1380x980")
         self.window.minsize(1000, 700)
         style = ttk.Style(self.window)

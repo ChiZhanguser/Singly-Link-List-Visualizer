@@ -248,13 +248,10 @@ class SequenceListVisualizer:
 
         insert_idx = position - 1  # 转为 0-based
         try:
-            # 使用 model.insert (0-based) 将数据插入模型
             self.model.insert(insert_idx, value)
         except Exception as e:
             messagebox.showerror("错误", f"插入失败: {e}")
             return
-
-        # 以 0-based index 播放动画
         try:
             self.animate_insert(insert_idx, value)
         except Exception as e:
@@ -265,7 +262,6 @@ class SequenceListVisualizer:
                 pass
         
     def animate_insert(self, position, value):
-        # position: 0-based 插入索引
         self.disable_buttons()
         # 新元素起始在右侧（画布外/右侧）
         new_x = self.start_x + max(0, len(self.data_store)-1) * (self.cell_width + self.spacing) + 200
