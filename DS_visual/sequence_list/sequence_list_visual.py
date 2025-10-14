@@ -228,52 +228,80 @@ class SequenceListVisualizer:
             self.model.insert_last(value)
         
         self.animate_insert(position, value)
-    
+        
     def perform_insert_with_position(self):
         value = self.value_entry.get()
         position_str = self.position_entry.get()
         if not value or not position_str:
             messagebox.showerror("错误", "请填写所有字段")
             return
-        position = int(position_str)
+        try:
+            position = int(position_str)  # 用户输入是 1-based
+        except ValueError:
+            messagebox.showerror("错误", "位置必须是整数")
+            return
+
+        # 允许插入到末尾，所以最大为 len + 1
         if position < 1 or position > len(self.data_store) + 1:
             messagebox.showerror("错误", f"位置必须在1到{len(self.data_store) + 1}之间")
             return
-        self.model.insert_after(position - 1, value)
-        self.animate_insert(position, value)
+
+        insert_idx = position - 1  # 转为 0-based
+        try:
+            # 使用 model.insert (0-based) 将数据插入模型
+            self.model.insert(insert_idx, value)
+        except Exception as e:
+            messagebox.showerror("错误", f"插入失败: {e}")
+            return
+
+        # 以 0-based index 播放动画
+        try:
+            self.animate_insert(insert_idx, value)
+        except Exception as e:
+            messagebox.showerror("错误", f"插入动画失败: {e}")
+            try:
+                self.update_display()
+            except Exception:
+                pass
         
     def animate_insert(self, position, value):
-        # 禁用所有按钮
+        # position: 0-based 插入索引
         self.disable_buttons()
-        # 创建新元素（初始位置在右侧）
-        new_x = self.start_x + (len(self.data_store) - 1) * (self.cell_width + self.spacing) + 200
+        # 新元素起始在右侧（画布外/右侧）
+        new_x = self.start_x + max(0, len(self.data_store)-1) * (self.cell_width + self.spacing) + 200
         new_y = self.start_y
-        new_rect = self.canvas.create_rectangle(new_x, new_y, new_x + self.cell_width, 
-                                              new_y + self.cell_height, fill="lightblue", outline="black")
-        new_label = self.canvas.create_text(new_x + self.cell_width/2, new_y + self.cell_height/2, 
-                                          text=value, font=("Arial", 14, "bold"))
-        # 移动新元素到正确位置
+        new_rect = self.canvas.create_rectangle(new_x, new_y, new_x + self.cell_width,
+                                                new_y + self.cell_height, fill="lightblue", outline="black")
+        new_label = self.canvas.create_text(new_x + self.cell_width/2, new_y + self.cell_height/2,
+                                            text=value, font=("Arial", 14, "bold"))
+
         target_x = self.start_x + position * (self.cell_width + self.spacing)
-        # 移动新元素
-        dx = (target_x - new_x) / 20
-        for i in range(20):
+        dx = (target_x - new_x) / 20.0
+        for _ in range(20):
             self.canvas.move(new_rect, dx, 0)
             self.canvas.move(new_label, dx, 0)
             self.window.update()
-            time.sleep(0.05)
-        # 移动后面的元素
-        for i in range(position, len(self.data_store) - 1):
-            dx = (self.cell_width + self.spacing) / 10
-            for j in range(10):
-                self.canvas.move(self.data_rectangles[i], dx, 0)
-                self.canvas.move(self.data_labels[i], dx, 0)
-                self.canvas.move(self.index_labels[i], dx, 0)
-                self.window.update()
-                time.sleep(0.02)
-        # 更新显示
-        self.update_display()        
-        # 启用所有按钮
+            time.sleep(0.03)
+
+        old_count = len(self.data_rectangles)
+        # move items at indices >= position up to old_count-1 (these correspond to elements before insertion)
+        for idx in range(position, old_count):
+            step_dx = (self.cell_width + self.spacing) / 10.0
+            for _ in range(10):
+                try:
+                    self.canvas.move(self.data_rectangles[idx], step_dx, 0)
+                    self.canvas.move(self.data_labels[idx], step_dx, 0)
+                    self.canvas.move(self.index_labels[idx], step_dx, 0)
+                    self.window.update()
+                    time.sleep(0.01)
+                except Exception:
+                    pass
+
+        # 最后刷新显示以保证一致
+        self.update_display()
         self.enable_buttons()
+
+
     
     def delete_first(self):
         if len(self.data_store) == 0:

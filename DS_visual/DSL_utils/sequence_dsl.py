@@ -1,191 +1,178 @@
 from tkinter import messagebox
+import time
 
-def _split_items(args):
+def _split_items_from_args(args):
+    """
+    把命令参数解析成元素列表，支持空格或逗号分隔混合：
+    e.g. "1 2 3" / "1,2,3" / "1, 2,3" 等都能解析成 ["1","2","3"]
+    """
     items = []
-    for a in args:
-        for p in a.split(","):
-            s = p.strip()
-            if s:
-                items.append(s)
+    for tok in args:
+        if not tok:
+            continue
+        parts = [p.strip() for p in tok.split(",") if p.strip() != ""]
+        if parts:
+            items.extend(parts)
     return items
 
 def process(vis, text):
-    parts = text.split()
+    """
+    通用 DSL 处理器（对顺序表 & BST 都友好）。
+    vis: 某个 Visualizer 实例（例如 SequenceListVisualizer 或 BSTVisualizer）
+    text: 用户在 DSL 输入框写的命令
+    """
+    if not vis or not text:
+        return
+    t = text.strip()
+    if getattr(vis, "animating", False):
+        messagebox.showinfo("提示", "当前正在执行动画，请稍后再试")
+        return
+
+    parts = t.split()
     if not parts:
         return
     cmd = parts[0].lower()
     args = parts[1:]
 
-    # insert x -> append / insert_last
-    if cmd == "insert":
-        val = " ".join(args)
-        if hasattr(vis, "perform_insert") and hasattr(vis, "animate_insert"):
+    # --- helpers to detect capabilities ---
+    has_bst_insert_anim = hasattr(vis, "start_insert_animated")
+    has_seq_build_anim = hasattr(vis, "animate_build_element") and hasattr(vis, "disable_buttons")
+
+    # --------- insert / create ----------
+    if cmd in ("insert", "create"):
+        items = _split_items_from_args(args)
+        if not items:
+            return
+
+        # BST-style visualizer: reuse its start_insert_animated flow
+        if has_bst_insert_anim:
+            # 用逗号分隔的输入兼容 BST 的解析逻辑
+            vis.input_var.set(",".join(items))
+            vis.start_insert_animated()
+            return
+
+        # Sequence-list visualizer: use append + animate_build_element
+        if has_seq_build_anim:
             try:
-                # 默认尾部插入
-                pos = len(vis.data_store)
-                vis.model.insert_last(val) if hasattr(vis.model, "insert_last") else getattr(vis.model, "append", vis.model.append)(val)
-                vis.animate_insert(pos, val)
-                return
+                vis.disable_buttons()
             except Exception:
                 pass
-        if hasattr(vis, "model") and hasattr(vis.model, "append"):
             try:
-                vis.model.append(val)
-                if hasattr(vis, "update_display"):
-                    vis.update_display()
+                # 逐个 append 并调用动画（perform_build_list 的逻辑）
+                for i, v in enumerate(items):
+                    # append 到模型
+                    vis.model.append(v)
+                    # 调用可视化的单个插入动画（该方法本身会做移动与刷新）
+                    vis.animate_build_element(i, v)
+                    # 保证 UI 刷新（animate_build_element 内通常会有 update/sleep，但我们再保证一下）
+                    try:
+                        vis.window.update()
+                    except Exception:
+                        pass
+                    # 给一点小间隔（可选、调速用）
+                    # time.sleep(0.06)
+                # 完成后恢复按钮
+            except Exception as e:
+                # 遇到错误也要确保恢复按钮
+                try:
+                    vis.enable_buttons()
+                except Exception:
+                    pass
+                messagebox.showerror("错误", f"执行 create/insert 时出错: {e}")
                 return
+            try:
+                vis.enable_buttons()
             except Exception:
                 pass
-        if hasattr(vis, "data_store"):
-            vis.data_store.append(str(val))
+            return
+
+        # fallback: 没有动画接口，直接插入模型并刷新显示
+        try:
+            for v in items:
+                if hasattr(vis.model, "append"):
+                    vis.model.append(v)
             if hasattr(vis, "update_display"):
                 vis.update_display()
-            return
+        except Exception as e:
+            messagebox.showerror("错误", f"插入失败: {e}")
         return
 
-    # insert_at i x
-    if cmd == "insert_at":
-        if len(args) < 2:
-            messagebox.showerror("错误", "insert_at 需要位置和数值，例如：insert_at 3 42")
+    # --------- search ----------
+    if cmd == "search":
+        if not args:
             return
+        val = args[0].strip()
+        # BST visualizer: use its animated search if exists
+        if has_bst_insert_anim and hasattr(vis, "start_search_animated"):
+            vis.input_var.set(val)
+            vis.start_search_animated()
+            return
+        # Sequence: no animated search defined — fallback to simple highlight if available
+        if hasattr(vis, "start_search_animated"):
+            vis.input_var.set(val)
+            vis.start_search_animated()
+            return
+        # fallback: try model search and show message
         try:
-            pos = int(args[0])  # 1-based expected
-            val = " ".join(args[1:])
-        except Exception:
-            messagebox.showerror("错误", "位置必须为整数")
-            return
-        # convert to 0-based index
-        idx = max(0, pos-1)
-        try:
-            if hasattr(vis.model, "insert_after"):
-                # some models use insert_after(index, value) where index is 0-based previous node
-                vis.model.insert_after(idx-1 if idx>0 else 0, val)
-            elif hasattr(vis.model, "insert"):
-                vis.model.insert(idx, val)
-            elif hasattr(vis, "insert_at"):
-                vis.insert_at(idx, val)
-            elif hasattr(vis, "data_store"):
-                vis.data_store.insert(idx, str(val))
-            if hasattr(vis, "update_display"):
-                vis.update_display()
-            return
+            found = False
+            if hasattr(vis.model, "data"):
+                found = (val in vis.model.data)
+            messagebox.showinfo("查找结果", f"{val} {'存在' if found else '不存在'}")
         except Exception as e:
-            messagebox.showerror("错误", f"插入失败：{e}")
-            return
+            messagebox.showerror("错误", f"查找失败: {e}")
+        return
 
-    # delete i  or delete first/last
+    # --------- delete ----------
     if cmd == "delete":
         if not args:
-            messagebox.showerror("错误", "delete 需要参数，例如：delete 3 / delete first / delete last")
             return
-        key = args[0].lower()
-        if key in ("first", "head", "1"):
-            if hasattr(vis, "delete_first"):
-                try:
-                    vis.delete_first(); return
-                except Exception:
-                    pass
-            # fallback
-            if hasattr(vis.model, "pop"):
-                try:
-                    vis.model.pop(0); vis.update_display(); return
-                except Exception:
-                    pass
-            if hasattr(vis, "data_store") and vis.data_store:
-                vis.data_store.pop(0); vis.update_display(); return
+        val = args[0].strip()
+        # BST visualizer
+        if has_bst_insert_anim and hasattr(vis, "start_delete_animated"):
+            vis.input_var.set(val)
+            vis.start_delete_animated()
             return
-        if key in ("last", "tail"):
-            if hasattr(vis, "delete_last"):
-                try:
-                    vis.delete_last(); return
-                except Exception:
-                    pass
-            if hasattr(vis.model, "pop"):
-                try:
-                    vis.model.pop(); vis.update_display(); return
-                except Exception:
-                    pass
-            if hasattr(vis, "data_store") and vis.data_store:
-                vis.data_store.pop(); vis.update_display(); return
-            return
-        # numeric pos
-        try:
-            pos = int(key)
-        except Exception:
-            messagebox.showerror("错误", "delete 参数需为 first/last 或 正整数位置，例如 delete 3")
-            return
-        idx = pos - 1
-        if hasattr(vis.model, "pop"):
+        # Sequence visualizer: try to find index then call animate_delete
+        if hasattr(vis, "data_store") and hasattr(vis, "animate_delete"):
             try:
-                vis.model.pop(idx)
-                if hasattr(vis, "update_display"): vis.update_display()
-                return
-            except Exception:
-                pass
-        if hasattr(vis, "data_store"):
-            if 0 <= idx < len(vis.data_store):
-                vis.data_store.pop(idx)
-                if hasattr(vis, "update_display"): vis.update_display()
-                return
-            else:
-                messagebox.showerror("错误", "位置越界")
-                return
-        messagebox.showerror("错误", "无法执行删除：缺少支持的方法")
-        return
-
-    # clear
-    if cmd == "clear":
-        if hasattr(vis, "clear_list"):
-            try:
-                vis.clear_list(); return
-            except Exception:
-                pass
-        if hasattr(vis.model, "clear"):
-            try:
-                vis.model.clear(); vis.update_display(); return
-            except Exception:
-                pass
-        if hasattr(vis, "data_store"):
-            vis.data_store.clear(); vis.update_display(); return
-        return
-
-    # create 1 2 3  or create 1,2,3
-    if cmd == "create":
-        if not args:
-            messagebox.showerror("错误", "create 需要至少一个值，例如：create 1 2 3")
-            return
-        items = _split_items(args)
-        if hasattr(vis, "prepare_build_list") and hasattr(vis, "perform_build_list"):
-            # 如果有构建接口，优先走它（把 values 写入 build_values_entry 然后调用 perform）
-            try:
-                # 尝试直接快速创建：清空模型后逐个追加（不做动画），再刷新
-                if hasattr(vis.model, "clear"):
-                    vis.model.clear()
-                if hasattr(vis.model, "append"):
-                    for v in items:
-                        vis.model.append(v)
-                    if hasattr(vis, "update_display"):
-                        vis.update_display()
+                # 在数据模型中查找第一个匹配项的索引（字符串匹配）
+                idx = None
+                for i, x in enumerate(vis.data_store):
+                    if str(x) == val:
+                        idx = i
+                        break
+                if idx is None:
+                    messagebox.showinfo("删除", f"未找到 {val}")
                     return
-            except Exception:
-                pass
-        # 回退：写 data_store 或 model
-        if hasattr(vis, "data_store"):
-            vis.data_store[:] = [str(x) for x in items]
+                # animate_delete 使用 0-based index
+                vis.animate_delete(idx)
+            except Exception as e:
+                messagebox.showerror("错误", f"删除失败: {e}")
+            return
+        # fallback: try model delete/pop then refresh
+        try:
+            if hasattr(vis.model, "data") and val in vis.model.data:
+                vis.model.data.remove(val)
             if hasattr(vis, "update_display"):
                 vis.update_display()
-            return
-        if hasattr(vis.model, "clear") and hasattr(vis.model, "append"):
-            try:
-                vis.model.clear()
-                for v in items:
-                    vis.model.append(v)
-                if hasattr(vis, "update_display"):
-                    vis.update_display()
-                return
-            except Exception:
-                pass
+        except Exception as e:
+            messagebox.showerror("错误", f"删除失败: {e}")
         return
 
-    # 未识别命令 -> 静默返回
+    # --------- clear ----------
+    if cmd == "clear":
+        try:
+            if hasattr(vis, "clear_list"):
+                vis.clear_list()
+            elif hasattr(vis, "clear_canvas"):
+                vis.clear_canvas()
+            else:
+                vis.model.clear()
+                if hasattr(vis, "update_display"):
+                    vis.update_display()
+        except Exception as e:
+            messagebox.showerror("错误", f"清空失败: {e}")
+        return
+
+    # 未识别命令：不处理
     return
