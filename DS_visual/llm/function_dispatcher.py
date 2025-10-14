@@ -16,21 +16,18 @@ def _try_import_stack_api():
     global stack_api
     if stack_api is not None:
         return stack_api
-    # 1) package import
     try:
         import stack.stack_api as _m
         stack_api = _m
         return stack_api
     except Exception:
         pass
-    # 2) relative import
     try:
-        from .. import stack_api as _m  # type: ignore
+        from .. import stack_api as _m  
         stack_api = _m
         return stack_api
     except Exception:
         pass
-    # 3) search upward for stack_api.py
     try:
         this_file = os.path.abspath(__file__)
         cur = os.path.dirname(this_file)
@@ -53,7 +50,7 @@ def _try_import_stack_api():
             loader = spec.loader
             if loader is None:
                 raise ImportError("spec.loader is None for stack_api")
-            loader.exec_module(module)  # type: ignore
+            loader.exec_module(module)  
             sys.modules["stack_api"] = module
             stack_api = module
             return stack_api
@@ -65,21 +62,18 @@ def _try_import_sequence_api():
     global sequence_api
     if sequence_api is not None:
         return sequence_api
-    # 1) package import
     try:
         import sequence.sequence_api as _m
         sequence_api = _m
         return sequence_api
     except Exception:
         pass
-    # 2) relative import
     try:
-        from .. import sequence_api as _m  # type: ignore
+        from .. import sequence_api as _m  
         sequence_api = _m
         return sequence_api
     except Exception:
         pass
-    # 3) search upward for sequence_api.py
     try:
         this_file = os.path.abspath(__file__)
         cur = os.path.dirname(this_file)
@@ -102,7 +96,7 @@ def _try_import_sequence_api():
             loader = spec.loader
             if loader is None:
                 raise ImportError("spec.loader is None for sequence_api")
-            loader.exec_module(module)  # type: ignore
+            loader.exec_module(module)  
             sys.modules["sequence_api"] = module
             sequence_api = module
             return sequence_api
@@ -114,21 +108,18 @@ def _try_import_linked_list_api():
     global linked_list_api
     if linked_list_api is not None:
         return linked_list_api
-    # 1) package import
     try:
         import linked_list.linked_list_api as _m
         linked_list_api = _m
         return linked_list_api
     except Exception:
         pass
-    # 2) relative import
     try:
-        from .. import linked_list_api as _m  # type: ignore
+        from .. import linked_list_api as _m  
         linked_list_api = _m
         return linked_list_api
     except Exception:
         pass
-    # 3) search upward for linked_list_api.py
     try:
         this_file = os.path.abspath(__file__)
         cur = os.path.dirname(this_file)
@@ -151,7 +142,7 @@ def _try_import_linked_list_api():
             loader = spec.loader
             if loader is None:
                 raise ImportError("spec.loader is None for linked_list_api")
-            loader.exec_module(module)  # type: ignore
+            loader.exec_module(module)  
             sys.modules["linked_list_api"] = module
             linked_list_api = module
             return linked_list_api
@@ -159,12 +150,10 @@ def _try_import_linked_list_api():
         pass
     return None
 
-# attempt to initialize at import time (optional)
 _try_import_stack_api()
 _try_import_sequence_api()
 _try_import_linked_list_api()
 
-# registry: kind -> weakref to visualizer instance
 _registry: Dict[str, weakref.ref] = {}
 
 def _safe_parse_args(arguments: Any) -> Any:
@@ -174,11 +163,9 @@ def _safe_parse_args(arguments: Any) -> Any:
         try:
             return json.loads(arguments)
         except Exception:
-            # keep raw string for downstream handling
             return {"__raw": arguments}
     return arguments
 
-# ---------------- register / unregister ----------------
 def register_visualizer(kind_or_visualizer, visualizer: Optional[object] = None) -> Dict[str, Any]:
     try:
         if visualizer is None:
@@ -231,18 +218,14 @@ def _normalize_name(raw):
     if not isinstance(raw, str):
         return raw
     s = raw.strip()
-    # camelCase -> snake_case
     s = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s)
-    # non-alnum -> underscore
     s = re.sub(r'[^0-9a-zA-Z_]', '_', s).lower()
     s = re.sub(r'_+', '_', s).strip('_')
-    # remove prefixes
     s = re.sub(r'^(demo|do|action)_', '', s)
     return _ALIAS_MAP.get(s, s)
 
 def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
     global stack_api, sequence_api, linked_list_api
-    # ensure api modules available (lazy)
     if stack_api is None:
         _try_import_stack_api()
     if sequence_api is None:
@@ -254,7 +237,6 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
     if isinstance(name, str):
         name = _normalize_name(name)
 
-    # debug print
     try:
         print(f"dispatch -> name={name!r}, arguments={args!r}")
     except Exception:
@@ -449,24 +431,19 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
     except Exception as e:
         return {"ok": False, "error": f"sequence dispatch error: {e}"}
 
-    # ---------------- linked-list handlers ----------------
     try:
         if linked_list_api is None:
             _try_import_linked_list_api()
 
-        # insert last / append
         if name in ("linked_list_insert_last", "linked_list_insert", "linked_list_insert_tail", "linked_list_add", "linked_list_push", "linked_list_append", "linked_list_insert_end", "linked_list_insert_tail"):
             if linked_list_api is None:
-                # if the dedicated API not available, try calling registered visualizer programmatically
                 vis = _get_visualizer("linked_list")
                 if vis:
                     val = args.get("value") if isinstance(args, dict) and "value" in args else args
-                    # try a few known method names on visualizer
                     for m in ("programmatic_insert_last", "create_list_from_string", "insert_last", "insert"):
                         if hasattr(vis, m):
                             try:
                                 if m == "create_list_from_string" and isinstance(val, (list, tuple)):
-                                    # join into comma string
                                     vis.batch_entry_var.set(",".join(map(str, val)))
                                     vis.create_list_from_string()
                                     return {"ok": True, "message": "created via visualizer.create_list_from_string"}
@@ -479,24 +456,20 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
                 return {"ok": False, "error": "linked_list_api and visualizer methods not available"}
             val = args.get("value") if isinstance(args, dict) and "value" in args else args
             res = None
-            # prefer explicit API name
             if hasattr(linked_list_api, "insert_last"):
                 res = linked_list_api.insert_last(val)
                 print(f"dispatch -> linked_list_api.insert_last result={res!r}")
                 return res
-            # try common names
             for m in ("insert_last", "append", "push", "programmatic_insert_last"):
                 if hasattr(linked_list_api, m):
                     res = getattr(linked_list_api, m)(val)
                     print(f"dispatch -> linked_list_api.{m} result={res!r}")
                     return res
-            # fallback: if API exposes data list
             if hasattr(linked_list_api, "data") and isinstance(getattr(linked_list_api, "data"), list):
                 getattr(linked_list_api, "data").append(val)
                 return {"ok": True, "message": "appended raw to linked_list_api.data", "state": getattr(linked_list_api, "data")}
             return {"ok": False, "error": "linked_list_api missing insert/append method"}
 
-        # insert at index (0-based)
         if name in ("linked_list_insert_at", "linked_list_insert_pos", "linked_list_insert_position", "linked_list_insert_index"):
             if linked_list_api is None:
                 return {"ok": False, "error": "linked_list_api not available"}
@@ -513,7 +486,6 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
                 idx_int = int(idx)
             except Exception:
                 return {"ok": False, "error": f"invalid index: {idx}"}
-            # try API
             if hasattr(linked_list_api, "insert_at"):
                 res = linked_list_api.insert_at(idx_int, val)
                 print(f"dispatch -> linked_list_api.insert_at result={res!r}")
@@ -522,7 +494,6 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
                 res = linked_list_api.insert_after(idx_int, val)
                 print(f"dispatch -> linked_list_api.insert_after result={res!r}")
                 return res
-            # fallback mutate .data
             if hasattr(linked_list_api, "data") and isinstance(getattr(linked_list_api, "data"), list):
                 data = getattr(linked_list_api, "data")
                 if 0 <= idx_int <= len(data):
@@ -532,7 +503,6 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
                     return {"ok": False, "error": "index out of range for raw data insert"}
             return {"ok": False, "error": "linked_list_api missing insert_at method"}
 
-        # delete at index
         if name in ("linked_list_delete_at", "linked_list_delete", "linked_list_remove_at"):
             if linked_list_api is None:
                 return {"ok": False, "error": "linked_list_api not available"}
@@ -563,13 +533,10 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
                 return {"ok": False, "error": "index out of range for raw data pop"}
             return {"ok": False, "error": "linked_list_api missing delete/pop method"}
 
-        # clear linked list
         if name in ("linked_list_clear", "linked_list_clear_all", "linked_list_reset", "linked_list_empty"):
             if linked_list_api is None:
-                # try visualizer-level clear
                 vis = _get_visualizer("linked_list")
                 if vis:
-                    # try common visualizer clearing methods
                     for m in ("clear_visualization", "clear", "reset", "clear_all"):
                         if hasattr(vis, m):
                             try:
@@ -588,10 +555,8 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
                 return {"ok": True, "message": "cleared raw data", "state": getattr(linked_list_api, "data")}
             return {"ok": False, "error": "linked_list_api missing clear method"}
 
-        # batch create
         if name in ("linked_list_batch_create", "linked_list_create", "linked_list_build", "linked_list_create_from"):
             if linked_list_api is None:
-                # try visualizer-level create_list_from_string
                 vis = _get_visualizer("linked_list")
                 if vis:
                     vals = args.get("values") if isinstance(args, dict) and "values" in args else args
@@ -623,10 +588,8 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
                     return {"ok": False, "error": f"failed to set raw data: {e}"}
             return {"ok": False, "error": "linked_list_api missing batch_create method"}
 
-        # get state
         if name in ("linked_list_get_state", "get_linked_list_state"):
             if linked_list_api is None:
-                # try visualizer read
                 vis = _get_visualizer("linked_list")
                 if vis:
                     state = getattr(vis, "node_value_store", None)
@@ -645,15 +608,11 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
     except Exception as e:
         return {"ok": False, "error": f"linked_list dispatch error: {e}"}
 
-    # ---------------- fallback: method prefix visualizer ----------------
     if isinstance(name, str) and "_" in name:
         prefix, suffix = name.split("_", 1)
         vis = _get_visualizer(prefix)
         if vis:
-            # try to call suffix method on visualizer if exists
-            # e.g., 'linked_list_insert' -> call vis.insert(...) or vis.programmatic_insert_last(...)
             try:
-                # try direct method
                 if hasattr(vis, suffix):
                     fn = getattr(vis, suffix)
                     try:
@@ -664,8 +623,6 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
                         return {"ok": True, "message": f"invoked visualizer.{suffix}", "result": res}
                     except Exception as e:
                         return {"ok": False, "error": f"visualizer.{suffix} raised: {e}"}
-                # try common mappings for suffix
-                # e.g., suffix 'insert' -> programmatic_insert_last
                 fallback_map = {
                     "insert": "programmatic_insert_last",
                     "insert_last": "programmatic_insert_last",
@@ -698,5 +655,4 @@ def dispatch(name: str, arguments: Any) -> Dict[str, Any]:
         else:
             return {"ok": False, "error": f"no visualizer registered for kind '{prefix}'"}
 
-    # unknown function
     return {"ok": False, "error": f"unknown function name: {name}"}

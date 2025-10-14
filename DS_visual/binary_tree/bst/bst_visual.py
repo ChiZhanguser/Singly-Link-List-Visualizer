@@ -175,17 +175,28 @@ class BSTVisualizer:
         v2 = self.canvas.create_line(x2, top, x2, bottom, width=1)
         self.node_items += [v1, v2]
         self.canvas.create_text((x1+x2)/2, (top+bottom)/2, text=str(node.val), font=("Arial",12,"bold"))
-        
+    def parse_value(self, s: str):
+        s = s.strip()
+        try:
+            return int(s)
+        except Exception:
+            try:
+                return float(s)
+            except Exception:
+                return s
+
     def insert_direct(self):
         text = self.input_var.get().strip()
         if not text:
             messagebox.showinfo("提示", "请输入值或逗号分隔的值")
             return
-        items = [s.strip() for s in text.split(",") if s.strip()!=""]
+        # 先用 s.strip() 过滤空白，再 parse_value，不要在 parse_value 返回值上调用 .strip()
+        items = [self.parse_value(s) for s in text.split(",") if s.strip() != ""]
         for v in items:
             self.model.insert(v)
         self.redraw()
         self.update_status(f"已插入 {len(items)} 个节点")
+
 
     def start_insert_animated(self):
         if self.animating:
@@ -193,12 +204,13 @@ class BSTVisualizer:
         text = self.input_var.get().strip()
         if not text:
             messagebox.showinfo("提示", "请输入值或逗号分隔的值")
-            return
-        items = [s.strip() for s in text.split(",") if s.strip()!=""]
+            return  
+        items = [self.parse_value(s) for s in text.split(",") if s.strip() != ""]
         if not items:
             return
         self.animating = True
         self._insert_seq(items, 0)
+
 
     def _insert_seq(self, items: List[str], idx: int):
         if idx >= len(items):
@@ -269,12 +281,19 @@ class BSTVisualizer:
         steps = []
         while cur:
             steps.append(cur)
-            if str(val) == str(cur.val):
-                cur = cur.right
-            elif str(val) < str(cur.val):
+            cmp = self.model.compare_values(val, cur.val)
+            if cmp == 0:
+                cur = cur.right   
+            elif cmp < 0:
                 cur = cur.left
             else:
                 cur = cur.right
+            # if str(val) == str(cur.val):
+            #     cur = cur.right
+            # elif str(val) < str(cur.val):
+            #     cur = cur.left
+            # else:
+            #     cur = cur.right
         self._play_highlight_sequence(steps, f"插入 val={val}", on_complete)
 
     def _play_highlight_sequence(self, nodes: List[TreeNode], label_prefix: str, on_complete):
@@ -297,25 +316,28 @@ class BSTVisualizer:
             self.window.after(520, step)
         step()
 
+ 
     def start_search_animated(self):
         if self.animating:
             return
-        val = self.input_var.get().strip()
-        if not val:
+        raw = self.input_var.get().strip()
+        if not raw:
             messagebox.showinfo("提示", "请输入要查找的值")
             return
+        val = self.parse_value(raw)
         self.animating = True
         path_nodes = []
         cur = self.model.root
         while cur:
             path_nodes.append(cur)
-            if str(val) == str(cur.val):
+            cmp = self.model.compare_values(val, cur.val)
+            if cmp == 0:
                 break
-            elif str(val) < str(cur.val):
+            elif cmp < 0:
                 cur = cur.left
             else:
                 cur = cur.right
-        found = (path_nodes and str(path_nodes[-1].val) == str(val))
+        found = (path_nodes and self.model.compare_values(val, path_nodes[-1].val) == 0)
         i = 0
         def step():
             nonlocal i
@@ -342,26 +364,29 @@ class BSTVisualizer:
             self.window.after(520, step)
         step()
 
+
     def start_delete_animated(self):
         if self.animating:
             return
-        val = self.input_var.get().strip()
-        if not val:
+        raw = self.input_var.get().strip()
+        if not raw:
             messagebox.showinfo("提示", "请输入要删除的值")
             return
+        val = self.parse_value(raw)
         self.animating = True
         path_nodes = []
         cur = self.model.root
         while cur:
             path_nodes.append(cur)
-            if str(val) == str(cur.val):
+            cmp = self.model.compare_values(val, cur.val)
+            if cmp == 0:
                 break
-            elif str(val) < str(cur.val):
+            elif cmp < 0:
                 cur = cur.left
             else:
                 cur = cur.right
 
-        found = (path_nodes and str(path_nodes[-1].val) == str(val))
+        found = (path_nodes and self.model.compare_values(val, path_nodes[-1].val) == 0)
         i = 0
         def step():
             nonlocal i
@@ -377,11 +402,10 @@ class BSTVisualizer:
             if node in self.node_to_rect:
                 self.canvas.itemconfig(self.node_to_rect[node], fill="yellow")
             self.update_status(f"删除：比较到 {node.val} (step {i})")
-            i_plus = i+1
-            i_next = lambda: self.window.after(420, step)
             i += 1
             self.window.after(420, step)
         step()
+
 
     def _animate_deletion_process(self, val):
         node, path = self.model.search_with_path(val)

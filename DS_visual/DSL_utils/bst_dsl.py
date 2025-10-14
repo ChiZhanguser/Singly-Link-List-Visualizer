@@ -1,4 +1,3 @@
-# DSL_utils/bst_dsl.py
 from tkinter import messagebox
 
 def _split_items_from_args(args):
@@ -6,7 +5,6 @@ def _split_items_from_args(args):
     for tok in args:
         if not tok:
             continue
-        # tok: "1,2,3" 或 "1" 或 "1,2" 或 "10"
         parts = [p.strip() for p in tok.split(",") if p.strip() != ""]
         if parts:
             items.extend(parts)
@@ -24,7 +22,7 @@ def process(vis, text):
     args = parts[1:]
     if cmd == "insert":
         items = _split_items_from_args(args)
-        vis.input_var.set(" ".join(items))
+        vis.input_var.set(",".join(items))
         vis.start_insert_animated()
         return
     if cmd == "search":
@@ -42,10 +40,8 @@ def process(vis, text):
         return
     if cmd == "create":
         items = _split_items_from_args(args)
-        vis.model.root = None
-        for v in items:
-            vis.model.insert(v)
-        vis.redraw()
-        vis.update_status(f"已创建{len(items)}个节点")
+        vis.clear_canvas()
+        vis.input_var.set(",".join(items))
+        vis.start_insert_animated()
         return
     return

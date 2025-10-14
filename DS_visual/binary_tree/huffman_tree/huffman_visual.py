@@ -11,7 +11,7 @@ class HuffmanVisualizer:
     def __init__(self, root):
         self.window = root
         self.window.config(bg="#F0F4F8")
-        self.canvas_w = 920   # 左侧 main canvas 宽
+        self.canvas_w = 920   
         self.canvas_h = 520
         container = Frame(self.window, bg="#F0F4F8")
         container.pack(fill=BOTH, expand=True, padx=10, pady=8)
@@ -32,7 +32,7 @@ class HuffmanVisualizer:
                         font=("Arial", 10))
         style.configure("HeapTree.Treeview.Heading", font=("Arial", 10, "bold"), background="#E6EEF8")
         style.map("HeapTree.Treeview", background=[('selected', '#FFD59E')])
-        label = Label(right_frame, text="当前堆快照（按权值排序）", bg="#F0F4F8", fg="#0B2545", font=("Arial", 11, "bold"))
+        label = Label(right_frame, text="当前堆的快照（按权值排序）", bg="#F0F4F8", fg="#0B2545", font=("Arial", 11, "bold"))
         label.pack(padx=8, pady=(6,2), anchor="nw")
         columns = ("before", "after")
         self.heap_tree = ttk.Treeview(right_frame, columns=columns, show="headings", style="HeapTree.Treeview", height=20)
@@ -50,18 +50,15 @@ class HuffmanVisualizer:
         self.snap_before: List[List[float]] = []
         self.snap_after: List[List[float]] = []
 
-        # visual bookkeeping
         self.node_vis: Dict = {}  
         self.animating = False
 
-        # layout params
         self.node_w = 80
         self.node_h = 40
         self.base_y = self.canvas_h - 80
         self.gap_x = 30
         self.level_gap = 80
 
-        # controls 在顶上放一行（直接放在 window 顶部）
         ctrl_frame = Frame(self.window, bg="#F0F4F8")
         ctrl_frame.pack(fill=X, padx=12, pady=(0,6))
 
@@ -72,24 +69,17 @@ class HuffmanVisualizer:
         self.entry.insert(0, "1,2,3,4")
         Button(ctrl_frame, text="逐步动画构建", command=self.start_animated_build, bg="#2E8B57", fg="white").pack(side=LEFT, padx=6)
 
-        # ---------- 新增：保存 / 打开 按钮 ----------
         Button(ctrl_frame, text="保存 Huffman", command=self.save_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
         Button(ctrl_frame, text="打开 Huffman", command=self.load_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
 
-        # status text on canvas (top-left)
         self.status_id = None
         self._draw_instructions()
 
-    # ---------- UI helper ----------
     def _draw_instructions(self):
-        # 保持画布上的网格，先删除其他内容（不删除 grid）
-        # grid items are tagged with "grid"
         for item in self.canvas.find_all():
             if "grid" not in self.canvas.gettags(item):
                 self.canvas.delete(item)
-        # instructions
         self.canvas.create_text(12, 12, anchor="nw", text="Huffman 构建：逐步合并最小两个节点并生成父节点。右侧显示每步堆快照 (Before / After)。", font=("Arial",11), fill="#0B2545")
-        # status area (top-right inside canvas)
         if self.status_id:
             try:
                 self.canvas.delete(self.status_id)
@@ -98,7 +88,6 @@ class HuffmanVisualizer:
         self.status_id = self.canvas.create_text(self.canvas_w - 12, 12, anchor="ne", text="", font=("Arial",11,"bold"), fill="#0B2545")
 
     def _draw_subtle_grid(self):
-        # 细线网格作为背景纹理，tag 为 "grid"，画在 canvas 最底层
         self.canvas.delete("all")
         step = 20
         w, h = self.canvas_w, self.canvas_h
@@ -113,20 +102,16 @@ class HuffmanVisualizer:
         else:
             self.status_id = self.canvas.create_text(self.canvas_w - 12, 12, anchor="ne", text=txt, font=("Arial",11,"bold"), fill="#0B2545")
 
-    # Treeview 操作：在右侧显示 Before/After 列
     def _tree_clear(self):
         for iid in self.heap_tree.get_children():
             self.heap_tree.delete(iid)
 
     def _tree_insert_steps(self, snaps_before: List[List[float]]):
-        """根据 snap_before 预填 rows（After 列空），row id 用 step index"""
         self._tree_clear()
         for i, before in enumerate(snaps_before):
             before_str = ", ".join([self._fmt_num(x) for x in before])
             self.heap_tree.insert("", "end", iid=str(i), values=(before_str, ""))
-        # 若没有任何 step（例如单节点），显示初始堆
         if not snaps_before:
-            # show a single row with initial list as 'Before'
             self.heap_tree.insert("", "end", iid="init", values=("", ""))
 
     def _tree_set_after(self, idx: int, after_list: List[float]):
@@ -135,12 +120,10 @@ class HuffmanVisualizer:
         if iid in self.heap_tree.get_children():
             self.heap_tree.set(iid, column="after", value=after_str)
         else:
-            # 如果不存在（极端情况），插入
             self.heap_tree.insert("", "end", iid=iid, values=("", after_str))
 
     def _tree_highlight(self, idx: int):
         iid = str(idx)
-        # 先清除 selection
         try:
             self.heap_tree.selection_remove(self.heap_tree.selection())
         except Exception:
@@ -229,26 +212,22 @@ class HuffmanVisualizer:
         leaf_pos_list = positions.get("leaves", []) if isinstance(positions, dict) else []
         parent_pos_list = positions.get("parents", []) if isinstance(positions, dict) else []
 
-        # 重新用 HuffmanModel 构建（得到 steps/snaps 用于后续绘制）
         self.model = HuffmanModel()
         root, steps, snaps_before, snaps_after = self.model.build_with_steps(weights)
         self.steps = steps
         self.snap_before = snaps_before
         self.snap_after = snaps_after
 
-        # 重绘画布并根据 saved positions 恢复视觉
         self.node_vis.clear()
         self._draw_subtle_grid()
         self._draw_instructions()
         self._tree_clear()
 
-        # 绘制叶子：优先使用 leaf_pos_list 中的坐标，否则使用默认计算位置
         n = len(weights)
         total_w = n * self.node_w + max(0, (n - 1) * self.gap_x)
         start_x = max(self.node_w / 2 + 20, (self.canvas_w - total_w) / 2 + self.node_w / 2)
         for i, w in enumerate(weights):
             if i < len(leaf_pos_list) and leaf_pos_list[i] is not None:
-                # 允许 leaf_pos_list 元素为 [cx, cy] 或 {"cx":..,"cy":..}
                 lp = leaf_pos_list[i]
                 if isinstance(lp, dict):
                     cx = float(lp.get("cx", start_x + i * (self.node_w + self.gap_x)))
@@ -269,12 +248,11 @@ class HuffmanVisualizer:
 
         # 绘制父节点（按 steps 顺序），优先使用 parent_pos_list 中的坐标
         for i, (a, b, p) in enumerate(steps):
-            # 优先使用保存的 parent 坐标（支持 None 占位）
             if i < len(parent_pos_list) and parent_pos_list[i] is not None:
                 pp = parent_pos_list[i]
                 if isinstance(pp, (list, tuple)) and len(pp) >= 2:
                     tx = float(pp[0]); ty = float(pp[1])
-                else: # fallback 自动计算
+                else:
                     va = self.node_vis.get(a.id); vb = self.node_vis.get(b.id)
                     if va and vb:
                         tx = (va['cx'] + vb['cx'])/2
@@ -283,7 +261,6 @@ class HuffmanVisualizer:
                         tx = self.canvas_w/2
                         ty = self.base_y - (i+1) * self.level_gap
             else:
-                # 自动计算目标位置（与 build_direct 一致）
                 va = self.node_vis.get(a.id)
                 vb = self.node_vis.get(b.id)
                 if va and vb:
@@ -292,28 +269,22 @@ class HuffmanVisualizer:
                 else:
                     tx = self.canvas_w/2
                     ty = self.base_y - (i+1) * self.level_gap
-
-            # create visual, link, mark merged
             self._create_node_visual(p, tx, ty)
-            # connect to children (this will try to map leaf visuals to child ids if needed
             self._link_parent_child(p, a)
             self._link_parent_child(p, b)
-            # mark merged children
             self._mark_merged(a)
             self._mark_merged(b)
-            # fill Treeview after snapshot if available
             if i < len(snaps_after):
                 self._tree_set_after(i, snaps_after[i])
         self.update_status("已通过权值恢复 Huffman（如有保存的视觉坐标则使用之）")
         messagebox.showinfo("成功", f"已通过权值恢复 Huffman（共 {len(weights)} 个初始权值）")
-    # ---------- 动画构建 ----------
+        
     def start_animated_build(self):
         if self.animating:
             return
         nums = self.parse_input()
         if nums is None:
             return
-        # reset
         self.model = HuffmanModel()
         self.node_vis.clear()
         self.canvas.delete("all")
@@ -340,7 +311,6 @@ class HuffmanVisualizer:
         if idx >= len(self.steps):
             self.animating = False
             self.update_status("Huffman 构建完成")
-            # 最后如果有 snap_after 显示最终堆
             if self.snap_after:
                 self._tree_set_after(len(self.steps)-1, self.snap_after[-1])
                 self._tree_highlight(len(self.steps)-1)
@@ -348,14 +318,11 @@ class HuffmanVisualizer:
 
         a, b, p = self.steps[idx]
         self.update_status(f"步骤 {idx+1}/{len(self.steps)} ： 合并 {self._fmt_num(a.weight)} 与 {self._fmt_num(b.weight)} -> {self._fmt_num(p.weight)}")
-        # 在 Treeview 中 highlight 当前 step（before）
         self._tree_highlight(idx)
 
-        # highlight nodes
         self._highlight_node(a, "yellow")  
         self._highlight_node(b, "yellow")
 
-        # target position
         va = self.node_vis.get(a.id)
         vb = self.node_vis.get(b.id)
         if va and vb:
@@ -392,7 +359,6 @@ class HuffmanVisualizer:
                     self.canvas.delete(temp_text)
                 except Exception:
                     pass
-                # create parent visual + connect + mark merged
                 self._create_node_visual(p, tx, ty)
                 self._link_parent_child(p, a)
                 self._link_parent_child(p, b)
@@ -401,7 +367,6 @@ class HuffmanVisualizer:
                 # 更新 Treeview 的 After 列
                 if idx < len(self.snap_after):
                     self._tree_set_after(idx, self.snap_after[idx])
-                # highlight this row as completed briefly
                 self._tree_highlight(idx)
                 # 下一步
                 self.window.after(520, lambda: self._animate_step(idx+1))
@@ -409,7 +374,6 @@ class HuffmanVisualizer:
         move_step()
 
     def draw_initial_leaves(self, weights: List[float]):
-        # draw bottom row leaves and map ("leaf", i)
         self.canvas.delete("all")
         self._draw_subtle_grid()
         self._draw_instructions()
@@ -435,7 +399,6 @@ class HuffmanVisualizer:
     def _link_parent_child(self, parent: HuffmanNode, child: HuffmanNode):
         pvis = self.node_vis.get(parent.id)
         cvis = self.node_vis.get(child.id)
-        # try match child leaf mapping
         if not cvis:
             for k,v in list(self.node_vis.items()):
                 if isinstance(k, tuple) and k[0] == "leaf":

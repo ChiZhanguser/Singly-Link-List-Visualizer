@@ -26,11 +26,8 @@ def process(visualizer, text: str):
             return
         if key in ("last", "tail"):
             if hasattr(visualizer, "delete_last_node"):
-                try:
-                    visualizer.delete_last_node(0)
-                    return
-                except Exception as e:
-                    print("delete_last_node error:", e)
+                visualizer.delete_last_node(0)
+                return
             try:
                 if hasattr(visualizer, "node_value_store") and len(visualizer.node_value_store) > 0:
                     visualizer.node_value_store.pop()
