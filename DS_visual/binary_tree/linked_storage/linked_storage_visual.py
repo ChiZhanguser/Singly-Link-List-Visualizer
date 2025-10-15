@@ -6,7 +6,8 @@ import math
 import storage as storage
 import os
 import json
-from datetime import datetime   
+from datetime import datetime
+import re
 
 class BinaryTreeVisualizer:
     def __init__(self, root):
@@ -15,7 +16,7 @@ class BinaryTreeVisualizer:
         self.window.title("二叉树可视化工具")
         self.canvas_width = 1250
         self.canvas_height = 520
-        self.canvas = Canvas(self.window, bg="#F3F6FA", width=self.canvas_width, height=self.canvas_height, 
+        self.canvas = Canvas(self.window, bg="#F3F6FA", width=self.canvas_width, height=self.canvas_height,
                              relief=FLAT, bd=0, highlightthickness=0)
         self.canvas.pack(pady=(15, 0), padx=15, fill=BOTH, expand=True)
         self.root_node: Optional[TreeNode] = None
@@ -48,7 +49,7 @@ class BinaryTreeVisualizer:
         return ids
 
     def draw_decorations(self):
-        self.canvas.delete("decor") 
+        self.canvas.delete("decor")
         cx1, cy1 = 12, 12
         cx2, cy2 = self.canvas_width - 12, self.canvas_height - 12
         shadow_ids = []
@@ -76,28 +77,30 @@ class BinaryTreeVisualizer:
     def create_controls(self):
         control_frame = Frame(self.window, bg="#F3F6FB", pady=10)
         control_frame.pack(fill=X, padx=30, pady=(18, 6))
-        title_label = Label(control_frame, text="二叉树可视化工具", font=("Segoe UI", 16, "bold"), 
+        title_label = Label(control_frame, text="二叉树可视化工具", font=("Segoe UI", 16, "bold"),
                           bg="#F3F6FB", fg="#2D3748")
         title_label.pack(pady=(0, 8))
         input_frame = Frame(control_frame, bg="#F3F6FB")
         input_frame.pack(fill=X, pady=5)
-        
-        label = Label(input_frame, text="输入层序序列:", font=("Segoe UI", 11), 
+
+        label = Label(input_frame, text="输入层序序列 / DSL:", font=("Segoe UI", 11),
                      bg="#F3F6FB", fg="#4A5568")
         label.pack(side=LEFT, padx=(0, 10))
 
         entry = Entry(input_frame, textvariable=self.input_var, width=50, font=("Segoe UI", 11),
-                     relief=SOLID, bd=1, highlightthickness=1, highlightcolor="#4299E1", 
+                     relief=SOLID, bd=1, highlightthickness=1, highlightcolor="#4299E1",
                      highlightbackground="#CBD5E0")
         entry.pack(side=LEFT, padx=(0, 10), fill=X, expand=True)
         entry.insert(0, "1,2,3,#,4,#,5")
+        # 绑定 Enter 键到 DSL 解析器
+        entry.bind("<Return>", self.process_dsl)
 
         button_frame = Frame(control_frame, bg="#F3F6FB")
         button_frame.pack(fill=X, pady=10)
-        
-        button_style = {"font": ("Segoe UI", 10), "width": 12, "height": 1, 
+
+        button_style = {"font": ("Segoe UI", 10), "width": 12, "height": 1,
                        "relief": FLAT, "bd": 0, "cursor": "hand2"}
-        
+
         build_btn = Button(button_frame, text="一步构建", **button_style,
                           bg="#48BB78", fg="white", activebackground="#38A169",
                           command=self.build_tree_from_input)
@@ -117,21 +120,21 @@ class BinaryTreeVisualizer:
                          bg="#718096", fg="white", activebackground="#4A5568",
                          command=self.back_to_main)
         back_btn.pack(side=LEFT, padx=5)
-        
+
         save_btn = Button(button_frame, text="保存树", **button_style,
                           bg="#6C9EFF", fg="white", activebackground="#4C6EF5",
                           command=self.save_tree)
         save_btn.pack(side=LEFT, padx=6)
-        
+
         load_btn = Button(button_frame, text="打开树", **button_style,
                           bg="#6C9EFF", fg="white", activebackground="#4C6EF5",
                           command=self.load_tree)
         load_btn.pack(side=LEFT, padx=6)
-        
-        hint_label = Label(control_frame, text="提示: 使用逗号分隔节点，#表示空节点", 
-                          font=("Segoe UI", 9), bg="#F3F6FB", fg="#718096")
+
+        hint_label = Label(control_frame, text="提示: 使用逗号或空格分隔节点，#表示空节点。按 Enter 可执行 DSL（如：create 1 # 2 3 # 3 4 5 / clear / animate ...）",
+                          font=("Segoe UI", 9), bg="#F3F6FB", fg="#718096", wraplength=900, justify=LEFT)
         hint_label.pack(pady=(5, 0))\
-            
+
     def _ensure_tree_folder(self) -> str:
         if hasattr(storage, "ensure_save_subdir"):
             return storage.ensure_save_subdir("tree")
@@ -160,7 +163,7 @@ class BinaryTreeVisualizer:
             json.dump(payload, f, indent=2, ensure_ascii=False)
         messagebox.showinfo("成功", f"二叉树已保存到：\n{filepath}")
         self.update_status("保存成功", "#48BB78")
-    
+
     def load_tree(self):
         default_dir = self._ensure_tree_folder()
         filepath = filedialog.askopenfilename(
@@ -170,30 +173,30 @@ class BinaryTreeVisualizer:
         )
         with open(filepath, "r", encoding="utf-8") as f:
             obj = json.load(f)
-        tree_dict = obj.get("tree",{})
+        tree_dict = obj.get("tree", {})
         new_root = storage.tree_dict_to_nodes(tree_dict, TreeNode)
         self.root_node = new_root
         self.redraw_tree()
         messagebox.showinfo("成功", "二叉树已成功加载并恢复")
         self.update_status("加载成功", "#48BB78")
-    
+
     def draw_instructions(self):
         self.canvas.delete("instr")
         self.canvas.create_line(30, 42, self.canvas_width-30, 42, fill="#EEF2F7", width=1, tags=("instr",))
-        self.canvas.create_text(30, 20, 
-                               text="显示规则：每个节点分为3格 [left | value | right]，左右指针连接到子节点或指向NULL", 
+        self.canvas.create_text(30, 20,
+                               text="显示规则：每个节点分为3格 [left | value | right]，左右指针连接到子节点或指向NULL",
                                anchor="w", font=("Segoe UI", 10), fill="#4A5568", tags=("instr",))
         if self.status_text_id:
             self.canvas.delete(self.status_text_id)
         self.status_text_id = self.canvas.create_text(
-            self.canvas_width - 30, 20, text="就绪", anchor="ne", 
+            self.canvas_width - 30, 20, text="就绪", anchor="ne",
             font=("Segoe UI", 11, "bold"), fill="#4299E1", tags=("instr",)
         )
 
     def update_status(self, text: str, color: str = "#4299E1"):
         if not self.status_text_id:
             self.status_text_id = self.canvas.create_text(
-                self.canvas_width - 15, 15, text=text, anchor="ne", 
+                self.canvas_width - 15, 15, text=text, anchor="ne",
                 font=("Segoe UI", 11, "bold"), fill=color, tags=("instr",)
             )
         else:
@@ -204,7 +207,8 @@ class BinaryTreeVisualizer:
         if not text:
             messagebox.showinfo("提示", "请输入层序序列，例如：1,2,3,#,4,#,5")
             return
-        parts = [p.strip() for p in text.split(",")]
+        # 支持逗号或空格分隔
+        parts = [p.strip() for p in re.split(r'[\s,]+', text) if p.strip() != ""]
         root, _ = BinaryTreeModel.build_from_level_order(parts)
         self.root_node = root
         self.redraw_tree()
@@ -229,7 +233,7 @@ class BinaryTreeVisualizer:
         self.draw_decorations()
         self.draw_instructions()
         if not self.root_node:
-            self.canvas.create_text(self.canvas_width/2, self.canvas_height/2, 
+            self.canvas.create_text(self.canvas_width/2, self.canvas_height/2,
                                    text="空树", font=("Segoe UI", 16), fill="#A0AEC0")
             return
         initial_offset = self.canvas_width / 4
@@ -245,7 +249,7 @@ class BinaryTreeVisualizer:
         start_y = 80
 
         def _rec(node: TreeNode, cx: float, cy: float, offset: float):
-            pos[node] = (cx, cy)    
+            pos[node] = (cx, cy)
             child_y = cy + self.level_gap
             child_offset = max(offset/2, 20)
             if node.left:
@@ -263,7 +267,7 @@ class BinaryTreeVisualizer:
         if not text:
             messagebox.showinfo("提示", "请输入层序序列，例如：1,2,3,#,4,#,5")
             return
-        parts = [p.strip() for p in text.split(",")]
+        parts = [p.strip() for p in re.split(r'[\s,]+', text) if p.strip() != ""]
         if not parts:
             return
         max_nodes = 255
@@ -327,19 +331,19 @@ class BinaryTreeVisualizer:
         # 添加阴影效果
         shadow_offset = 2
         shadow_rect = self.canvas.create_rectangle(
-            left+shadow_offset, top+shadow_offset, 
+            left+shadow_offset, top+shadow_offset,
             right+shadow_offset, bottom+shadow_offset,
             fill="#E2E8F0", outline=""
         )
         temp_rect = self.canvas.create_rectangle(
-            left, top, right, bottom, 
+            left, top, right, bottom,
             fill="#C6F6D5", outline="#38A169", width=2
         )
         x1 = left + self.left_cell_w
         x2 = x1 + self.center_cell_w
         temp_text = self.canvas.create_text(
-            (x1 + x2)/2, (top + bottom)/2, 
-            text=str(target_item.val), 
+            (x1 + x2)/2, (top + bottom)/2,
+            text=str(target_item.val),
             font=("Segoe UI", 12, "bold"),
             fill="#22543D"
         )
@@ -374,7 +378,7 @@ class BinaryTreeVisualizer:
                         if new_parent and new_parent in self.node_to_rect:
                             try:
                                 self.canvas.itemconfig(
-                                    self.node_to_rect[new_parent], 
+                                    self.node_to_rect[new_parent],
                                     fill="#FEFCBF", outline="#D69E2E", width=2
                                 )
                             except Exception:
@@ -394,13 +398,13 @@ class BinaryTreeVisualizer:
         # 添加阴影效果（单个节点）
         shadow_offset = 3
         shadow_rect = self.canvas.create_rectangle(
-            left+shadow_offset, top+shadow_offset, 
+            left+shadow_offset, top+shadow_offset,
             right+shadow_offset, bottom+shadow_offset,
             fill="#E9F3FF", outline=""
         )
-        
+
         rect = self.canvas.create_rectangle(
-            left, top, right, bottom, 
+            left, top, right, bottom,
             fill="#FFF", outline="#C6E4FF", width=2
         )
         # 记录映射（TreeNode -> rect id）
@@ -417,8 +421,8 @@ class BinaryTreeVisualizer:
 
         # 中间值
         self.canvas.create_text(
-            (x1 + x2)/2, (top + bottom)/2, 
-            text=str(node.val), 
+            (x1 + x2)/2, (top + bottom)/2,
+            text=str(node.val),
             font=("Segoe UI", 12, "bold"),
             fill="#1F2937"
         )
@@ -438,11 +442,11 @@ class BinaryTreeVisualizer:
             null_x = cx - offset
             null_y = child_y
             rect_null = self.canvas.create_rectangle(
-                null_x - 28, null_y - 14, null_x + 28, null_y + 14, 
+                null_x - 28, null_y - 14, null_x + 28, null_y + 14,
                 fill="#FFF5F5", outline="#FED7D7", width=1
             )
             text_null = self.canvas.create_text(
-                null_x, null_y, text="NULL", 
+                null_x, null_y, text="NULL",
                 font=("Segoe UI", 9, "bold"), fill="#C53030"
             )
             self.node_items += [rect_null, text_null]
@@ -457,11 +461,11 @@ class BinaryTreeVisualizer:
             null_x = cx + offset
             null_y = child_y
             rect_null = self.canvas.create_rectangle(
-                null_x - 28, null_y - 14, null_x + 28, null_y + 14, 
+                null_x - 28, null_y - 14, null_x + 28, null_y + 14,
                 fill="#FFF5F5", outline="#FED7D7", width=1
             )
             text_null = self.canvas.create_text(
-                null_x, null_y, text="NULL", 
+                null_x, null_y, text="NULL",
                 font=("Segoe UI", 9, "bold"), fill="#C53030"
             )
             self.node_items += [rect_null, text_null]
@@ -478,7 +482,64 @@ class BinaryTreeVisualizer:
             messagebox.showinfo("提示", "正在动画构建，无法返回")
             return
         self.window.destroy()
-        
+
+    # ----------------------------
+    # DSL 支持：在输入框按回车可执行
+    # 支持命令：create/build <序列>（现在 create 使用逐步动画）、
+    #            animate <序列>、clear/reset、help
+    # ----------------------------
+    def process_dsl(self, event=None):
+        raw = (self.input_var.get() or "").strip()
+        if not raw:
+            return
+        # 将命令拆分：允许用空格或逗号分隔节点，命令与其参数也可用空格分隔
+        parts = [p for p in re.split(r'[\s,]+', raw) if p != ""]
+        if not parts:
+            return
+        cmd = parts[0].lower()
+        args = parts[1:]
+
+        try:
+            # ===== 改动点：create 使用逐步动画构建（等同于 animate）
+            if cmd in ("create", "build"):
+                if not args:
+                    messagebox.showinfo("用法", "示例: create 1 # 2 3 # 3 4 5 （用空格或逗号分隔，# 表示空）")
+                    return
+                # 将参数拼回字符串放入 input_var，然后调用逐步动画构建
+                seq_text = " ".join(args)
+                self.input_var.set(seq_text)
+                # 启动动画（create 现在为逐步动画构建）
+                self.start_animated_build()
+            elif cmd in ("animate", "animated", "start"):
+                # animate 后面可以跟序列（覆盖输入框），也可以直接使用当前输入框剩余内容
+                if args:
+                    seq_text = " ".join(args)
+                    self.input_var.set(seq_text)
+                self.start_animated_build()
+            elif cmd in ("clear", "reset"):
+                self.clear_canvas()
+                self.update_status("DSL: clear 执行完成", "#4299E1")
+            elif cmd in ("help", "?"):
+                msg = ("DSL 帮助：\n"
+                       "  create <序列>   - 逐步动画按层序构建（示例：create 1 # 2 3 # 3 4 5）\n"
+                       "  animate <序列>  - 逐步动画构建（等同于 create）\n"
+                       "  clear / reset    - 清空画布\n"
+                       "  help / ?         - 显示此帮助\n\n"
+                       "说明：序列支持用逗号或空格分隔节点，使用 '#' 表示空节点。")
+                messagebox.showinfo("DSL 帮助", msg)
+            else:
+                # 兼容老的直接层序输入（没有命令时直接构建为动画）
+                if re.match(r'^[\d#-]+$', cmd) or cmd != "":
+                    seq = parts
+                    self.input_var.set(" ".join(seq))
+                    self.start_animated_build()
+                else:
+                    messagebox.showinfo("未识别命令", "支持命令：create / animate / clear / help，或直接输入层序序列。")
+        except Exception as e:
+            messagebox.showerror("DSL 执行错误", f"命令执行失败: {e}")
+            self.update_status("DSL 错误", "#E53E3E")
+
+
 if __name__ == '__main__':
     window = Tk();window.title("二叉树可视化工具");window.geometry("1350x780");window.configure(bg="#F3F6FA")
     BinaryTreeVisualizer(window);window.mainloop()

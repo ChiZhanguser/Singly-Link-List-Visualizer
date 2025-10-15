@@ -18,6 +18,7 @@ from hashtable.hashtable_visual import HashtableVisualizer
 import random
 import time
 
+
 def hex_to_rgb(h):
     h = h.lstrip('#')
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
@@ -73,36 +74,36 @@ class MainInterface:
         self.window.minsize(1000, 700)
         style = ttk.Style(self.window)
         style.theme_use('clam')
-        self.window.configure(bg="#EAF5FF")
-        header_h = 200
-        self.header = Canvas(self.window, height=header_h, bd=0, highlightthickness=0, bg=self.window['bg'])
-        self.header.pack(fill=X)
+        self.window.configure(bg="#000000")
+        self.bg_canvas = Canvas(self.window, bd=0, highlightthickness=0, bg=self.window['bg'])
+        self.bg_canvas.pack(fill=BOTH, expand=True)
         self._anim_phase = 0.0
-        self._particle_positions = [(random.uniform(40, 1180), random.uniform(18, header_h-18),
-                                     random.uniform(6, 26), random.uniform(0.12, 0.6)) for _ in range(12)]
-        self._draw_header_gradient(self.header, header_h, "#3a8dde", "#70b7ff")
-        self._animate_header()
-        self.header.create_text(48, 52, anchor='w', text="数据结构可视化工具",
-                                font=("Helvetica", 36, "bold"), fill="#062A4A", tags="title")
-        self.header.create_text(48, 120, anchor='w',
+        self._particle_positions = [(random.uniform(20, 1360), random.uniform(20, 960),
+                                     random.uniform(1, 3), random.uniform(0.12, 0.6)) for _ in range(100)]
+        self._draw_bg_gradient(self.bg_canvas, "#000000", "#320459")
+        self._animate_bg()
+        self.bg_canvas.create_text(48, 52, anchor='w', text="数据结构可视化工具",
+                                font=("Helvetica", 36, "bold"), fill="#ffffff", tags="title")
+        self.bg_canvas.create_text(48, 120, anchor='w',
                                 text="",
                                 font=("Helvetica", 14), fill="#EAF6FF", tags="subtitle")
-        shadow = Frame(self.window, bg="#d7e9ff", bd=8)
+        header_h = 200
+        shadow = Frame(self.window, bg="#282850", bd=8)
         shadow.place(relx=0.5, y=header_h - 12, anchor='n', relwidth=0.92, height=560)
-        card = Frame(self.window, bg="white", relief="flat", bd=0, highlightthickness=0)
+        card = Frame(self.window, bg="#1b1b3a", relief="flat", bd=0, highlightthickness=0)
         card.place(relx=0.5, y=header_h - 16, anchor='n', relwidth=0.92, height=540)
         card.grid_propagate(False)
         card.grid_rowconfigure(0, weight=0)
         card.grid_rowconfigure(1, weight=1)
         card.grid_columnconfigure(0, weight=1)
-        top_frame = Frame(card, bg="white", bd=0)
+        top_frame = Frame(card, bg="#1b1b3a", bd=0)
         top_frame.grid(row=0, column=0, sticky="ew", padx=28, pady=(24, 12))
-        subtitle = Label(top_frame, text="选择可视化模块", font=("Helvetica", 22, "bold"), bg="white", fg="#0b3a66")
+        subtitle = Label(top_frame, text="选择可视化模块", font=("Helvetica", 22, "bold"), bg="#1b1b3a", fg="#ffffff")
         subtitle.grid(row=0, column=0, sticky="w")
         desc = Label(top_frame, text="点击下面的按钮进入对应数据结构的交互演示。支持键盘/鼠标/DSL/自然语言交互。",
-                     font=("Helvetica", 12), bg="white", fg="#4d6b88")
+                     font=("Helvetica", 12), bg="#1b1b3a", fg="#cccccc")
         desc.grid(row=1, column=0, sticky="w", pady=(6, 0))
-        btn_frame = Frame(card, bg="white")
+        btn_frame = Frame(card, bg="#1b1b3a")
         btn_frame.grid(row=1, column=0, sticky="nsew", padx=28, pady=14)
         cols = 3
         for i in range(cols):
@@ -131,19 +132,19 @@ class MainInterface:
             btn_frame.grid_rowconfigure(row, weight=1, minsize=84)
             self._attach_hover_effect(btn, color)
             ToolTip(btn, tip)
-        bottom_bar = Frame(self.window, bg="#F4F8FF", height=44)
+        bottom_bar = Frame(self.window, bg="#1b1b3a", height=44)
         bottom_bar.pack(fill=X, side=BOTTOM)
-        copyright_label = Label(bottom_bar, text="© 张驰 的 数据结构可视化工具", bg="#F4F8FF", fg="#7a8897",
+        copyright_label = Label(bottom_bar, text="© 张驰 的 数据结构可视化工具", bg="#1b1b3a", fg="#aaaaaa",
                                 font=("Arial", 10))
         copyright_label.pack(side=LEFT, padx=12)
-        status_label = Label(bottom_bar, text="23070215", bg="#F4F8FF", fg="#7a8897", font=("Arial", 10))
+        status_label = Label(bottom_bar, text="23070215", bg="#1b1b3a", fg="#aaaaaa", font=("Arial", 10))
         status_label.pack(side=RIGHT, padx=12)
         self.window.bind("<Key-1>", lambda e: self.open_linked_list())
         self.window.bind("<Key-2>", lambda e: self.open_sequence_list())
         self.window.bind("<Key-3>", lambda e: self.open_stack())
         self.window.bind("<Key-4>", lambda e: self.open_trie())
         self.window.bind("<Key-5>", lambda e: self.open_bplustree())
-        chat_btn = Button(self.header, text="🤖 聊天", font=("Helvetica", 14, "bold"),
+        chat_btn = Button(self.window, text="🤖 聊天", font=("Helvetica", 14, "bold"),
                           bg="#1FA2FF", fg="white", bd=0, relief='flat', cursor="hand2",
                           command=lambda: ChatWindow(self.window))
         chat_btn.place(relx=0.96, y=28, anchor='ne', width=110, height=44)
@@ -153,9 +154,10 @@ class MainInterface:
         except Exception:
             pass
 
-    def _draw_header_gradient(self, canvas, h, c1, c2):
+    def _draw_bg_gradient(self, canvas, c1, c2):
         canvas.delete("grad")
-        width = canvas.winfo_width() or self.window.winfo_width() or 1280
+        width = canvas.winfo_width() or 1380
+        h = canvas.winfo_height() or 980
         steps = 72
         for i in range(steps):
             t = i / (steps - 1)
@@ -163,13 +165,6 @@ class MainInterface:
             y0 = int(i * (h / steps))
             y1 = int((i+1) * (h / steps))
             canvas.create_rectangle(0, y0, width, y1, outline=color, fill=color, tags="grad")
-        points = []
-        wave_h = 18
-        for x in range(0, width+160, 20):
-            y = h - (math.sin(x / 60.0) * wave_h + 8)
-            points.append(x)
-            points.append(y)
-        canvas.create_polygon(*points, fill=blend_hex(c2, "#ffffff", 0.12), outline='', tags="grad")
         for i, (px, py, rad, alpha) in enumerate(self._particle_positions):
             canvas.create_oval(px-rad, py-rad, px+rad, py+rad, fill=blend_hex("#ffffff", c2, 0.7), outline="", tags="grad")
         canvas.tag_raise("title")
@@ -190,21 +185,25 @@ class MainInterface:
         widget.bind("<Enter>", on_enter)
         widget.bind("<Leave>", on_leave)
 
-    def _animate_header(self):
+    def _animate_bg(self):
         self._anim_phase = (self._anim_phase + 0.006) % 1.0
         new_positions = []
+        width = 1380
+        h = 980
         for (x, y, r, a) in self._particle_positions:
             nx = x + math.sin(time.time() * 0.18 + x) * 0.4
-            if nx < 20: nx = 1240
-            if nx > 1240: nx = 20
+            if nx < 20: nx = width - 20
+            if nx > width - 20: nx = 20
             ny = y + math.sin(time.time() * 0.85 + x) * 4 * a
+            if ny < 20: ny = h - 20
+            if ny > h - 20: ny = 20
             new_positions.append((nx, ny, r, a))
         self._particle_positions = new_positions
         try:
-            self._draw_header_gradient(self.header, 200, "#3a8dde", "#70b7ff")
+            self._draw_bg_gradient(self.bg_canvas, "#000000", "#320459")
         except Exception:
             pass
-        self.window.after(40, self._animate_header)
+        self.window.after(40, self._animate_bg)
 
     def open_linked_list(self):
         linked_list_window = Toplevel(self.window)
