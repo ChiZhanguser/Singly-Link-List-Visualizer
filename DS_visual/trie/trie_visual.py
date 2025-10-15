@@ -1,7 +1,9 @@
 from tkinter import *
-from tkinter import messagebox, ttk
+from tkinter import messagebox, ttk, Entry
 from typing import Dict, Tuple, List, Optional
 from trie.trie_model import TrieModel, TrieNode
+from DSL_utils import process_command
+import time
 
 class TrieVisualizer:
     def __init__(self, root):
@@ -48,6 +50,7 @@ class TrieVisualizer:
         # animation state
         self.animating = False
         self.redraw()
+
     def _build_left_panel(self):
         pad = 12
         title = Label(self.left_panel, text="Trie 可视化", font=("Helvetica", 14, "bold"), bg="#F8FAFF")
@@ -62,6 +65,9 @@ class TrieVisualizer:
         entry = Entry(frm, textvariable=self.input_var, font=("Arial", 12))
         entry.pack(fill=X, pady=(6,0))
         entry.insert(0, "apple, app, bat")
+        # 回车默认触发 DSL（主键盘 Enter 与小键盘 Enter）
+        entry.bind("<Return>", lambda e: self.process_dsl())
+        entry.bind("<KP_Enter>", lambda e: self.process_dsl())
         # 按钮
         btn_frame = Frame(self.left_panel, bg="#F8FAFF")
         btn_frame.pack(padx=pad, pady=(12,10), fill=X)
@@ -93,8 +99,10 @@ class TrieVisualizer:
                      "• 当节点很多时，使用滚动条或按住鼠标左键拖动画布查看。\n"
                      "• 查找会高亮遍历路径（黄色），命中末尾为绿色。")
         Label(self.left_panel, text=help_text, bg="#F8FAFF", fg="#555", justify=LEFT, wraplength=self.left_width-24).pack(padx=pad, pady=(6,10))
+
     def update_status(self, txt: str):
         self.status_text_var.set(txt)
+
     def compute_positions(self) -> Dict[TrieNode, Tuple[float,float]]:
         pos: Dict[TrieNode, Tuple[float,float]] = {}
         levels = self.model.nodes_by_level()
@@ -120,6 +128,7 @@ class TrieVisualizer:
                 y = self.top_margin + (depth-1) * self.level_gap
                 pos[node] = (x, y)
         return pos
+
     # ---------------- drawing ----------------
     def redraw(self, highlight: Optional[Dict[TrieNode, str]] = None):
         self.canvas.delete("all")
@@ -179,7 +188,7 @@ class TrieVisualizer:
             left, top, right, bottom = bbox
             pad = 60
             self.canvas.config(scrollregion=(left-pad, top-pad, right+pad, bottom+pad))
-            
+
     def _draw_node(self, node: TrieNode, cx: float, cy: float, fill_color: Optional[str] = None):
         left = cx - self.node_w/2
         top = cy - self.node_h/2
@@ -193,12 +202,14 @@ class TrieVisualizer:
         self.canvas.create_text(cx - 12, cy, text=node.char, font=("Arial",12,"bold"), fill="#0b1220")
         if node.is_end:
             self.canvas.create_oval(right-16, top+8, right-6, top+18, fill="#ef4444", outline="")
+
     def parse_input_words(self) -> List[str]:
         text = self.input_var.get().strip()
         if not text:
             return []
         parts = [p.strip() for p in text.replace(",", " ").split() if p.strip()]
         return parts
+
     def clear_trie(self):
         if self.animating:
             return
@@ -319,6 +330,33 @@ class TrieVisualizer:
             i += 1
             self.window.after(380, step)
         step()
+
+    # --------------------
+    # DSL entry: 回车默认触发 DSL（在 _build_left_panel 已绑定）
+    # 将命令传给 DSL_utils.process_command，DSL 会根据 visualizer 类型分发执行
+    # --------------------
+    def process_dsl(self, event=None):
+        """
+        当用户在 Entry 中按回车时调用；也可以从代码中直接调用。
+        event 参数会被忽略（用于绑定兼容）。
+        """
+        # 若当前有动画在执行，拒绝执行新的 DSL 命令（避免状态冲突）
+        if getattr(self, "animating", False):
+            messagebox.showinfo("提示", "当前正在执行动画，无法执行 DSL，请稍后再试。")
+            return
+
+        raw = (self.input_var.get() or "").strip()
+        if not raw:
+            return
+
+        try:
+            # 将 visualizer（self）与命令传到 DSL 分发器
+            process_command(self, raw)
+            # （可选）执行成功后清空输入框：如果不希望清空可以注释下一行
+            # self.input_var.set("")
+        except Exception as e:
+            messagebox.showerror("DSL 执行错误", f"执行 DSL 时出错: {e}")
+            self.update_status("DSL 错误")
 
 if __name__ == '__main__':
     root = Tk()

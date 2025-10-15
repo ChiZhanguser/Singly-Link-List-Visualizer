@@ -2,6 +2,7 @@ from . import linkedlist_dsl
 from . import stack_dsl
 from . import sequence_dsl
 from . import bst_dsl
+from . import trie_dsl
 
 def process_command(visualizer, text):
     if not visualizer or not text or not text.strip():
@@ -24,6 +25,11 @@ def process_command(visualizer, text):
     try:
         if "bst" in type(visualizer).__name__.lower():
             return bst_dsl.process(visualizer, text)
+    except Exception:
+        pass
+    try:
+        if "trie" in type(visualizer).__name__.lower():
+            return trie_dsl.process(visualizer, text)
     except Exception:
         pass
     
