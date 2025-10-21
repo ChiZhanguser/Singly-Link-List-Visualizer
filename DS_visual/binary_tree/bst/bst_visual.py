@@ -13,6 +13,8 @@ from binary_tree.bst.bst_ui import draw_instructions, create_controls
 class BSTVisualizer:
     def __init__(self, root):
         self.window = root
+        self.window = root
+        self.window.title("二叉搜索树（BST）可视化")
         self.window.config(bg="#F7F9FB")
         self.canvas_width = 1250
         self.canvas_height = 560
@@ -40,6 +42,7 @@ class BSTVisualizer:
         self.input_var = StringVar()
         create_controls(self)
         draw_instructions(self)
+        
     def process_dsl(self, event=None):
         text = (self.dsl_var.get() or "").strip()
         if not text:

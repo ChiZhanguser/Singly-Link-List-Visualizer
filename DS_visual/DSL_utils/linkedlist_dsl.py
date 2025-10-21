@@ -10,12 +10,17 @@ def _parse_items(args):
     return items
 
 def process(visualizer, text: str):
+    print(f"DEBUG: Entered linkedlist_dsl.process with text: {text}")
+    print(f"DEBUG: Visualizer type in DSL: {type(visualizer).__name__}")
+    
     text = (text or "").strip()
     if not text:
-        return
+        return  
     parts = text.split()
     cmd = parts[0].lower()
     args = parts[1:]
+    
+    print(f"DEBUG: Command: {cmd}, Args: {args}")
 
     # ---------- INSERT (支持末尾插入与指定位置插入) ----------
     if cmd in ("insert", "insert_at", "insertat"):
@@ -47,9 +52,12 @@ def process(visualizer, text: str):
             else:
                 # 没有指定位置 -> 末尾插入（保持原有行为）
                 value = " ".join(args)
+                print(f"Attempting to insert value: {value} at the end")  # 调试输出
                 try:
                     visualizer.programmatic_insert_last(value)
+                    print(f"Successfully inserted value: {value}")  # 调试输出
                 except Exception as e:
+                    print(f"Error during insertion: {e}")  # 调试输出
                     messagebox.showerror("错误", f"插入失败：{e}")
                 return
         try:

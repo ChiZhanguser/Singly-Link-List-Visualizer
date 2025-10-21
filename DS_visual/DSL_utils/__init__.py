@@ -7,31 +7,94 @@ from . import trie_dsl
 def process_command(visualizer, text):
     if not visualizer or not text or not text.strip():
         return
+
+    print(f"DEBUG: Processing command for visualizer: {type(visualizer).__name__}")
+    print(f"DEBUG: Command text: {text}")
+    visualizer_type = type(visualizer).__name__.lower()
+
     try:
-        if hasattr(visualizer, "node_value_store") or "linked" in type(visualizer).__name__.lower() or "link" in type(visualizer).__name__.lower():
+        # LinkList or LinkedListVisualizer
+        if type(visualizer).__name__ in ("LinkList", "LinkedListVisualizer") or "linked" in visualizer_type:
+            print(f"DEBUG: Processing as LinkedList visualizer")
             return linkedlist_dsl.process(visualizer, text)
-    except Exception:
+            
+        if (hasattr(visualizer, "node_value_store") or 
+            "linked" in visualizer_type or 
+            "link" in visualizer_type or
+            "linklist" in visualizer_type):
+            print(f"DEBUG: Matched linked list by other criteria")
+            return linkedlist_dsl.process(visualizer, text)
+    except Exception as e:
+        print(f"Error in linked list command processing: {e}")  # 调试输出
         pass
     try:
-        if "stack" in type(visualizer).__name__.lower():
+        # Stack Visualizer
+        if ("stack" in visualizer_type or 
+            hasattr(visualizer, "animate_push_left") or 
+            hasattr(visualizer, "model") and hasattr(visualizer.model, "is_full")):
+            print(f"DEBUG: Processing as Stack visualizer")
+            # Convert commands for stack operations
+            text_parts = text.strip().split()
+            if not text_parts:
+                return
+            
+            cmd = text_parts[0].lower()
+            args = text_parts[1:]
+            
+            # Command conversions for stack
+            if cmd in ("insert", "add"):
+                text = "push " + " ".join(args)
+            elif cmd == "delete":
+                if len(args) > 0 and args[0].lower() in ("last", "tail"):
+                    text = "pop"
+                else:
+                    # Keep original command for error handling in stack_dsl
+                    pass
+            print(f"DEBUG: Stack command conversion: {text}")
             return stack_dsl.process(visualizer, text)
-    except Exception:
+    except Exception as e:
+        print(f"DEBUG: Stack processing error: {e}")
         pass
+
     try:
-        if "sequence" in type(visualizer).__name__.lower():
+        # Sequence List Visualizer
+        if ("sequence" in visualizer_type or
+            hasattr(visualizer, "animate_build_element") or
+            hasattr(visualizer, "animate_insert")):
+            print(f"DEBUG: Processing as Sequence List visualizer")
             return sequence_dsl.process(visualizer, text)
-    except Exception:
+    except Exception as e:
+        print(f"DEBUG: Sequence processing error: {e}")
         pass
+
     try:
-        if "bst" in type(visualizer).__name__.lower():
+        # Binary Search Tree Visualizer
+        if ("bst" in visualizer_type or
+            hasattr(visualizer, "start_insert_animated") and
+            hasattr(visualizer, "start_search_animated")):
+            print(f"DEBUG: Processing as BST visualizer")
             return bst_dsl.process(visualizer, text)
-    except Exception:
+    except Exception as e:
+        print(f"DEBUG: BST processing error: {e}")
         pass
+
     try:
-        if "trie" in type(visualizer).__name__.lower():
+        # Trie Visualizer
+        if ("trie" in visualizer_type or
+            hasattr(visualizer, "clear_trie") or
+            hasattr(visualizer, "start_insert_animated") and not "bst" in visualizer_type):
+            print(f"DEBUG: Processing as Trie visualizer")
             return trie_dsl.process(visualizer, text)
-    except Exception:
+    except Exception as e:
+        print(f"DEBUG: Trie processing error: {e}")
         pass
     
     from tkinter import messagebox
-    messagebox.showinfo("未识别可视化类型", "当前 DSL 只支持单链表（linked list）的命令。")
+    messagebox.showinfo("未识别可视化类型", 
+        "当前支持的数据结构类型：\n"
+        "1. 单链表 (LinkedList)\n"
+        "2. 栈 (Stack)\n"
+        "3. 顺序表 (Sequence List)\n"
+        "4. 二叉搜索树 (BST)\n"
+        "5. 字典树 (Trie)\n\n"
+        f"当前类型 '{type(visualizer).__name__}' 未能匹配到对应的DSL处理器。")

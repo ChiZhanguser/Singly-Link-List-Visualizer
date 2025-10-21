@@ -1,4 +1,3 @@
-# DS_visual/binary_tree/avl_visual.py
 from tkinter import *
 from tkinter import messagebox
 from typing import Dict, Tuple, List, Optional
@@ -137,34 +136,47 @@ class AVLVisualizer:
             key = f"{base}#{cnt}" if cnt > 0 else base
             node_to_key[node] = key
 
-        # draw edges recursively
-        def draw_edges(n: Optional[AVLNode]):
-            if not n:
-                return
-            k = node_to_key[n]
-            cx, cy = pos[k]
-            if n.left:
-                lk = node_to_key[n.left]
-                lx, ly = pos[lk]
-                self._draw_connection(cx, cy, lx, ly)
-            if n.right:
-                rk = node_to_key[n.right]
-                rx, ry = pos[rk]
-                self._draw_connection(cx, cy, rx, ry)
-            draw_edges(n.left); draw_edges(n.right)
-        draw_edges(root)
-
-        # draw nodes and populate node_vis
+        # [FIXED] Step 1: Draw nodes first and initialize node_vis with edge placeholders
         self.node_vis.clear()
         for node, key in node_to_key.items():
             cx, cy = pos[key]
-            left = cx - self.node_w/2; top = cy - self.node_h/2; right = cx + self.node_w/2; bottom = cy + self.node_h/2
+            left, top, right, bottom = cx - self.node_w/2, cy - self.node_h/2, cx + self.node_w/2, cy + self.node_h/2
             rect = self.canvas.create_rectangle(left, top, right, bottom, fill="#F0F8FF", outline="black", width=2)
-            x1 = left + 28; x2 = x1 + 64
+            x1, x2 = left + 28, left + 92
             self.canvas.create_line(x1, top, x1, bottom, width=1)
             self.canvas.create_line(x2, top, x2, bottom, width=1)
-            txt = self.canvas.create_text((x1+x2)/2, (top+bottom)/2, text=str(node.val), font=("Arial",12,"bold"))
-            self.node_vis[key] = {'rect':rect, 'text':txt, 'cx':cx, 'cy':cy, 'val':str(node.val)}
+            txt = self.canvas.create_text((x1+x2)/2, cy, text=str(node.val), font=("Arial",12,"bold"))
+            self.node_vis[key] = {
+                'rect': rect, 
+                'text': txt, 
+                'cx': cx, 
+                'cy': cy, 
+                'val': str(node.val),
+                'edges': {}  # Placeholder for outgoing edge items
+            }
+
+        # [FIXED] Step 2: Draw edges and store their canvas IDs in the parent's node_vis entry
+        def setup_edges(n: Optional[AVLNode]):
+            if not n:
+                return
+            parent_key = node_to_key[n]
+            parent_cx, parent_cy = pos[parent_key]
+
+            if n.left:
+                child_key = node_to_key[n.left]
+                child_cx, child_cy = pos[child_key]
+                line_ids = self._draw_connection(parent_cx, parent_cy, child_cx, child_cy)
+                self.node_vis[parent_key]['edges'][child_key] = line_ids
+                setup_edges(n.left)
+            
+            if n.right:
+                child_key = node_to_key[n.right]
+                child_cx, child_cy = pos[child_key]
+                line_ids = self._draw_connection(parent_cx, parent_cy, child_cx, child_cy)
+                self.node_vis[parent_key]['edges'][child_key] = line_ids
+                setup_edges(n.right)
+                
+        setup_edges(root)
 
     # ---------- main insertion animation flow ----------
     def start_insert_animated(self):
@@ -240,10 +252,10 @@ class AVLVisualizer:
 
         # create temporary visual at top and animate
         sx, sy = self.canvas_w/2, 20
-        left = sx - self.node_w/2; top = sy - self.node_h/2; right = sx + self.node_w/2; bottom = sy + self.node_h/2
+        left, top, right, bottom = sx - self.node_w/2, sy - self.node_h/2, sx + self.node_w/2, sy + self.node_h/2
         temp_rect = self.canvas.create_rectangle(left, top, right, bottom, fill="#C6F6D5", outline="black", width=2)
-        x1 = left + 28; x2 = x1 + 64
-        temp_text = self.canvas.create_text((x1+x2)/2, (top+bottom)/2, text=str(val_str), font=("Arial",12,"bold"))
+        x1 = left + 28
+        temp_text = self.canvas.create_text(sx, sy, text=str(val_str), font=("Arial",12,"bold"))
 
         steps = 30
         dx = (tx - sx)/steps
@@ -273,6 +285,43 @@ class AVLVisualizer:
                 self.window.after(300, on_complete)
         step()
 
+    # [NEW] Helper method to redraw edges during animation
+    def _redraw_all_edges_during_animation(self):
+        """
+        Redraws all edges based on the current positions of the nodes on the canvas.
+        This is called every frame during an animation.
+        """
+        for parent_key, parent_vis in self.node_vis.items():
+            try:
+                # Get parent's current center coordinates from its rectangle
+                parent_coords = self.canvas.coords(parent_vis['rect'])
+                if not parent_coords or len(parent_coords) < 4: continue
+                parent_cx = (parent_coords[0] + parent_coords[2]) / 2
+                parent_cy = (parent_coords[1] + parent_coords[3]) / 2
+
+                # Iterate over its outgoing edges
+                for child_key, line_ids in parent_vis.get('edges', {}).items():
+                    child_vis = self.node_vis.get(child_key)
+                    if not child_vis: continue
+                    
+                    # Get child's current center coordinates
+                    child_coords = self.canvas.coords(child_vis['rect'])
+                    if not child_coords or len(child_coords) < 4: continue
+                    child_cx = (child_coords[0] + child_coords[2]) / 2
+                    child_cy = (child_coords[1] + child_coords[3]) / 2
+                    
+                    # Update the line coordinates using the same logic as _draw_connection
+                    l1_id, l2_id = line_ids
+                    top = parent_cy + self.node_h / 2
+                    bot = child_cy - self.node_h / 2
+                    midy = (top + bot) / 2
+                    
+                    self.canvas.coords(l1_id, parent_cx, top, parent_cx, midy)
+                    self.canvas.coords(l2_id, parent_cx, midy, child_cx, bot)
+            except TclError:
+                # This can happen if a canvas item was unexpectedly deleted. Safe to ignore.
+                continue
+
     def _animate_single_rotation(self, before_root: Optional[AVLNode], after_root: Optional[AVLNode], rotation_info: Dict, on_done):
         pos_before = self.compute_positions_for_root(before_root)
         pos_after = self.compute_positions_for_root(after_root)
@@ -288,7 +337,6 @@ class AVLVisualizer:
                 continue
             sx, sy = pos_before[k]
             tx, ty = pos_after[k]
-            # rect coords top-left used by canvas.coords
             moves.append((k, item['rect'], item['text'], sx, sy, tx, ty))
 
         # draw arc/label to indicate rotation direction (best-effort)
@@ -312,11 +360,11 @@ class AVLVisualizer:
             except Exception:
                 arc_id = None; label_id = None
 
-        frames = 24
-        delay = 30
+        frames = 30 # Increased for smoother animation
+        delay = 20  # Decreased for faster frame rate
 
         def rect_center_coords(rect_id):
-            coords = self.canvas.coords(rect_id)  # [x1,y1,x2,y2]
+            coords = self.canvas.coords(rect_id)
             if not coords or len(coords) < 4:
                 return (0,0)
             x1,y1,x2,y2 = coords
@@ -334,23 +382,26 @@ class AVLVisualizer:
                     except: pass
                 self.window.after(300, on_done)
                 return
+            
             t = (f+1)/frames
             for (k, rect_id, text_id, sx, sy, tx, ty) in moves:
-                # compute desired current center
+                # compute desired current center (interpolation)
                 cur_cx = sx + (tx - sx) * t
                 cur_cy = sy + (ty - sy) * t
-                # get current center to compute delta
                 try:
-                    cur_coords = rect_center_coords(rect_id)
-                    if cur_coords == (0,0):
-                        continue
-                    ccx, ccy = cur_coords
+                    # get current center to compute delta for move command
+                    ccx, ccy = rect_center_coords(rect_id)
+                    if (ccx, ccy) == (0,0): continue
                     dx = cur_cx - ccx
                     dy = cur_cy - ccy
                     self.canvas.move(rect_id, dx, dy)
                     self.canvas.move(text_id, dx, dy)
                 except Exception:
                     pass
+
+            # [FIXED] Redraw all edges to keep them connected during animation
+            self._redraw_all_edges_during_animation()
+            
             self.window.after(delay, lambda: frame_step(f+1))
         frame_step(0)
 
@@ -362,7 +413,7 @@ class AVLVisualizer:
             if i >= len(rotations):
                 on_all_done()
                 return
-            before_root = snapshots[1 + i]   # after previous step (i==0 -> after-insert)
+            before_root = snapshots[1 + i]
             after_root = snapshots[2 + i]
             rot_info = rotations[i]
             self.update_status(f"执行旋转 {i+1}/{len(rotations)}: {rot_info.get('type')}")
@@ -406,9 +457,12 @@ class AVLVisualizer:
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             title="保存 AVL 到文件"
         )
+        if not filepath: return
         ok = storage.save_tree_to_file(root, filepath)
-        messagebox.showinfo("成功", f"AVL 已保存到：\n{filepath}")
-        if ok: self.update_status("保存成功")
+        if ok:
+            messagebox.showinfo("成功", f"AVL 已保存到：\n{filepath}")
+            self.update_status("保存成功")
+
     def load_structure(self):
         default_dir = self._ensure_avl_folder()
         filepath = filedialog.askopenfilename(
@@ -416,6 +470,7 @@ class AVLVisualizer:
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             title="从文件加载 AVL"
         )
+        if not filepath: return
         tree_dict = storage.load_tree_from_file(filepath)
         from avl.avl_model import AVLNode as AVLNodeClass
         newroot = storage.tree_dict_to_nodes(tree_dict, AVLNodeClass)
