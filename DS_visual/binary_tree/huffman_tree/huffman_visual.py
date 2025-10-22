@@ -72,6 +72,13 @@ class HuffmanVisualizer:
         Button(ctrl_frame, text="保存 Huffman", command=self.save_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
         Button(ctrl_frame, text="打开 Huffman", command=self.load_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
 
+        # ---- DSL 输入框 ----
+        Label(ctrl_frame, text="DSL命令:", font=("Arial", 11), bg="#F0F4F8").pack(side=LEFT, padx=6)
+        self.dsl_var = StringVar()
+        self.dsl_entry = Entry(ctrl_frame, textvariable=self.dsl_var, width=36, font=("Arial", 11))
+        self.dsl_entry.pack(side=LEFT, padx=6)
+        self.dsl_entry.bind("<Return>", lambda e: self._on_dsl_submit())
+
         self.status_id = None
         self._draw_instructions()
 
@@ -459,6 +466,21 @@ class HuffmanVisualizer:
             return
         self.window.destroy()
         
+    def _on_dsl_submit(self):
+        """处理 DSL 命令提交"""
+        dsl_command = self.dsl_var.get().strip()
+        if not dsl_command:
+            messagebox.showwarning("警告", "DSL 命令不能为空！")
+            return
+
+        try:
+            from DSL_utils import process_command
+            process_command(self, dsl_command)
+        except Exception as e:
+            messagebox.showerror("错误", f"处理 DSL 命令失败: {str(e)}")
+        finally:
+            self.dsl_var.set("")  # 清空输入框内容
+
 if __name__ == '__main__':
     w = Tk()
     w.title("Huffman 构建可视化")

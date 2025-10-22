@@ -1,5 +1,15 @@
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Tuple
+from dataclasses import dataclass
+
 TOMBSTONE = object()
+
+@dataclass
+class ProbeResult:
+    """探测结果，包含探测路径和结果位置"""
+    found: bool  # 是否找到
+    target_index: Optional[int]  # 目标位置（插入位置或找到的位置）
+    probe_path: List[int]  # 探测路径
+    is_full: bool = False  # 表是否已满
 
 class HashTableModel:
     def __init__(self, capacity: int = 11):
@@ -8,73 +18,115 @@ class HashTableModel:
         self.capacity = capacity
         self.table: List[Optional[Any]] = [None] * capacity
         self.tombstone = TOMBSTONE
+        self.size = 0  # 有效元素计数（不含墓碑）
 
     def _hash(self, x: Any) -> int:
+        """计算元素的哈希值"""
         try:
             xi = int(x)
-        except Exception:
-            xi = hash(x)
-        return int(xi) % self.capacity
+        except (ValueError, TypeError):
+            xi = hash(str(x))
+        return abs(xi) % self.capacity
 
-    def find(self, x: Any) -> int:
+    def _probe_find(self, x: Any) -> ProbeResult:
+        """查找元素，返回探测结果"""
         start = self._hash(x)
+        probe_path = []
         i = start
-        first_pass = True
+
         while True:
+            probe_path.append(i)
             val = self.table[i]
+            
             if val is None:
-                return -1  
+                return ProbeResult(False, -1, probe_path)
+            
             if val is not self.tombstone and val == x:
-                return i
+                return ProbeResult(True, i, probe_path)
+            
             i = (i + 1) % self.capacity
             if i == start:
                 break
-        return -1
+        
+        return ProbeResult(False, -1, probe_path)
 
-    def insert(self, x: Any) -> Optional[int]:
-        if self.find(x) != -1:
-            return self.find(x)
+    def _probe_insert(self, x: Any) -> ProbeResult:
+        """探测插入位置，返回探测结果"""
+        # 先尝试查找是否存在
+        find_result = self._probe_find(x)
+        if find_result.found:
+            return find_result
 
+        # 开始插入探测
         start = self._hash(x)
+        probe_path = []
         i = start
         first_tombstone = -1
+
         while True:
+            probe_path.append(i)
             val = self.table[i]
+            
             if val is None:
-                # 如果之前遇到 tombstone，优先放在那里
+                # 找到空位
                 target = first_tombstone if first_tombstone != -1 else i
-                self.table[target] = x
-                return target
-            if val is self.tombstone:
-                if first_tombstone == -1:
-                    first_tombstone = i
-            # 否则被占用，继续线性探测
+                return ProbeResult(False, target, probe_path)
+            
+            if val is self.tombstone and first_tombstone == -1:
+                first_tombstone = i
+            
             i = (i + 1) % self.capacity
             if i == start:
                 break
-        # 全表探测一圈仍未找到空位
-        if first_tombstone != -1:
-            self.table[first_tombstone] = x
-            return first_tombstone
-        return None
 
-    def delete(self, x: Any) -> Optional[int]: 
-        idx = self.find(x)
-        if idx == -1:
-            return None
-        self.table[idx] = self.tombstone
-        return idx
+        # 表满，但有墓碑可用
+        if first_tombstone != -1:
+            return ProbeResult(False, first_tombstone, probe_path)
+            
+        # 表完全满
+        return ProbeResult(False, None, probe_path, is_full=True)
+
+    def find(self, x: Any) -> Tuple[bool, List[int]]:
+        """查找元素，返回 (是否找到, 探测路径)"""
+        result = self._probe_find(x)
+        return result.found, result.probe_path
+
+    def insert(self, x: Any) -> Tuple[Optional[int], List[int], bool]:
+        """插入元素，返回 (插入位置, 探测路径, 是否表满)"""
+        result = self._probe_insert(x)
+        if result.target_index is not None:
+            if not result.found:  # 新插入而不是找到已存在
+                self.table[result.target_index] = x
+                self.size += 1
+        return result.target_index, result.probe_path, result.is_full
+
+    def delete(self, x: Any) -> Tuple[Optional[int], List[int]]:
+        """删除元素，返回 (删除位置, 探测路径)"""
+        result = self._probe_find(x)
+        if result.found:
+            self.table[result.target_index] = self.tombstone
+            self.size -= 1
+            return result.target_index, result.probe_path
+        return None, result.probe_path
 
     def clear(self):
+        """清空哈希表"""
         self.table = [None] * self.capacity
+        self.size = 0
 
     def __len__(self):
-        return sum(1 for v in self.table if v is not None and v is not self.tombstone)
+        """返回有效元素数量（不含墓碑）"""
+        return self.size
 
     def load_list(self, items: List[Any]):
+        """批量加载元素列表"""
         self.clear()
         for x in items:
             self.insert(x)
 
+    def get_load_factor(self) -> float:
+        """返回负载因子（有效元素/容量）"""
+        return self.size / self.capacity
+
     def __repr__(self):
-        return f"HashTableModel(capacity={self.capacity}, table={self.table})"
+        return f"HashTableModel(capacity={self.capacity}, size={self.size}, table={self.table})"

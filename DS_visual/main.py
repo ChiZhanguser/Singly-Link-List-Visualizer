@@ -374,22 +374,31 @@ class MainWindow:
             # 准备系统提示和函数定义
             system_prompt = (
                 "你是一个数据结构可视化助手。你需要将用户的自然语言指令转换为规范的DSL命令。\n"
-                "请严格按照以下格式转换：\n\n"
-                "1. 插入操作:\n"
+                "请根据当前数据结构类型，按照以下格式转换：\n\n"
+                "1. 通用操作:\n"
+                "   - clear（清空）\n\n"
+                "2. 链表/顺序表操作:\n"
                 "   - 末尾插入：insert VALUE\n"
-                "   - 指定位置插入：insert VALUE at POSITION 或 insert_at POSITION VALUE\n\n"
-                "2. 删除操作:\n"
-                "   - delete first（删除开头）\n"
-                "   - delete last（删除末尾）\n"
-                "   - delete POSITION（删除指定位置）\n\n"
-                "3. 清空操作:\n"
-                "   - clear\n\n"
-                "4. 批量创建:\n"
-                "   - create VALUE1,VALUE2,VALUE3\n\n"
+                "   - 指定位置插入：insert VALUE at POSITION 或 insert_at POSITION VALUE\n"
+                "   - 删除操作：delete first/last/POSITION\n"
+                "   - 批量创建：create VALUE1,VALUE2,VALUE3\n\n"
+                "3. 栈操作:\n"
+                "   - 压栈：push VALUE\n"
+                "   - 弹栈：pop\n\n"
+                "4. 二叉搜索树操作:\n"
+                "   - 插入：insert VALUE\n"
+                "   - 查找：search VALUE\n"
+                "   - 删除：delete VALUE\n"
+                "   - 批量创建：create VALUE1,VALUE2,VALUE3\n\n"
+                "5. 循环队列操作:\n"
+                "   - 入队：enqueue VALUE 或 enq VALUE\n"
+                "   - 出队：dequeue 或 deq\n"
+                "   - 清空：clear\n\n"
                 "示例转换：\n"
-                "- '在末尾添加5' -> 'insert 5'\n"
-                "- '在第2个位置插入3' -> 'insert 3 at 2'\n"
-                "- '删除开头的节点' -> 'delete first'\n"
+                "- '查找23' -> 'search 23'\n"
+                "- '入队5' -> 'enqueue 5'\n"
+                "- '压入6' -> 'push 6'\n"
+                "- '删除队首元素' -> 'dequeue'\n"
                 "仅返回转换后的命令，不要添加任何额外解释。"
             )
 
@@ -431,13 +440,13 @@ class MainWindow:
                         print(f"DEBUG: Instance methods: {[attr for attr in dir(instance) if not attr.startswith('_') and callable(getattr(instance, attr))]}")
                         process_command(instance, dsl_command)
                         print(f"DSL command executed: {dsl_command}")  # 调试输出
+                        # 更新状态栏
+                        self.status_label.config(text=f"已执行: {dsl_command}")
+                        # 清空输入框
+                        self.nl_var.set("")
                     except Exception as e:
                         print(f"Error processing DSL: {e}")  # 调试输出
                         raise
-                                
-                        # 更新状态栏
-                        self.status_label.config(text=f"已执行: {dsl_command}")
-                        break
 
             if not found_instance:
                 messagebox.showerror("错误", "未找到活动的数据结构实例")

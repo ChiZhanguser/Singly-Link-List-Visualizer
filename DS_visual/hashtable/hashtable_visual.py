@@ -1,4 +1,3 @@
-# hash_visual.py
 from tkinter import *
 from tkinter import messagebox, filedialog
 import json
@@ -54,40 +53,117 @@ class HashtableVisualizer:
 
     def create_buttons(self):
         button_frame = Frame(self.window, bg="#F0F8FF")
-        button_frame.place(x=20, y=540, width=1310, height=160)
+        button_frame.place(x=20, y=540, width=1310, height=150)  # Increased height to accommodate DSL row
 
-        Button(button_frame, text="插入 Insert", font=("Arial", 12), width=14, height=2, bg="green", fg="white",
-               command=self.prepare_insert).grid(row=0, column=0, padx=10, pady=6)
-        Button(button_frame, text="查找 Find", font=("Arial", 12), width=14, height=2, bg="blue", fg="white",
-               command=lambda: self.prepare_find()).grid(row=0, column=1, padx=10, pady=6)
-        Button(button_frame, text="删除 Delete", font=("Arial", 12), width=14, height=2, bg="orange", fg="white",
-               command=lambda: self.prepare_delete()).grid(row=0, column=2, padx=10, pady=6)
-        Button(button_frame, text="清空 Clear", font=("Arial", 12), width=14, height=2, bg="red", fg="white",
-               command=self.clear_table).grid(row=0, column=3, padx=10, pady=6)
-        Button(button_frame, text="返回主界面", font=("Arial", 12), width=14, height=2, bg="#6C9EFF", fg="white",
-               command=self.back_to_main).grid(row=0, column=4, padx=10, pady=6)
+        # 第一行：操作按钮
+        Button(button_frame, text="插入 Insert", font=("Arial", 11, "bold"), width=10, height=1, bg="#4CAF50", fg="white",
+               relief="flat", bd=1, command=self.prepare_insert).grid(row=0, column=0, padx=6, pady=4)
+        Button(button_frame, text="查找 Find", font=("Arial", 11, "bold"), width=10, height=1, bg="#2196F3", fg="white",
+               relief="flat", bd=1, command=lambda: self.prepare_find()).grid(row=0, column=1, padx=6, pady=4)
+        Button(button_frame, text="删除 Delete", font=("Arial", 11, "bold"), width=10, height=1, bg="#FF9800", fg="white",
+               relief="flat", bd=1, command=lambda: self.prepare_delete()).grid(row=0, column=2, padx=6, pady=4)
+        Button(button_frame, text="清空 Clear", font=("Arial", 11, "bold"), width=10, height=1, bg="#F44336", fg="white",
+               relief="flat", bd=1, command=self.clear_table).grid(row=0, column=3, padx=6, pady=4)
+        Button(button_frame, text="返回主界面", font=("Arial", 11, "bold"), width=10, height=1, bg="#6C9EFF", fg="white",
+               relief="flat", bd=1, command=self.back_to_main).grid(row=0, column=4, padx=6, pady=4)
 
-        Label(button_frame, text="值:", bg="#F0F8FF").grid(row=1, column=0, sticky="e", padx=(10,2))
-        Entry(button_frame, textvariable=self.value_entry, width=20).grid(row=1, column=1, sticky="w")
-        Button(button_frame, text="确认", command=self._on_confirm_value).grid(row=1, column=2, padx=8, sticky="w")
+        # 第二行：单值输入
+        Label(button_frame, text="值:", font=("Arial", 11), bg="#F0F8FF").grid(row=1, column=0, sticky="e", padx=(8, 2), pady=4)
+        Entry(button_frame, textvariable=self.value_entry, width=12, font=("Arial", 11)).grid(row=1, column=1, sticky="w", padx=4)
+        Button(button_frame, text="确认", font=("Arial", 11, "bold"), width=6, height=1, bg="#4CAF50", fg="white",
+               relief="flat", bd=1, command=self._on_confirm_value).grid(row=1, column=2, padx=6, pady=4)
 
-        Label(button_frame, text="批量构建 (逗号分隔):", bg="#F0F8FF").grid(row=1, column=3, sticky="e")
-        Entry(button_frame, textvariable=self.batch_entry_var, width=40).grid(row=1, column=4, sticky="w")
-        Button(button_frame, text="开始批量构建", command=self.start_batch_build).grid(row=1, column=5, padx=6)
+        # 第三行：批量构建
+        Label(button_frame, text="批量构建:", font=("Arial", 11), bg="#F0F8FF").grid(row=2, column=0, sticky="e", padx=(8, 2), pady=4)
+        Entry(button_frame, textvariable=self.batch_entry_var, width=25, font=("Arial", 11)).grid(row=2, column=1, columnspan=2, sticky="w", padx=4)
+        Button(button_frame, text="开始", font=("Arial", 11, "bold"), width=6, height=1, bg="#2196F3", fg="white",
+               relief="flat", bd=1, command=self.start_batch_build).grid(row=2, column=3, padx=6, pady=4)
 
-        Label(button_frame, text="DSL 命令:", bg="#F0F8FF").grid(row=2, column=0, sticky="e")
-        dsl_entry = Entry(button_frame, textvariable=self.dsl_var, width=70)
-        dsl_entry.grid(row=2, column=1, columnspan=4, sticky="w", padx=6)
+        # 第四行：DSL 命令
+        Label(button_frame, text="DSL 命令:", font=("Arial", 11), bg="#F0F8FF").grid(row=3, column=0, sticky="e", padx=(8, 2), pady=4)
+        dsl_entry = Entry(button_frame, textvariable=self.dsl_var, width=40, font=("Arial", 11))
+        dsl_entry.grid(row=3, column=1, columnspan=3, sticky="w", padx=4)
         dsl_entry.bind("<Return>", lambda e: self.process_dsl())
-        Button(button_frame, text="执行", command=self.process_dsl).grid(row=2, column=5, padx=6)
+        Button(button_frame, text="执行", font=("Arial", 11, "bold"), width=6, height=1, bg="#FF9800", fg="white",
+               relief="flat", bd=1, command=self.process_dsl).grid(row=3, column=4, padx=6, pady=4)
 
-        Button(button_frame, text="保存", command=self.save_structure).grid(row=0, column=6, padx=8)
-        Button(button_frame, text="打开", command=self.load_structure).grid(row=1, column=6, padx=8)
+        # 右侧：保存与打开按钮
+        Button(button_frame, text="保存", font=("Arial", 11, "bold"), width=6, height=1, bg="#6C9EFF", fg="white",
+               relief="flat", bd=1, command=self.save_structure).grid(row=1, column=4, padx=6, pady=4)
+        Button(button_frame, text="打开", font=("Arial", 11, "bold"), width=6, height=1, bg="#6C9EFF", fg="white",
+               relief="flat", bd=1, command=self.load_structure).grid(row=2, column=4, padx=6, pady=4)
+
+        # 统一设置 sticky 和 pady，确保对齐
+        for child in button_frame.winfo_children():
+            child.grid_configure(sticky="nsew")
 
     def process_dsl(self):
         text = self.dsl_var.get().strip()
         try:
-            process_command(self, text)
+            # 处理 create 命令的特殊情况
+            if text.startswith("create"):
+                # 解析 create 后的数字序列
+                items = text.split()[1:]
+                if not items:
+                    messagebox.showerror("错误", "请在create后提供要插入的值，例如：create 1 2 3")
+                    return
+                # 转换为整数序列
+                try:
+                    values = [int(x) for x in items]
+                except ValueError:
+                    messagebox.showerror("错误", "create命令后请提供有效的整数值")
+                    return
+                # 设置批量队列并开始处理
+                if len(values) > self.capacity:
+                    if not messagebox.askyesno("容量不足", 
+                        f"要插入 {len(values)} 个元素，capacity={self.capacity}。是否只插入前 {self.capacity} 个？"):
+                        return
+                    values = values[:self.capacity]
+                self.batch_queue = values
+                self.batch_index = 0
+                self._set_buttons_state("disabled")
+                self._batch_step()
+            # 处理 insert 命令
+            elif text.startswith("insert"):
+                parts = text.split()
+                if len(parts) != 2:
+                    messagebox.showerror("错误", "插入命令格式：insert 值")
+                    return
+                try:
+                    value = int(parts[1])
+                    self.insert_value(value)
+                except ValueError:
+                    messagebox.showerror("错误", "请输入有效的整数值")
+                    return
+            # 处理 find/search 命令
+            elif text.startswith("find") or text.startswith("search"):
+                parts = text.split()
+                if len(parts) != 2:
+                    messagebox.showerror("错误", "查找命令格式：find 值 或 search 值")
+                    return
+                try:
+                    value = int(parts[1])
+                    self.find_value(value)
+                except ValueError:
+                    messagebox.showerror("错误", "请输入有效的整数值")
+                    return
+            # 处理 delete 命令
+            elif text.startswith("delete"):
+                parts = text.split()
+                if len(parts) != 2:
+                    messagebox.showerror("错误", "删除命令格式：delete 值")
+                    return
+                try:
+                    value = int(parts[1])
+                    self.delete_value(value)
+                except ValueError:
+                    messagebox.showerror("错误", "请输入有效的整数值")
+                    return
+            # 处理 clear 命令
+            elif text.strip() == "clear":
+                self.clear_table()
+            else:
+                messagebox.showerror("错误", "未知命令。支持的命令：create、insert、find/search、delete、clear")
         finally:
             self.dsl_var.set("")
 
@@ -144,13 +220,14 @@ class HashtableVisualizer:
 
     def _open_input(self, label_text, default_value, action):
         if self.input_frame:
-            self.input_frame = None
+            self.input_frame.destroy()  # 销毁旧的 input_frame
         self.value_entry.set(default_value)
         self.input_frame = Frame(self.window, bg="#F0F8FF")
-        self.input_frame.place(x=420, y=620, width=500, height=70)
-        Label(self.input_frame, text=label_text + ":", bg="#F0F8FF").grid(row=0, column=0, padx=6, pady=8)
-        Entry(self.input_frame, textvariable=self.value_entry).grid(row=0, column=1)
-        Button(self.input_frame, text="确认", command=lambda: self._on_confirm(action)).grid(row=0, column=2, padx=8)
+        self.input_frame.place(x=420, y=680, width=300, height=40)  # Moved below button frame
+        Label(self.input_frame, text=label_text + ":", font=("Arial", 11), bg="#F0F8FF").grid(row=0, column=0, padx=4, pady=4, sticky="e")
+        Entry(self.input_frame, textvariable=self.value_entry, width=12, font=("Arial", 11)).grid(row=0, column=1, padx=4, pady=4, sticky="w")
+        Button(self.input_frame, text="确认", font=("Arial", 11, "bold"), width=6, height=1, bg="#4CAF50", fg="white",
+               relief="flat", bd=1, command=lambda: self._on_confirm(action)).grid(row=0, column=2, padx=4, pady=4)
         self.window.after(50, lambda: self.input_frame.focus_force())
 
     def _on_confirm(self, action):
@@ -159,7 +236,8 @@ class HashtableVisualizer:
             messagebox.showerror("错误", "请输入一个值")
             return
         if self.input_frame:
-            self.input_frame=None
+            self.input_frame.destroy()  # 销毁输入框
+            self.input_frame = None
         if action == "insert":
             self.insert_value(val)
         elif action == "find":

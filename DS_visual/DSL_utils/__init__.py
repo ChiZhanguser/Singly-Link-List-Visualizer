@@ -3,6 +3,7 @@ from . import stack_dsl
 from . import sequence_dsl
 from . import bst_dsl
 from . import trie_dsl
+from . import huffman_dsl
 
 def process_command(visualizer, text):
     if not visualizer or not text or not text.strip():
@@ -12,6 +13,15 @@ def process_command(visualizer, text):
     print(f"DEBUG: Command text: {text}")
     visualizer_type = type(visualizer).__name__.lower()
 
+    try:
+        # Huffman visualizer
+        if ("huffman" in visualizer_type or
+            hasattr(visualizer, "start_animated_build") and hasattr(visualizer, "clear_canvas")):
+            print(f"DEBUG: Processing as Huffman visualizer")
+            return huffman_dsl.process(visualizer, text)
+    except Exception as e:
+        print(f"DEBUG: Huffman processing error: {e}")
+        pass
     try:
         # LinkList or LinkedListVisualizer
         if type(visualizer).__name__ in ("LinkList", "LinkedListVisualizer") or "linked" in visualizer_type:
@@ -25,15 +35,14 @@ def process_command(visualizer, text):
             print(f"DEBUG: Matched linked list by other criteria")
             return linkedlist_dsl.process(visualizer, text)
     except Exception as e:
-        print(f"Error in linked list command processing: {e}")  # 调试输出
+        print(f"Error in linked list command processing: {e}")  
         pass
     try:
-        # Stack Visualizer
-        if ("stack" in visualizer_type or 
-            hasattr(visualizer, "animate_push_left") or 
-            hasattr(visualizer, "model") and hasattr(visualizer.model, "is_full")):
-            print(f"DEBUG: Processing as Stack visualizer")
-            # Convert commands for stack operations
+        # Circular Queue Visualizer (检查要放在栈之前，因为条件更具体)
+        if ("circularqueue" in visualizer_type.replace("_", "") or
+            "queue" in visualizer_type.lower() or
+            hasattr(visualizer, "animate_enqueue") and hasattr(visualizer, "animate_dequeue")):
+            print(f"DEBUG: Processing as Circular Queue visualizer")
             text_parts = text.strip().split()
             if not text_parts:
                 return
@@ -41,14 +50,38 @@ def process_command(visualizer, text):
             cmd = text_parts[0].lower()
             args = text_parts[1:]
             
-            # Command conversions for stack
+            # Command conversion for queue operations
+            if cmd in ("insert", "add", "push"):
+                text = "enqueue " + " ".join(args)
+            elif cmd in ("delete", "remove", "pop"):
+                text = "dequeue"
+            print(f"DEBUG: Circular Queue command conversion: {text}")
+            from . import circular_queue_dsl
+            return circular_queue_dsl._fallback_process_command(visualizer, text)
+    except Exception as e:
+        print(f"DEBUG: Circular Queue processing error: {e}")
+        pass
+
+    try:
+        if ("stack" in visualizer_type or 
+            hasattr(visualizer, "animate_push_left") or
+            (hasattr(visualizer, "model") and 
+             hasattr(visualizer.model, "is_full") and 
+             not hasattr(visualizer, "animate_enqueue"))):  # 确保不是队列
+            print(f"DEBUG: Processing as Stack visualizer")
+            text_parts = text.strip().split()
+            if not text_parts:
+                return
+            
+            cmd = text_parts[0].lower()
+            args = text_parts[1:]
+            
             if cmd in ("insert", "add"):
                 text = "push " + " ".join(args)
             elif cmd == "delete":
                 if len(args) > 0 and args[0].lower() in ("last", "tail"):
                     text = "pop"
                 else:
-                    # Keep original command for error handling in stack_dsl
                     pass
             print(f"DEBUG: Stack command conversion: {text}")
             return stack_dsl.process(visualizer, text)
@@ -87,6 +120,32 @@ def process_command(visualizer, text):
             return trie_dsl.process(visualizer, text)
     except Exception as e:
         print(f"DEBUG: Trie processing error: {e}")
+        pass
+
+    try:
+        # Circular Queue Visualizer
+        if ("circularqueue" in visualizer_type.replace("_", "") or
+            hasattr(visualizer, "animate_enqueue") and
+            hasattr(visualizer, "animate_dequeue")):
+            print(f"DEBUG: Processing as Circular Queue visualizer")
+            # Convert commands for circular queue
+            text_parts = text.strip().split()
+            if not text_parts:
+                return
+            
+            cmd = text_parts[0].lower()
+            args = text_parts[1:]
+            
+            # Command conversion for queue operations
+            if cmd in ("insert", "add", "push"):
+                text = "enqueue " + " ".join(args)
+            elif cmd in ("delete", "remove", "pop"):
+                text = "dequeue"
+            print(f"DEBUG: Circular Queue command conversion: {text}")
+            from . import circular_queue_dsl
+            return circular_queue_dsl._fallback_process_command(visualizer, text)
+    except Exception as e:
+        print(f"DEBUG: Circular Queue processing error: {e}")
         pass
     
     from tkinter import messagebox
