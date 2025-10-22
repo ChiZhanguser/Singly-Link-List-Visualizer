@@ -7,7 +7,7 @@ import storage as storage
 import json
 from datetime import datetime
 import sys
-import sequence_api as sequence_api
+# import sequence_api as sequence_api  # 暂时注释掉，因为sequence_api文件内容不正确
 from sequence_list.sequence_ui import create_heading, create_buttons
 
 class SequenceListVisualizer:
@@ -17,8 +17,8 @@ class SequenceListVisualizer:
         self.canvas = Canvas(self.window, bg="lightyellow", width=1350, height=500, relief=RAISED, bd=8)
         self.canvas.pack()
         self.model = SequenceListModel()
-        sequence_api.bind_visualizer(self)
-        print("sequence_api successfully bound to SequenceListVisualizer (model shared).")
+        # sequence_api.bind_visualizer(self)  # 暂时注释掉
+        # print("sequence_api successfully bound to SequenceListVisualizer (model shared).")
         self.dsl_var=StringVar()
         
         # 存储画布上的元素

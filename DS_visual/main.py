@@ -73,8 +73,12 @@ class MainWindow:
         self.main_pane.add(self.sidebar)
         self.main_pane.add(self.content)
 
-        topbar = Frame(self.content, bg="#f8fafc")
+        # ========== 美化顶部栏 ==========
+        topbar = Frame(self.content, bg="#ffffff", height=70)
         topbar.pack(fill=X, side=TOP)
+        topbar.pack_propagate(False)  # 保持固定高度
+        
+        # 应用现代样式
         self.style = ttk.Style(self.root)
         try:
             self.style.theme_use("vista")
@@ -82,27 +86,83 @@ class MainWindow:
             pass
         self._apply_hidden_notebook_style()
 
-        # ---- AI 按钮 (仍在最右侧) ----
-        ai_btn = Button(topbar, text="AI 助手", fg="#ffffff", bg="#1FA2FF",
-                        activebackground="#52b6ff", activeforeground="#ffffff",
-                        relief=FLAT, padx=35, pady=6, cursor="hand2",
-                        command=self._open_chat)
-        # 先 pack ai_btn 到右侧（pack 顺序决定左右排列）
-        ai_btn.pack(side=RIGHT, padx=10, pady=6)
+        # ---- 左侧：Logo和标题 ----
+        header_left = Frame(topbar, bg="#ffffff")
+        header_left.pack(side=LEFT, padx=20, pady=15)
+        
+        # Logo容器（圆形背景）
+        logo_frame = Frame(header_left, bg="#1FA2FF", width=40, height=40, relief=FLAT, bd=0)
+        logo_frame.pack(side=LEFT, padx=(0, 12))
+        logo_frame.pack_propagate(False)
+        logo_label = Label(logo_frame, text="DS", bg="#1FA2FF", fg="white", 
+                          font=("Segoe UI", 14, "bold"))
+        logo_label.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # 主标题
+        title_label = Label(header_left, text="数据结构可视化平台", 
+                           bg="#ffffff", fg="#1a1a1a", font=("Segoe UI", 16, "bold"))
+        title_label.pack(side=LEFT)
+        
+        # 副标题
+        subtitle_label = Label(header_left, text="Data Structure Visualizer", 
+                              bg="#ffffff", fg="#666666", font=("Segoe UI", 10))
+        subtitle_label.pack(side=LEFT, padx=(8, 0), pady=(4, 0))
 
-        # ---- 当前结构标签 & 自然语言输入框（位于 AI 按钮左侧）----
-        # 当前结构标签（会在 tab 切换时更新）
-        self.structure_label = Label(topbar, text="当前: —", bg="#f8fafc", fg="#0b1220", font=("Segoe UI", 10))
-        # 自然语言 StringVar（已在你的原文件里有一个定义，这里重用）
+        # ---- 中间：当前结构指示器 ----
+        header_center = Frame(topbar, bg="#ffffff")
+        header_center.pack(side=LEFT, expand=True, fill=X, padx=40)
+        
+        # 当前结构标签 - 现代化设计
+        current_frame = Frame(header_center, bg="#f8fafc", relief=SOLID, bd=1)
+        current_frame.pack(side=TOP, pady=5)
+        
+        current_label = Label(current_frame, text="当前数据结构", bg="#f8fafc", 
+                            fg="#666666", font=("Segoe UI", 9))
+        current_label.pack(side=LEFT, padx=(12, 8), pady=4)
+        
+        self.structure_label = Label(current_frame, text="—", bg="#ffffff", fg="#1FA2FF", 
+                                   font=("Segoe UI", 10, "bold"), relief=SOLID, bd=1, 
+                                   padx=12, pady=4)
+        self.structure_label.pack(side=LEFT, padx=(0, 12), pady=4)
+
+        # ---- 右侧：功能区域 ----
+        header_right = Frame(topbar, bg="#ffffff")
+        header_right.pack(side=RIGHT, padx=20, pady=15)
+
+        # 自然语言输入框 - 现代化设计
         from tkinter import StringVar
         self.nl_var = StringVar(value="")
-
-        # 自然语言输入框，按回车触发转换/转发逻辑（钩子）
-        self.nl_entry = Entry(topbar, textvariable=self.nl_var, width=48)
+        
+        input_container = Frame(header_right, bg="#f1f5f9", relief=SOLID, bd=1)
+        input_container.pack(side=LEFT, padx=(0, 12))
+        
+        # 输入图标
+        input_icon = Label(input_container, text="🔍", bg="#f1f5f9", fg="#666666", 
+                          font=("Segoe UI", 10))
+        input_icon.pack(side=LEFT, padx=(12, 8))
+        
+        self.nl_entry = Entry(input_container, textvariable=self.nl_var, width=42, 
+                             font=("Segoe UI", 10), fg="#374151", bg="#f1f5f9", 
+                             relief=FLAT, bd=0, highlightthickness=0)
+        self.nl_entry.insert(0, "请输入自然语言命令...")
+        self.nl_entry.bind("<FocusIn>", lambda e: self.nl_entry.delete(0, END) if self.nl_entry.get() == "请输入自然语言命令..." else None)
+        self.nl_entry.bind("<FocusOut>", lambda e: self.nl_entry.insert(0, "请输入自然语言命令...") if not self.nl_entry.get().strip() else None)
         self.nl_entry.bind("<Return>", self._on_nl_submit)
-        # pack 的顺序：ai_btn 已经 pack 在最右，接着 pack nl_entry -> 出现在 ai_btn 左边，再 pack structure_label -> 出现在 nl_entry 左边
-        self.nl_entry.pack(side=RIGHT, padx=(0, 6), pady=6)
-        self.structure_label.pack(side=RIGHT, padx=(12, 6), pady=8)
+        self.nl_entry.pack(side=LEFT, padx=(0, 12), pady=8)
+        self.nl_entry.bind("<Enter>", lambda e: self.status_label.config(text="输入自然语言命令并按回车提交"))
+        self.nl_entry.bind("<Leave>", lambda e: self.status_label.config(text="© 张驰 的 数据结构可视化工具"))
+
+        # AI 助手按钮 - 现代化设计
+        ai_btn = Button(header_right, text="AI 助手", fg="#ffffff", bg="#1FA2FF",
+                        activebackground="#52b6ff", activeforeground="#ffffff",
+                        relief=FLAT, padx=24, pady=8, cursor="hand2",
+                        font=("Segoe UI", 10, "bold"),
+                        command=self._open_chat)
+        ai_btn.pack(side=RIGHT)
+
+        # 添加顶部装饰条
+        decoration_frame = Frame(topbar, bg="#1FA2FF", height=3)
+        decoration_frame.pack(fill=X, side=BOTTOM)
 
         # 隐藏 notebook 的样式（保持你原有逻辑）
         try:
@@ -145,6 +205,9 @@ class MainWindow:
             if ChatWindow is None:
                 messagebox.showinfo("提示", "聊天模块不可用（llm 未安装或路径错误）")
                 return
+            # 设置主窗口实例到function_dispatcher
+            from llm import function_dispatcher
+            function_dispatcher.set_main_window_instance(self)
             chat_window = ChatWindow(self.root)
             self._center_chat_window(chat_window)
             self._ensure_tabs_hidden()
@@ -330,12 +393,14 @@ class MainWindow:
         # 更新当前结构变量与界面标签
         try:
             self.current_structure = active_key
-            display_text = f"当前: {active_key}" if active_key else "当前: —"
+            # 获取友好的显示名称
+            display_name = dict(self.tabs).get(active_key, [None, None, None, active_key])[3]
+            display_text = f"当前: {display_name}" if active_key else "当前: —"
             if hasattr(self, "structure_label") and self.structure_label:
-                self.structure_label.config(text=display_text)
+                self.structure_label.config(text=display_name if active_key else "—")
             # 更新状态栏简要提示
             if hasattr(self, "status_label") and self.status_label:
-                self.status_label.config(text=f"当前数据结构：{active_key}    © 张驰 的 数据结构可视化工具")
+                self.status_label.config(text=f"当前数据结构：{display_name}    © 张驰 的 数据结构可视化工具")
         except Exception:
             pass
 
@@ -393,6 +458,9 @@ class MainWindow:
                 "5. 循环队列操作:\n"
                 "   - 入队：enqueue VALUE 或 enq VALUE\n"
                 "   - 出队：dequeue 或 deq\n"
+                "   - 清空：clear\n\n"
+                "6. 哈夫曼树操作:\n"
+                "   - 创建：create VALUE1,VALUE2,VALUE3\n"
                 "   - 清空：clear\n\n"
                 "示例转换：\n"
                 "- '查找23' -> 'search 23'\n"
