@@ -23,6 +23,7 @@ class ChatWindow:
         self.entry = self.ui.entry
         self.send_btn = self.ui.send_btn
         self._streaming = False
+    
     def _on_send(self):
         if self._streaming:
             return

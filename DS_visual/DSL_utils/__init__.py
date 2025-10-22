@@ -101,6 +101,20 @@ def process_command(visualizer, text):
         pass
 
     try:
+        # AVL Visualizer
+        if ("avl" in visualizer_type or 
+            hasattr(visualizer, "start_insert_animated") and 
+            hasattr(visualizer, "clear_canvas") and
+            hasattr(visualizer, "model") and
+            hasattr(visualizer.model, "_balance_factor")):
+            print(f"DEBUG: Processing as AVL visualizer")
+            from . import avl_dsl
+            return avl_dsl.process(visualizer, text)
+    except Exception as e:
+        print(f"DEBUG: AVL processing error: {e}")
+        pass
+    
+    try:
         # Binary Search Tree Visualizer
         if ("bst" in visualizer_type or
             hasattr(visualizer, "start_insert_animated") and

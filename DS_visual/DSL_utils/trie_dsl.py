@@ -9,6 +9,8 @@ DSL for TrieVisualizer.
   help                        -> 弹窗显示帮助
 
 如果没有命令（直接输入若干单词），会将整串内容当作 insert 处理。
+
+输入框会在命令执行后自动清空，以便下次输入。
 """
 import re
 from tkinter import messagebox
@@ -25,6 +27,8 @@ def process_command(visualizer, raw_text: str):
     解析并执行 Trie DSL 命令。
     visualizer: TrieVisualizer 实例
     raw_text: 用户输入的字符串（可以来自 visualizer.input_var.get()）
+    
+    执行后会自动清空输入框。
     """
     if not visualizer:
         return
@@ -55,6 +59,9 @@ def process_command(visualizer, raw_text: str):
             visualizer.start_insert_animated()
         except Exception as e:
             messagebox.showerror("错误", f"启动插入动画失败: {e}")
+        finally:
+            # 清空输入框
+            visualizer.input_var.set("")
         return
 
     # ---------- search ----------
@@ -74,6 +81,9 @@ def process_command(visualizer, raw_text: str):
             visualizer.start_search_animated()
         except Exception as e:
             messagebox.showerror("错误", f"启动查找动画失败: {e}")
+        finally:
+            # 清空输入框
+            visualizer.input_var.set("")
         return
 
     # ---------- clear ----------
@@ -82,6 +92,9 @@ def process_command(visualizer, raw_text: str):
             visualizer.clear_trie()
         except Exception as e:
             messagebox.showerror("错误", f"清空 Trie 失败: {e}")
+        finally:
+            # 清空输入框
+            visualizer.input_var.set("")
         return
 
     # ---------- help ----------
@@ -92,11 +105,14 @@ def process_command(visualizer, raw_text: str):
             "  search <word>              - 逐字符动画查找单词，例如：search apple\n"
             "  clear                      - 清空 Trie\n"
             "  help                       - 显示本帮助\n\n"
-            "提示：如果省略命令参数，DSL 会尝试使用输入框的内容作为参数（比如直接将输入框内的一串词作为 insert）。"
+            "提示：输入框会在命令执行后自动清空，以便下次输入。"
         )
         messagebox.showinfo("DSL 帮助", msg)
+        # 清空输入框
+        visualizer.input_var.set("")
         return
 
+    # ---------- 默认情况：当作 insert 处理 ----------
     tokens = _split_tokens(txt)
     if tokens:
         visualizer.input_var.set(", ".join(tokens))
@@ -104,10 +120,15 @@ def process_command(visualizer, raw_text: str):
             visualizer.start_insert_animated()
         except Exception as e:
             messagebox.showerror("错误", f"启动插入动画失败: {e}")
+        finally:
+            # 清空输入框
+            visualizer.input_var.set("")
         return
 
     # 兜底提示
     messagebox.showinfo("未识别命令", "支持命令：insert / search / clear / help，或直接输入单词列表（将视作 insert）。")
+    # 清空输入框
+    visualizer.input_var.set("")
 
 # 兼容性：DSL_utils 可能期望模块导出名为 `process`
 def process(visualizer, text):

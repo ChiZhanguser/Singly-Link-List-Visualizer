@@ -46,6 +46,41 @@ class AVLVisualizer:
         Button(frame, text="打开", bg="#6C9EFF", command=self.load_structure).pack(side=LEFT, padx=6)
         self.status_id = None
         
+        # 添加DSL命令输入框
+        dsl_frame = Frame(self.window, bg="#F7F4F8")
+        dsl_frame.pack(pady=(0,10), fill=X, padx=10)
+        
+        Label(dsl_frame, text="DSL命令:", bg="#F7F4F8", font=("Arial",11)).pack(side=LEFT, padx=6)
+        
+        self.dsl_var = StringVar()
+        dsl_entry = Entry(dsl_frame, textvariable=self.dsl_var, width=60, font=("Arial",11))
+        dsl_entry.pack(side=LEFT, padx=6, fill=X, expand=True)
+        dsl_entry.bind('<Return>', self.execute_dsl_command)  # 绑定回车键
+        
+        Button(dsl_frame, text="执行DSL", bg="#9C27B0", fg="white", command=self.execute_dsl_command).pack(side=LEFT, padx=6)
+        Button(dsl_frame, text="DSL帮助", bg="#673AB7", fg="white", command=self.show_dsl_help).pack(side=LEFT, padx=6)
+
+    def execute_dsl_command(self, event=None):
+        """执行DSL命令"""
+        dsl_text = self.dsl_var.get().strip()
+        if not dsl_text:
+            return
+            
+        try:
+            # 导入并处理DSL命令
+            from DSL_utils import avl_dsl
+            success = avl_dsl.process(self, dsl_text)
+            if success:
+                self.dsl_var.set("")  # 清空输入框
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showerror("DSL错误", f"执行DSL命令时出错: {str(e)}")
+
+    def show_dsl_help(self):
+        """显示DSL帮助"""
+        from avl import avl_dsl
+        avl_dsl._show_help()
+        
     def draw_instructions(self):
         self.canvas.delete("all")
         self.node_vis.clear()
