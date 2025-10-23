@@ -18,7 +18,7 @@ class BinaryTreeVisualizer:
         self.canvas_height = 520
         self.canvas = Canvas(self.window, bg="#F3F6FA", width=self.canvas_width, height=self.canvas_height,
                              relief=FLAT, bd=0, highlightthickness=0)
-        self.canvas.pack(pady=(15, 0), padx=15, fill=BOTH, expand=True)
+        self.canvas.pack(pady=(10, 0), padx=15, fill=BOTH, expand=True)
         self.root_node: Optional[TreeNode] = None
         self.node_items: List[int] = []
         self.node_to_rect: Dict[TreeNode, int] = {}
@@ -29,9 +29,12 @@ class BinaryTreeVisualizer:
         self.right_cell_w = self.node_w - self.left_cell_w - self.center_cell_w
         self.level_gap = 100
         self.input_var = StringVar()
+        self.dsl_var = StringVar()  # 新增：DSL输入框变量
         self.batch_queue: List[str] = []
         self.animating = False
         self.status_text_id: Optional[int] = None
+        self.dsl_history: List[str] = []
+        self.history_index = -1
         self.create_controls()
         self.draw_decorations()
         self.draw_instructions()
@@ -75,65 +78,101 @@ class BinaryTreeVisualizer:
         self.canvas.tag_lower("decor")
 
     def create_controls(self):
-        control_frame = Frame(self.window, bg="#F3F6FB", pady=10)
-        control_frame.pack(fill=X, padx=30, pady=(18, 6))
-        title_label = Label(control_frame, text="二叉树可视化工具", font=("Segoe UI", 16, "bold"),
+        # 创建主控制框架
+        main_control_frame = Frame(self.window, bg="#F3F6FB")
+        main_control_frame.pack(fill=X, padx=15, pady=10)
+        
+        # 标题
+        title_label = Label(main_control_frame, text="二叉树可视化工具", font=("Segoe UI", 16, "bold"),
                           bg="#F3F6FB", fg="#2D3748")
-        title_label.pack(pady=(0, 8))
-        input_frame = Frame(control_frame, bg="#F3F6FB")
+        title_label.pack(pady=(0, 10))
+        
+        # 输入框行
+        input_frame = Frame(main_control_frame, bg="#F3F6FB")
         input_frame.pack(fill=X, pady=5)
-
-        label = Label(input_frame, text="输入层序序列 / DSL:", font=("Segoe UI", 11),
-                     bg="#F3F6FB", fg="#4A5568")
-        label.pack(side=LEFT, padx=(0, 10))
-
-        entry = Entry(input_frame, textvariable=self.input_var, width=50, font=("Segoe UI", 11),
-                     relief=SOLID, bd=1, highlightthickness=1, highlightcolor="#4299E1",
-                     highlightbackground="#CBD5E0")
-        entry.pack(side=LEFT, padx=(0, 10), fill=X, expand=True)
-        entry.insert(0, "1,2,3,#,4,#,5")
-        # 绑定 Enter 键到 DSL 解析器
-        entry.bind("<Return>", self.process_dsl)
-
-        button_frame = Frame(control_frame, bg="#F3F6FB")
-        button_frame.pack(fill=X, pady=10)
+        
+        # 层序序列输入
+        level_order_label = Label(input_frame, text="层序序列:", font=("Segoe UI", 11),
+                                 bg="#F3F6FB", fg="#4A5568")
+        level_order_label.grid(row=0, column=0, sticky=W, padx=(0, 10))
+        
+        level_order_entry = Entry(input_frame, textvariable=self.input_var, width=50, font=("Segoe UI", 11),
+                                 relief=SOLID, bd=1, highlightthickness=1, highlightcolor="#4299E1",
+                                 highlightbackground="#CBD5E0")
+        level_order_entry.grid(row=0, column=1, sticky=EW, padx=(0, 20))
+        level_order_entry.insert(0, "1,2,3,#,4,#,5")
+        level_order_entry.bind("<Return>", lambda e: self.build_tree_from_input())
+        
+        # DSL输入
+        dsl_label = Label(input_frame, text="DSL命令:", font=("Segoe UI", 11),
+                         bg="#F3F6FB", fg="#4A5568")
+        dsl_label.grid(row=0, column=2, sticky=W, padx=(0, 10))
+        
+        dsl_entry = Entry(input_frame, textvariable=self.dsl_var, width=25, font=("Segoe UI", 11),
+                         relief=SOLID, bd=1, highlightthickness=1, highlightcolor="#9F7AEA",
+                         highlightbackground="#CBD5E0")
+        dsl_entry.grid(row=0, column=3, sticky=EW)
+        dsl_entry.insert(0, "help")
+        dsl_entry.bind("<Return>", self.process_dsl)
+        dsl_entry.bind("<Up>", self.show_prev_history)
+        dsl_entry.bind("<Down>", self.show_next_history)
+        
+        # 配置列权重
+        input_frame.columnconfigure(1, weight=1)
+        input_frame.columnconfigure(3, weight=1)
+        
+        # 按钮行 - 使用两行布局确保所有按钮可见
+        button_frame1 = Frame(main_control_frame, bg="#F3F6FB")
+        button_frame1.pack(fill=X, pady=5)
+        
+        button_frame2 = Frame(main_control_frame, bg="#F3F6FB")
+        button_frame2.pack(fill=X, pady=5)
 
         button_style = {"font": ("Segoe UI", 10), "width": 12, "height": 1,
                        "relief": FLAT, "bd": 0, "cursor": "hand2"}
 
-        build_btn = Button(button_frame, text="一步构建", **button_style,
+        # 第一行按钮
+        build_btn = Button(button_frame1, text="一步构建", **button_style,
                           bg="#48BB78", fg="white", activebackground="#38A169",
                           command=self.build_tree_from_input)
         build_btn.pack(side=LEFT, padx=5)
 
-        animate_btn = Button(button_frame, text="逐步构建", **button_style,
+        animate_btn = Button(button_frame1, text="逐步构建", **button_style,
                             bg="#4299E1", fg="white", activebackground="#3182CE",
                             command=self.start_animated_build)
         animate_btn.pack(side=LEFT, padx=5)
 
-        clear_btn = Button(button_frame, text="清空画布", **button_style,
+        clear_btn = Button(button_frame1, text="清空画布", **button_style,
                           bg="#ED8936", fg="white", activebackground="#DD6B20",
                           command=self.clear_canvas)
         clear_btn.pack(side=LEFT, padx=5)
 
-        back_btn = Button(button_frame, text="返回主界面", **button_style,
+        back_btn = Button(button_frame1, text="返回主界面", **button_style,
                          bg="#718096", fg="white", activebackground="#4A5568",
                          command=self.back_to_main)
         back_btn.pack(side=LEFT, padx=5)
 
-        save_btn = Button(button_frame, text="保存树", **button_style,
+        # 第二行按钮
+        save_btn = Button(button_frame2, text="保存树", **button_style,
                           bg="#6C9EFF", fg="white", activebackground="#4C6EF5",
                           command=self.save_tree)
-        save_btn.pack(side=LEFT, padx=6)
+        save_btn.pack(side=LEFT, padx=5)
 
-        load_btn = Button(button_frame, text="打开树", **button_style,
+        load_btn = Button(button_frame2, text="打开树", **button_style,
                           bg="#6C9EFF", fg="white", activebackground="#4C6EF5",
                           command=self.load_tree)
-        load_btn.pack(side=LEFT, padx=6)
+        load_btn.pack(side=LEFT, padx=5)
+        
+        dsl_help_btn = Button(button_frame2, text="DSL帮助", **button_style,
+                         bg="#9F7AEA", fg="white", activebackground="#805AD5",
+                         command=self.show_dsl_help)
+        dsl_help_btn.pack(side=LEFT, padx=5)
 
-        hint_label = Label(control_frame, text="提示: 使用逗号或空格分隔节点，#表示空节点。按 Enter 可执行 DSL（如：create 1 # 2 3 # 3 4 5 / clear / animate ...）",
+        # 提示信息
+        hint_label = Label(main_control_frame, 
+                          text="提示: 使用逗号或空格分隔节点，#表示空节点。按 Enter 可执行 DSL（如：create 1 # 2 3 # 3 4 5 / clear / animate ...）",
                           font=("Segoe UI", 9), bg="#F3F6FB", fg="#718096", wraplength=900, justify=LEFT)
-        hint_label.pack(pady=(5, 0))\
+        hint_label.pack(pady=(5, 0))
 
     def _ensure_tree_folder(self) -> str:
         if hasattr(storage, "ensure_save_subdir"):
@@ -153,6 +192,9 @@ class BinaryTreeVisualizer:
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             title="保存树到文件"
         )
+        if not filepath:  # 用户取消了保存
+            return
+            
         tree_dict = storage.tree_to_dict(self.root_node) if hasattr(storage, "tree_to_dict") else {}
         metadata = {
             "saved_at": datetime.now().isoformat(),
@@ -171,6 +213,9 @@ class BinaryTreeVisualizer:
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             title="从文件加载二叉树"
         )
+        if not filepath:  # 用户取消了加载
+            return
+            
         with open(filepath, "r", encoding="utf-8") as f:
             obj = json.load(f)
         tree_dict = obj.get("tree", {})
@@ -484,14 +529,71 @@ class BinaryTreeVisualizer:
         self.window.destroy()
 
     # ----------------------------
-    # DSL 支持：在输入框按回车可执行
-    # 支持命令：create/build <序列>（现在 create 使用逐步动画）、
-    #            animate <序列>、clear/reset、help
+    # DSL 历史记录功能
     # ----------------------------
+    def add_to_history(self, command: str):
+        """添加命令到历史记录"""
+        if command and (not self.dsl_history or self.dsl_history[-1] != command):
+            self.dsl_history.append(command)
+            self.history_index = len(self.dsl_history)
+
+    def show_prev_history(self, event=None):
+        """显示上一条历史命令"""
+        if not self.dsl_history:
+            return
+        if self.history_index > 0:
+            self.history_index -= 1
+            self.dsl_var.set(self.dsl_history[self.history_index])
+
+    def show_next_history(self, event=None):
+        """显示下一条历史命令"""
+        if not self.dsl_history:
+            return
+        if self.history_index < len(self.dsl_history) - 1:
+            self.history_index += 1
+            self.dsl_var.set(self.dsl_history[self.history_index])
+        else:
+            self.history_index = len(self.dsl_history)
+            self.dsl_var.set("")
+
+    # ----------------------------
+    # 简化的 DSL 支持
+    # ----------------------------
+    def show_dsl_help(self):
+        """显示DSL帮助信息"""
+        help_text = """
+DSL (Domain Specific Language) 命令帮助：
+
+基础命令：
+  create <序列>    - 逐步动画按层序构建树
+  build <序列>     - 一步构建树
+  animate <序列>   - 逐步动画构建树
+
+遍历命令：
+  preorder         - 显示前序遍历结果
+  inorder          - 显示中序遍历结果  
+  postorder        - 显示后序遍历结果
+  levelorder       - 显示层序遍历结果
+
+实用命令：
+  clear / reset    - 清空画布
+  height           - 计算并显示树的高度
+  count            - 计算并显示节点数量
+
+说明：
+  - 序列支持用逗号或空格分隔节点，使用 '#' 表示空节点
+  - 按上下箭头键可浏览命令历史记录
+        """
+        messagebox.showinfo("DSL 命令帮助", help_text)
+
     def process_dsl(self, event=None):
-        raw = (self.input_var.get() or "").strip()
+        raw = (self.dsl_var.get() or "").strip()  # 改为使用dsl_var
         if not raw:
             return
+        
+        # 添加到历史记录
+        self.add_to_history(raw)
+        
         # 将命令拆分：允许用空格或逗号分隔节点，命令与其参数也可用空格分隔
         parts = [p for p in re.split(r'[\s,]+', raw) if p != ""]
         if not parts:
@@ -500,46 +602,153 @@ class BinaryTreeVisualizer:
         args = parts[1:]
 
         try:
-            # ===== 改动点：create 使用逐步动画构建（等同于 animate）
-            if cmd in ("create", "build"):
+            # 🌳 树构建命令
+            if cmd in ("create", "animate"):
                 if not args:
                     messagebox.showinfo("用法", "示例: create 1 # 2 3 # 3 4 5 （用空格或逗号分隔，# 表示空）")
                     return
-                # 将参数拼回字符串放入 input_var，然后调用逐步动画构建
                 seq_text = " ".join(args)
-                self.input_var.set(seq_text)
-                # 启动动画（create 现在为逐步动画构建）
+                self.input_var.set(seq_text)  # 设置到层序序列输入框
                 self.start_animated_build()
-            elif cmd in ("animate", "animated", "start"):
-                # animate 后面可以跟序列（覆盖输入框），也可以直接使用当前输入框剩余内容
-                if args:
-                    seq_text = " ".join(args)
-                    self.input_var.set(seq_text)
-                self.start_animated_build()
+                
+            elif cmd == "build":
+                if not args:
+                    messagebox.showinfo("用法", "示例: build 1 # 2 3 # 3 4 5")
+                    return
+                seq_text = " ".join(args)
+                self.input_var.set(seq_text)  # 设置到层序序列输入框
+                self.build_tree_from_input()
+
+            # 📊 遍历命令
+            elif cmd == "preorder":
+                self.show_traversal("preorder")
+            elif cmd == "inorder":
+                self.show_traversal("inorder")
+            elif cmd == "postorder":
+                self.show_traversal("postorder")
+            elif cmd == "levelorder":
+                self.show_traversal("levelorder")
+
+            # 🎨 显示控制命令
             elif cmd in ("clear", "reset"):
                 self.clear_canvas()
                 self.update_status("DSL: clear 执行完成", "#4299E1")
+                
+            elif cmd == "height":
+                self.show_tree_height()
+                
+            elif cmd == "count":
+                self.show_node_count()
+
+            # ❓ 帮助命令
             elif cmd in ("help", "?"):
-                msg = ("DSL 帮助：\n"
-                       "  create <序列>   - 逐步动画按层序构建（示例：create 1 # 2 3 # 3 4 5）\n"
-                       "  animate <序列>  - 逐步动画构建（等同于 create）\n"
-                       "  clear / reset    - 清空画布\n"
-                       "  help / ?         - 显示此帮助\n\n"
-                       "说明：序列支持用逗号或空格分隔节点，使用 '#' 表示空节点。")
-                messagebox.showinfo("DSL 帮助", msg)
+                self.show_dsl_help()
+                
+            elif cmd == "history":
+                self.show_command_history()
+
             else:
-                # 兼容老的直接层序输入（没有命令时直接构建为动画）
-                if re.match(r'^[\d#-]+$', cmd) or cmd != "":
-                    seq = parts
-                    self.input_var.set(" ".join(seq))
-                    self.start_animated_build()
-                else:
-                    messagebox.showinfo("未识别命令", "支持命令：create / animate / clear / help，或直接输入层序序列。")
+                messagebox.showinfo("未识别命令", f"未知命令: {cmd}\n输入 'help' 查看可用命令")
+
         except Exception as e:
             messagebox.showerror("DSL 执行错误", f"命令执行失败: {e}")
             self.update_status("DSL 错误", "#E53E3E")
 
+    # ----------------------------
+    # DSL 命令的具体实现
+    # ----------------------------
+    
+    def show_tree_height(self):
+        """显示树的高度"""
+        height = self._get_tree_height(self.root_node)
+        messagebox.showinfo("树高度", f"树的高度为: {height}")
+        self.update_status(f"树高度: {height}", "#4299E1")
+
+    def _get_tree_height(self, node: TreeNode) -> int:
+        """计算树高度"""
+        if not node:
+            return 0
+        return 1 + max(self._get_tree_height(node.left), 
+                      self._get_tree_height(node.right))
+
+    def show_node_count(self):
+        """显示节点数量"""
+        count = self._count_nodes(self.root_node)
+        messagebox.showinfo("节点计数", f"节点总数为: {count}")
+        self.update_status(f"节点数: {count}", "#4299E1")
+
+    def _count_nodes(self, node: TreeNode) -> int:
+        """计算节点数量"""
+        if not node:
+            return 0
+        return 1 + self._count_nodes(node.left) + self._count_nodes(node.right)
+
+    def show_traversal(self, traversal_type: str):
+        """显示遍历结果"""
+        if not self.root_node:
+            messagebox.showinfo("遍历", "树为空")
+            return
+            
+        result = []
+        if traversal_type == "preorder":
+            self._preorder_traversal(self.root_node, result)
+        elif traversal_type == "inorder":
+            self._inorder_traversal(self.root_node, result)
+        elif traversal_type == "postorder":
+            self._postorder_traversal(self.root_node, result)
+        elif traversal_type == "levelorder":
+            result = self._levelorder_traversal(self.root_node)
+            
+        result_str = " ".join(map(str, result))
+        messagebox.showinfo(f"{traversal_type}遍历", f"遍历结果:\n{result_str}")
+        self.update_status(f"{traversal_type}遍历完成", "#4299E1")
+
+    def _preorder_traversal(self, node: TreeNode, result: List):
+        if node:
+            result.append(node.val)
+            self._preorder_traversal(node.left, result)
+            self._preorder_traversal(node.right, result)
+
+    def _inorder_traversal(self, node: TreeNode, result: List):
+        if node:
+            self._inorder_traversal(node.left, result)
+            result.append(node.val)
+            self._inorder_traversal(node.right, result)
+
+    def _postorder_traversal(self, node: TreeNode, result: List):
+        if node:
+            self._postorder_traversal(node.left, result)
+            self._postorder_traversal(node.right, result)
+            result.append(node.val)
+
+    def _levelorder_traversal(self, node: TreeNode) -> List:
+        if not node:
+            return []
+        result = []
+        queue = [node]
+        while queue:
+            current = queue.pop(0)
+            result.append(current.val)
+            if current.left:
+                queue.append(current.left)
+            if current.right:
+                queue.append(current.right)
+        return result
+
+    def show_command_history(self):
+        """显示命令历史记录"""
+        if not self.dsl_history:
+            messagebox.showinfo("命令历史", "历史记录为空")
+            return
+            
+        history_text = "\n".join([f"{i+1}. {cmd}" for i, cmd in enumerate(self.dsl_history[-10:])])
+        messagebox.showinfo("命令历史 (最近10条)", history_text)
+
 
 if __name__ == '__main__':
-    window = Tk();window.title("二叉树可视化工具");window.geometry("1350x780");window.configure(bg="#F3F6FA")
-    BinaryTreeVisualizer(window);window.mainloop()
+    window = Tk()
+    window.title("二叉树可视化工具")
+    window.geometry("1350x800")  # 增加窗口高度
+    window.configure(bg="#F3F6FA")
+    BinaryTreeVisualizer(window)
+    window.mainloop()

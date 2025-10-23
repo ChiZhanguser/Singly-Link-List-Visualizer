@@ -2,6 +2,7 @@ import os
 import json
 import requests
 from typing import Any, Generator, Optional, List, Dict, Union
+import base64
 
 class DoubaoClient:
     def __init__(self, api_key: str = None, api_base: str = None, model: str = None, timeout: int = 60):
@@ -89,3 +90,57 @@ class DoubaoClient:
             return str(resp_json)[:2000]
         except Exception:
             return str(resp_json)[:2000]
+    def send_multimodal_message(self, text: str, image_path: str = None, temperature: Optional[float] = None) -> str:
+        """支持图片和文本的多模态消息发送"""
+        messages = []
+        
+        # 构建消息内容
+        content = []
+        
+        # 添加文本部分
+        if text:
+            content.append({
+                "type": "text",
+                "text": text
+            })
+        
+        # 添加图片部分
+        if image_path and os.path.exists(image_path):
+            try:
+                # 读取并编码图片
+                with open(image_path, "rb") as image_file:
+                    base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+                
+                content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{base64_image}"
+                    }
+                })
+            except Exception as e:
+                print(f"图片处理错误: {e}")
+                # 如果图片处理失败，只发送文本
+                if not text:
+                    content.append({
+                        "type": "text",
+                        "text": "图片处理失败，请描述数据结构"
+                    })
+        
+        if not content:
+            raise ValueError("必须提供文本或图片内容")
+            
+        messages.append({
+            "role": "user",
+            "content": content
+        })
+        
+        payload = {
+            "model": self.model,
+            "messages": messages
+        }
+        
+        if temperature is not None:
+            payload["temperature"] = float(temperature)
+
+        resp_json = self._post(payload, timeout_read=None)
+        return self._extract_text(resp_json)

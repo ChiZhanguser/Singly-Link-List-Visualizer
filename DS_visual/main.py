@@ -2,7 +2,10 @@ from tkinter import *
 from tkinter import ttk, messagebox
 import traceback, sys
 import random, math, time
-
+from utils.image_utils import ImageProcessor
+import tempfile
+import shutil
+import re
 
 def try_import(name, pkg):
     try:
@@ -24,7 +27,6 @@ CircularQueueVisualizer = try_import("CircularQueueVisualizer", "circular_queue.
 TrieVisualizer = try_import("TrieVisualizer", "trie.trie_visual")
 BPlusVisualizer = try_import("BPlusVisualizer", "bplustree.bplustree_visual")
 HashtableVisualizer = try_import("HashtableVisualizer", "hashtable.hashtable_visual")
-
 ChatWindow = try_import("ChatWindow", "llm.chat_window")
 
 
@@ -160,6 +162,14 @@ class MainWindow:
                         command=self._open_chat)
         ai_btn.pack(side=RIGHT)
 
+        # 图片上传按钮
+        image_btn = Button(header_right, text="📁 上传图片", fg="#ffffff", bg="#10B981",
+                          activebackground="#34D399", activeforeground="#ffffff",
+                          relief=FLAT, padx=20, pady=8, cursor="hand2",
+                          font=("Segoe UI", 10, "bold"),
+                          command=self._open_image_upload)
+        image_btn.pack(side=RIGHT, padx=(0, 10))
+
         # 添加顶部装饰条
         decoration_frame = Frame(topbar, bg="#1FA2FF", height=3)
         decoration_frame.pack(fill=X, side=BOTTOM)
@@ -192,6 +202,361 @@ class MainWindow:
 
         # 当前激活的数据结构 key（例如 "linked_list"）
         self.current_structure = None
+
+    def _open_image_upload(self):
+        """打开图片上传窗口"""
+        try:
+            # 创建图片上传窗口
+            self.image_window = Toplevel(self.root)
+            self.image_window.title("图片识别 - 数据结构可视化")
+            self.image_window.geometry("600x700")
+            self.image_window.configure(bg="#f8fafc")
+            self.image_window.resizable(False, False)
+            
+            # 居中显示
+            self._center_window(self.image_window, 600, 700)
+            
+            # 初始化图片处理器
+            self.image_processor = ImageProcessor(self.image_window)
+            
+            # 创建界面
+            self._create_image_upload_ui()
+            
+        except Exception as e:
+            messagebox.showerror("错误", f"打开图片上传窗口失败：{e}")
+    
+    def _center_window(self, window, width, height):
+        """居中显示窗口"""
+        screen_width = window.winfo_screenwidth()
+        screen_height = window.winfo_screenheight()
+        
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        
+        window.geometry(f"{width}x{height}+{x}+{y}")
+        
+    def _create_image_upload_ui(self):
+        """创建图片上传界面"""
+        # 标题
+        title_frame = Frame(self.image_window, bg="#f8fafc")
+        title_frame.pack(fill=X, padx=20, pady=20)
+        
+        title_label = Label(title_frame, text="图片识别数据结构", 
+                          font=("Segoe UI", 18, "bold"), bg="#f8fafc", fg="#1f2937")
+        title_label.pack()
+        
+        subtitle_label = Label(title_frame, text="上传包含数据结构的图片，AI将自动识别并生成可视化", 
+                             font=("Segoe UI", 10), bg="#f8fafc", fg="#6b7280")
+        subtitle_label.pack(pady=(5, 0))
+        
+        # 添加强调说明
+        emphasis_frame = Frame(self.image_window, bg="#d1ecf1", relief=SOLID, bd=1)
+        emphasis_frame.pack(fill=X, padx=40, pady=10)
+        
+        emphasis_label = Label(emphasis_frame, 
+                             text="💡 重要提示：请确保图片清晰显示数据结构（如链表节点和连接关系），AI将自动生成创建命令", 
+                             font=("Segoe UI", 10, "bold"), bg="#d1ecf1", fg="#0c5460", wraplength=500)
+        emphasis_label.pack(padx=10, pady=8)
+        
+        # 上传区域
+        upload_frame = Frame(self.image_window, bg="#e5e7eb", relief=SOLID, bd=1)
+        upload_frame.pack(fill=X, padx=40, pady=20, ipady=20)
+        
+        upload_btn = Button(upload_frame, text="选择图片文件", 
+                          font=("Segoe UI", 12, "bold"), bg="#3b82f6", fg="white",
+                          relief=FLAT, padx=20, pady=10, cursor="hand2",
+                          command=self._handle_image_selection)
+        upload_btn.pack(pady=10)
+        
+        upload_hint = Label(upload_frame, text="支持 JPG, PNG, GIF, BMP 格式", 
+                          font=("Segoe UI", 9), bg="#e5e7eb", fg="#6b7280")
+        upload_hint.pack()
+        
+        # 预览区域
+        self.preview_frame = Frame(self.image_window, bg="#f8fafc")
+        self.preview_frame.pack(fill=BOTH, expand=True, padx=40, pady=10)
+        
+        # 文本描述区域
+        desc_frame = Frame(self.image_window, bg="#f8fafc")
+        desc_frame.pack(fill=X, padx=40, pady=10)
+        
+        desc_label = Label(desc_frame, text="图片描述（可选，可帮助AI更准确识别）:", 
+                         font=("Segoe UI", 10, "bold"), bg="#f8fafc", fg="#374151")
+        desc_label.pack(anchor=W)
+        
+        self.desc_text = Text(desc_frame, height=3, font=("Segoe UI", 10), 
+                            relief=SOLID, bd=1, wrap=WORD)
+        self.desc_text.pack(fill=X, pady=(5, 0))
+        self.desc_text.insert("1.0", "例如：这是一个包含1,2,3的链表")
+        
+        # 按钮区域
+        btn_frame = Frame(self.image_window, bg="#f8fafc")
+        btn_frame.pack(fill=X, padx=40, pady=20)
+        
+        analyze_btn = Button(btn_frame, text="识别并生成", 
+                           font=("Segoe UI", 12, "bold"), bg="#10B981", fg="white",
+                           relief=FLAT, padx=30, pady=10, cursor="hand2",
+                           command=self._analyze_image)
+        analyze_btn.pack(side=RIGHT, padx=(10, 0))
+        
+        clear_btn = Button(btn_frame, text="清除", 
+                         font=("Segoe UI", 11), bg="#6b7280", fg="white",
+                         relief=FLAT, padx=20, pady=10, cursor="hand2",
+                         command=self._clear_image)
+        clear_btn.pack(side=RIGHT)
+    
+    def _handle_image_selection(self):
+        """处理图片选择"""
+        if self.image_processor.select_image():
+            # 图片选择成功
+            pass
+    
+    def _clear_image(self):
+        """清除已选择的图片"""
+        self.image_processor.clear_preview()
+        self.desc_text.delete("1.0", END)
+        self.desc_text.insert("1.0", "例如：这是一个包含1,2,3的链表")
+    
+    def _analyze_image(self):
+        """分析图片并生成DSL命令"""
+        image_path = self.image_processor.get_image_path()
+        description = self.desc_text.get("1.0", END).strip()
+        
+        if not image_path:
+            messagebox.showwarning("警告", "请先选择图片文件")
+            return
+        
+        try:
+            # 显示加载状态
+            self.image_window.config(cursor="watch")
+            
+            # 初始化LLM客户端
+            from llm.doubao_client import DoubaoClient
+            client = DoubaoClient()
+            
+            # 更具体和严格的系统提示
+            system_prompt = (
+                "你是一个数据结构可视化助手。你的唯一任务是分析用户上传的图片，识别其中的数据结构，并生成相应的DSL命令。\n\n"
+                "重要规则：\n"
+                "1. 只返回DSL命令，不要有任何解释、描述、分析或其他文本\n"
+                "2. 不要使用markdown格式\n"
+                "3. 不要添加任何前缀或后缀\n"
+                "4. 不要返回Python代码或对象表示\n"
+                "5. 如果无法识别，返回 'error'\n\n"
+                "DSL命令格式（只使用以下格式）：\n"
+                "- 清空：clear\n"
+                "- 链表批量创建：create 1,2,3\n"
+                "- 链表插入：insert 5 或 insert 5 at 2\n"
+                "- 链表删除：delete first 或 delete last 或 delete 2\n"
+                "- 栈操作：push 5 或 pop\n"
+                "- 队列操作：enqueue 5 或 dequeue\n"
+                "- 树操作：insert 5（用于二叉搜索树）\n"
+                "- 搜索：search 5\n\n"
+                "示例：\n"
+                "- 如果图片显示链表包含 1->2->3，则返回 'create 1,2,3'\n"
+                "- 如果图片显示栈顶有5，下面有3,1，则返回 'create 1,3,5'\n"
+                "- 如果图片显示二叉树包含1,2,3，则返回 'create 1,2,3'\n\n"
+                "现在请严格按照上述规则，只返回DSL命令："
+            )
+            
+            # 用户描述文本 - 更明确的指令
+            user_prompt = "分析这张图片中的数据结构，只返回DSL命令，不要任何解释、代码或对象表示。"
+            if description and description != "例如：这是一个包含1,2,3的链表":
+                user_prompt = f"{description} 只返回DSL命令，不要任何解释、代码或对象表示。"
+            
+            # 发送多模态请求
+            response = client.send_multimodal_message(
+                text=user_prompt,
+                image_path=image_path,
+                temperature=0.0  # 使用最低温度以获得确定性输出
+            )
+            
+            print(f"图片识别原始响应: {response}")
+            
+            # 更严格的命令清理
+            dsl_command = self._clean_dsl_response(response)
+            if not dsl_command or dsl_command.lower() == 'error':
+                messagebox.showerror("错误", "无法识别图片中的数据结构")
+                # 恢复光标状态
+                self.image_window.config(cursor="")
+                return
+            
+            print(f"清理后的DSL命令: {dsl_command}")
+            
+            # 执行DSL命令
+            self._execute_dsl_command_from_image(dsl_command)
+            
+            # 恢复光标状态
+            self.image_window.config(cursor="")
+            
+            # 关闭图片窗口
+            self.image_window.destroy()
+            messagebox.showinfo("成功", f"已识别并执行命令: {dsl_command}")
+            
+        except Exception as e:
+            messagebox.showerror("错误", f"图片识别失败: {str(e)}")
+            print(f"图片识别错误: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # 确保在异常情况下也恢复光标状态
+            try:
+                self.image_window.config(cursor="")
+            except:
+                pass  # 如果窗口已经不存在，忽略错误
+        
+    def _clean_dsl_response(self, response):
+        """清理DSL响应，提取纯命令"""
+        if not response:
+            return ""
+        
+        # 移除可能的markdown代码块
+        cleaned = response.strip()
+        if "```" in cleaned:
+            # 提取代码块内的内容
+            code_blocks = re.findall(r'```(?:\w+)?\s*(.*?)\s*```', cleaned, re.DOTALL)
+            if code_blocks:
+                cleaned = code_blocks[0].strip()
+        
+        # 检查是否是Python对象表示（如LinkedList、Node等）
+        if any(keyword in cleaned for keyword in ['LinkedList', 'Node', 'data=', 'next=', 'head=']):
+            # 尝试从对象表示中提取数字
+            numbers = re.findall(r'\b\d+\b', cleaned)
+            if numbers:
+                return f"create {','.join(numbers)}"
+        
+        # 移除常见的非命令文本
+        unwanted_prefixes = [
+            "dsl命令:", "命令:", "生成的dsl命令:", "根据图片分析",
+            "这个图示", "图片显示", "数据结构", "链表", "栈", "队列", "树",
+            "LinkedList", "Node"
+        ]
+        
+        for prefix in unwanted_prefixes:
+            if cleaned.lower().startswith(prefix.lower()):
+                cleaned = cleaned[len(prefix):].strip()
+        
+        # 只保留看起来像DSL命令的行
+        lines = cleaned.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and not any(word in line.lower() for word in ['分析', '解释', '说明', '示例', '图片', '结构', 'python', '代码']):
+                # 检查是否包含DSL命令关键字
+                dsl_keywords = ['create', 'insert', 'delete', 'push', 'pop', 'enqueue', 'dequeue', 'clear', 'search']
+                if any(keyword in line.lower() for keyword in dsl_keywords):
+                    return line
+        
+        # 如果没有找到明确命令，尝试手动解析链表结构
+        parsed_command = self._parse_linked_list_from_response(cleaned)
+        if parsed_command:
+            return parsed_command
+        
+        # 如果还是没有，返回原始响应的第一行
+        return lines[0].strip() if lines else ""
+    
+    def _parse_linked_list_from_response(self, response):
+        """从响应中手动解析链表结构"""
+        try:
+            # 尝试匹配常见的链表表示格式
+            patterns = [
+                r'LinkedList\(.*?(\d+).*?(\d+).*?(\d+)',  # LinkedList包含数字
+                r'(\d+)\s*->\s*(\d+)\s*->\s*(\d+)',      # 1->2->3格式
+                r'节点\s*(\d+).*?节点\s*(\d+).*?节点\s*(\d+)',  # 中文节点描述
+                r'数据\s*(\d+).*?数据\s*(\d+).*?数据\s*(\d+)'   # 数据字段
+            ]
+            
+            for pattern in patterns:
+                matches = re.findall(pattern, response)
+                if matches and len(matches[0]) >= 3:
+                    numbers = matches[0][:3]  # 取前三个数字
+                    return f"create {','.join(numbers)}"
+            
+            # 如果没有匹配到特定格式，尝试提取所有数字
+            numbers = re.findall(r'\b\d+\b', response)
+            if len(numbers) >= 2:  # 至少有两个数字才认为是有效的链表
+                return f"create {','.join(numbers)}"
+            
+            return None
+        except Exception as e:
+            print(f"解析链表响应失败: {e}")
+            return None
+    
+    def _validate_dsl_command(self, command):
+        """验证DSL命令格式"""
+        if not command:
+            return False
+        
+        command_lower = command.lower()
+        
+        # 检查是否包含有效的DSL关键字
+        dsl_keywords = ['create', 'insert', 'delete', 'push', 'pop', 'enqueue', 'dequeue', 'clear', 'search']
+        
+        return any(keyword in command_lower for keyword in dsl_keywords)
+    
+    def _execute_dsl_command_from_image(self, dsl_command):
+        """执行从图片识别得到的DSL命令"""
+        try:
+            # 验证命令格式
+            if not self._validate_dsl_command(dsl_command):
+                messagebox.showerror("错误", f"无效的DSL命令格式: {dsl_command}")
+                return
+                
+            print(f"从图片识别的DSL命令: {dsl_command}")
+            
+            # 获取当前可视化实例
+            current_frame = self.notebook.select()
+            found_instance = False
+
+            for key, (ctor, frame, instance, title) in self.tabs.items():
+                if str(frame) == str(current_frame) and instance:
+                    found_instance = True
+                    print(f"找到可视化实例: {key}")
+                    
+                    # 使用DSL处理函数
+                    from DSL_utils import process_command
+                    try:
+                        process_command(instance, dsl_command)
+                        print(f"DSL命令执行成功: {dsl_command}")
+                        # 更新状态栏
+                        self.status_label.config(text=f"图片识别执行: {dsl_command}")
+                    except Exception as e:
+                        print(f"DSL处理错误: {e}")
+                        # 尝试使用程序化方法
+                        self._try_programmatic_creation(instance, dsl_command)
+
+            if not found_instance:
+                messagebox.showerror("错误", "未找到活动的数据结构实例")
+
+        except Exception as e:
+            messagebox.showerror("错误", f"执行失败: {str(e)}")
+            print(f"执行错误: {str(e)}")
+    
+    def _try_programmatic_creation(self, instance, dsl_command):
+        """尝试使用程序化方法创建数据结构"""
+        try:
+            command_lower = dsl_command.lower()
+            
+            if command_lower.startswith('create'):
+                # 提取数值
+                numbers = re.findall(r'\d+', dsl_command)
+                if numbers:
+                    # 检查实例是否有 programmatic_insert_last 方法
+                    if hasattr(instance, 'programmatic_insert_last'):
+                        # 清空现有数据
+                        if hasattr(instance, 'clear_visualization'):
+                            instance.clear_visualization()
+                        
+                        # 批量插入
+                        for num in numbers:
+                            instance.programmatic_insert_last(num)
+                        print(f"程序化创建成功: {numbers}")
+                    elif hasattr(instance, 'create_list_from_string'):
+                        # 使用批量创建方法
+                        values_str = ','.join(numbers)
+                        instance.batch_entry_var.set(values_str)
+                        instance.create_list_from_string()
+                        print(f"批量创建成功: {values_str}")
+        except Exception as e:
+            print(f"程序化创建失败: {e}")
 
     def _on_theme_change(self, _evt=None):
         try:
