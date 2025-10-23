@@ -32,7 +32,7 @@ class HuffmanVisualizer:
                         font=("Arial", 10))
         style.configure("HeapTree.Treeview.Heading", font=("Arial", 10, "bold"), background="#E6EEF8")
         style.map("HeapTree.Treeview", background=[('selected', '#FFD59E')])
-        label = Label(right_frame, text="当前堆的快照（按权值排序）", bg="#F0F4F8", fg="#0B2545", font=("Arial", 11, "bold"))
+        label = Label(right_frame, text="当前堆的状态（按权值排序）", bg="#F0F4F8", fg="#0B2545", font=("Arial", 11, "bold"))
         label.pack(padx=8, pady=(6,2), anchor="nw")
         columns = ("before", "after")
         self.heap_tree = ttk.Treeview(right_frame, columns=columns, show="headings", style="HeapTree.Treeview", height=20)

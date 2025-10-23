@@ -13,11 +13,26 @@ from binary_tree.bst.bst_ui import draw_instructions, create_controls
 class BSTVisualizer:
     def __init__(self, root):
         self.window = root
-        self.window = root
         self.window.title("二叉搜索树（BST）可视化")
         self.window.config(bg="#F7F9FB")
         self.canvas_width = 1250
         self.canvas_height = 560
+        
+        # 创建顶部框架用于状态和引导信息
+        self.top_frame = Frame(self.window, bg="#F7F9FB")
+        self.top_frame.pack(fill=X, padx=10, pady=5)
+        
+        # 状态标签
+        self.status_label = Label(self.top_frame, text="就绪", font=("Arial", 10, "bold"), 
+                                 fg="darkgreen", bg="#F7F9FB")
+        self.status_label.pack(side=TOP, anchor=NE)
+        
+        # 引导信息标签 - 更加醒目
+        self.guide_label = Label(self.top_frame, text="", font=("Arial", 11, "bold"), 
+                                fg="#D35400", bg="#FFF9C4", relief=SOLID, bd=1,
+                                wraplength=1200, justify=CENTER, height=2)
+        self.guide_label.pack(side=TOP, fill=X, pady=(5, 0))
+        
         self.canvas = Canvas(self.window, bg="white", width=self.canvas_width, height=self.canvas_height, relief=RAISED, bd=8)
         self.canvas.pack(pady=(10,0))
         self.dsl_var = StringVar()
@@ -37,11 +52,54 @@ class BSTVisualizer:
 
         # 是否正在执行动画
         self.animating = False
+        # 是否启用分步引导模式
+        self.guide_mode = BooleanVar(value=True)  # 默认启用引导模式
 
         # 输入框
         self.input_var = StringVar()
         create_controls(self)
         draw_instructions(self)
+        
+        # 添加引导模式复选框
+        self._add_guide_mode_checkbox()
+        
+    def _add_guide_mode_checkbox(self):
+        """添加引导模式复选框"""
+        guide_frame = Frame(self.window, bg="#F7F9FB")
+        guide_frame.pack(pady=5)
+        Checkbutton(guide_frame, text="启用分步引导模式", variable=self.guide_mode, 
+                   bg="#F7F9FB", font=("Arial", 10), command=self._on_guide_mode_changed).pack(side=LEFT, padx=5)
+        
+    def _on_guide_mode_changed(self):
+        """引导模式改变时的回调"""
+        if not self.guide_mode.get():
+            self.guide_label.config(text="", bg="#F7F9FB")
+        else:
+            self.guide_label.config(bg="#FFF9C4")
+        
+    def update_guide(self, text: str):
+        """更新引导文本"""
+        if not self.guide_mode.get():
+            return
+            
+        # 使用Label显示引导文本，更加醒目
+        self.guide_label.config(text=text)
+        
+        # 同时在画布底部也显示（可选）
+        if hasattr(self, 'guide_text_id') and self.guide_text_id:
+            self.canvas.delete(self.guide_text_id)
+        self.guide_text_id = self.canvas.create_text(
+            self.canvas_width/2, self.canvas_height - 20, 
+            text=text, font=("Arial", 11, "bold"), 
+            fill="#D35400", width=self.canvas_width-40
+        )
+    
+    def clear_guide(self):
+        """清除引导文本"""
+        self.guide_label.config(text="")
+        if hasattr(self, 'guide_text_id') and self.guide_text_id:
+            self.canvas.delete(self.guide_text_id)
+            self.guide_text_id = None
         
     def process_dsl(self, event=None):
         text = (self.dsl_var.get() or "").strip()
@@ -54,10 +112,14 @@ class BSTVisualizer:
         self.dsl_var.set("")
     
     def update_status(self, text: str):
+        """更新状态文本"""
+        self.status_label.config(text=text)
+        # 同时在画布上也显示状态
         if not self.status_text_id:
             self.status_text_id = self.canvas.create_text(self.canvas_width-10, 10, anchor="ne", text=text, font=("Arial",12,"bold"), fill="darkgreen")
         else:
             self.canvas.itemconfig(self.status_text_id, text=text)
+    
     def _ensure_tree_folder(self) -> str:
         if hasattr(storage, "ensure_save_subdir"):
             return storage.ensure_save_subdir("bst")
@@ -178,6 +240,7 @@ class BSTVisualizer:
         v2 = self.canvas.create_line(x2, top, x2, bottom, width=1)
         self.node_items += [v1, v2]
         self.canvas.create_text((x1+x2)/2, (top+bottom)/2, text=str(node.val), font=("Arial",12,"bold"))
+        
     def parse_value(self, s: str):
         s = s.strip()
         try:
@@ -193,13 +256,11 @@ class BSTVisualizer:
         if not text:
             messagebox.showinfo("提示", "请输入值或逗号分隔的值")
             return
-        # 先用 s.strip() 过滤空白，再 parse_value，不要在 parse_value 返回值上调用 .strip()
         items = [self.parse_value(s) for s in text.split(",") if s.strip() != ""]
         for v in items:
             self.model.insert(v)
         self.redraw()
         self.update_status(f"已插入 {len(items)} 个节点")
-
 
     def start_insert_animated(self):
         if self.animating:
@@ -212,35 +273,117 @@ class BSTVisualizer:
         if not items:
             return
         self.animating = True
-        self._insert_seq(items, 0)
-
+        self.clear_guide()
+        self.update_guide(f"🚀 开始插入操作：将依次插入 {len(items)} 个值")
+        self.window.after(1000, lambda: self._insert_seq(items, 0))
 
     def _insert_seq(self, items: List[str], idx: int):
         if idx >= len(items):
             self.animating = False
             self.update_status("插入完成")
+            self.update_guide("✅ 所有插入操作已完成！")
+            self.window.after(2000, self.clear_guide)
             return
+            
         val = items[idx]
-        self._animate_search_path_for_insert(val, lambda: self._finalize_insert_and_continue(val, items, idx))
+        remaining = len(items) - idx - 1
+        self.update_guide(f"📥 准备插入第 {idx+1}/{len(items)} 个值: {val} ({remaining} 个待插入)")
+        self.window.after(800, lambda: self._animate_search_path_for_insert(val, items, idx))
+
+    def _animate_search_path_for_insert(self, val: str, items: List[str], idx: int):
+        path_nodes = []
+        explanations = []
+        
+        cur = self.model.root
+        if cur is None:
+            self.update_guide(f"🌱 树为空，将 {val} 作为根节点插入")
+            self.redraw()
+            self.window.after(800, lambda: self._finalize_insert_and_continue(val, items, idx))
+            return
+
+        # 构建路径和解释
+        step_count = 0
+        while cur:
+            path_nodes.append(cur)
+            step_count += 1
+            cmp = self.model.compare_values(val, cur.val)
+            
+            if cmp == 0:
+                explanation = f"🔍 步骤{step_count}: {val} = {cur.val}，向右子树移动（BST允许重复值）"
+                cur = cur.right
+            elif cmp < 0:
+                explanation = f"🔍 步骤{step_count}: {val} < {cur.val}，向左子树移动（较小值在左）"
+                cur = cur.left
+            else:
+                explanation = f"🔍 步骤{step_count}: {val} > {cur.val}，向右子树移动（较大值在右）"
+                cur = cur.right
+                
+            explanations.append(explanation)
+
+        self._play_highlight_sequence_with_explanations(path_nodes, explanations, val, items, idx)
+
+    def _play_highlight_sequence_with_explanations(self, nodes: List[TreeNode], explanations: List[str], val: str, items: List[str], idx: int):
+        if not nodes:
+            self.update_guide(f"📍 找到插入位置，准备插入新节点 {val}")
+            self.window.after(800, lambda: self._finalize_insert_and_continue(val, items, idx))
+            return
+            
+        i = 0
+        def step():
+            nonlocal i
+            if i >= len(nodes):
+                self.update_guide(f"📍 搜索完成，准备在适当位置插入 {val}")
+                self.window.after(800, lambda: self._finalize_insert_and_continue(val, items, idx))
+                return
+                
+            node = nodes[i]
+            explanation = explanations[i] if i < len(explanations) else f"访问节点 {node.val}"
+            
+            self.redraw()
+            if node in self.node_to_rect:
+                rid = self.node_to_rect[node]
+                self.canvas.itemconfig(rid, fill="yellow")
+                
+            self.update_status(f"插入 {val}: 步骤 {i+1}/{len(nodes)}")
+            self.update_guide(explanation)
+            
+            i += 1
+            self.window.after(1000, step)  # 增加延迟以便阅读说明
+            
+        step()
 
     def _finalize_insert_and_continue(self, val, items, idx):
+        # 执行实际插入
         new_node = self.model.insert(val)
         pos_map = self.compute_positions()
+        
         if new_node not in pos_map:
             self.redraw()
-            self.window.after(300, lambda: self._insert_seq(items, idx+1))
+            self.update_guide(f"✅ 已插入 {val}，继续下一个值")
+            self.window.after(800, lambda: self._insert_seq(items, idx+1))
             return
+            
+        # 显示新节点移动动画
         tx, ty = pos_map[new_node]
         sx, sy = self.canvas_width/2, 20
-        left = sx - self.node_w/2; top = sy - self.node_h/2; right = sx + self.node_w/2; bottom = sy + self.node_h/2
+        
+        self.update_guide(f"🎯 正在将新节点 {val} 放置到正确位置...")
+        
+        # 创建移动的新节点
+        left = sx - self.node_w/2
+        top = sy - self.node_h/2
+        right = sx + self.node_w/2
+        bottom = sy + self.node_h/2
+        
         temp_rect = self.canvas.create_rectangle(left, top, right, bottom, fill="#C6F6D5", outline="black", width=2)
-        x1 = left + self.left_cell_w; x2 = x1 + self.center_cell_w
+        x1 = left + self.left_cell_w
+        x2 = x1 + self.center_cell_w
         temp_text = self.canvas.create_text((x1+x2)/2, (top+bottom)/2, text=str(val), font=("Arial",12,"bold"))
 
         steps = 30
         dx = (tx - sx)/steps
         dy = (ty - sy)/steps
-        delay = 12
+        delay = 15
 
         def step(i=0):
             if i < steps:
@@ -253,73 +396,29 @@ class BSTVisualizer:
                     self.canvas.delete(temp_text)
                 except Exception:
                     pass
-                # redraw full tree where new node exists
+                    
+                # 重绘完整树
                 self.redraw()
-                # briefly highlight new node
+                
+                # 高亮显示新节点
                 if new_node in self.node_to_rect:
                     rid = self.node_to_rect[new_node]
                     self.canvas.itemconfig(rid, fill="lightgreen")
+                    self.update_guide(f"✅ 成功插入 {val}！新节点已放置在正确位置")
+                    
                     def unhigh():
                         try:
                             self.canvas.itemconfig(rid, fill="#F0F8FF")
                         except Exception:
                             pass
-                        # continue
-                        self.window.after(150, lambda: self._insert_seq(items, idx+1))
-                    self.window.after(300, unhigh)
+                        # 继续插入下一个值
+                        self.window.after(500, lambda: self._insert_seq(items, idx+1))
+                    self.window.after(1000, unhigh)
                 else:
-                    self.window.after(300, lambda: self._insert_seq(items, idx+1))
+                    self.window.after(500, lambda: self._insert_seq(items, idx+1))
 
         step()
 
-    def _animate_search_path_for_insert(self, val: str, on_complete):
-        path_nodes = []
-        cur = self.model.root
-        if cur is None:
-            self.redraw()
-            self.update_status(f"准备插入 val={val} 到 root (index=0)")
-            self.window.after(400, on_complete)
-            return
-
-        steps = []
-        while cur:
-            steps.append(cur)
-            cmp = self.model.compare_values(val, cur.val)
-            if cmp == 0:
-                cur = cur.right   
-            elif cmp < 0:
-                cur = cur.left
-            else:
-                cur = cur.right
-            # if str(val) == str(cur.val):
-            #     cur = cur.right
-            # elif str(val) < str(cur.val):
-            #     cur = cur.left
-            # else:
-            #     cur = cur.right
-        self._play_highlight_sequence(steps, f"插入 val={val}", on_complete)
-
-    def _play_highlight_sequence(self, nodes: List[TreeNode], label_prefix: str, on_complete):
-        if not nodes:
-            self.window.after(200, on_complete)
-            return
-        i = 0
-        def step():
-            nonlocal i
-            if i >= len(nodes):
-                on_complete()
-                return
-            node = nodes[i]
-            self.redraw()
-            if node in self.node_to_rect:
-                rid = self.node_to_rect[node]
-                self.canvas.itemconfig(rid, fill="yellow")
-            self.update_status(f"{label_prefix} 访问: {node.val} (step {i})")
-            i += 1
-            self.window.after(520, step)
-        step()
-
- 
     def start_search_animated(self):
         if self.animating:
             return
@@ -329,44 +428,72 @@ class BSTVisualizer:
             return
         val = self.parse_value(raw)
         self.animating = True
+        self.clear_guide()
+        
+        self.update_guide(f"🔎 开始查找值 {val}：从根节点开始比较")
+        
         path_nodes = []
+        explanations = []
         cur = self.model.root
+        
+        if cur is None:
+            self.update_guide("❌ 树为空，无法查找")
+            self.animating = False
+            return
+        
+        step_count = 0
         while cur:
+            step_count += 1
             path_nodes.append(cur)
             cmp = self.model.compare_values(val, cur.val)
+            
             if cmp == 0:
+                explanations.append(f"🎉 步骤{step_count}: 找到目标值 {val}！查找成功")
                 break
             elif cmp < 0:
+                explanations.append(f"🔍 步骤{step_count}: {val} < {cur.val}，向左子树继续查找")
                 cur = cur.left
             else:
+                explanations.append(f"🔍 步骤{step_count}: {val} > {cur.val}，向右子树继续查找")
                 cur = cur.right
+                
         found = (path_nodes and self.model.compare_values(val, path_nodes[-1].val) == 0)
+        
+        if not found and path_nodes:
+            explanations.append(f"❌ 步骤{step_count}: 到达叶子节点，未找到值 {val}，查找失败")
+            
         i = 0
         def step():
             nonlocal i
             if i >= len(path_nodes):
                 self.animating = False
                 if found:
-                    self.update_status(f"查找完成: 找到 {val}")
                     node = path_nodes[-1]
                     self.redraw()
                     if node in self.node_to_rect:
                         rid = self.node_to_rect[node]
-                        self.canvas.itemconfig(rid, fill="red")
-                        self.window.after(600, lambda: self.canvas.itemconfig(rid, fill="#F0F8FF"))
+                        self.canvas.itemconfig(rid, fill="#4CAF50")
+                        self.update_guide(f"🎉 查找成功！在BST中找到值 {val}")
+                    self.window.after(1500, lambda: self.canvas.itemconfig(rid, fill="#F0F8FF") if 'rid' in locals() else None)
                 else:
-                    self.update_status(f"查找完成: 未找到 {val}")
+                    self.update_guide(f"❌ 查找失败：BST中不存在值 {val}")
                 return
+                
             node = path_nodes[i]
+            explanation = explanations[i] if i < len(explanations) else f"访问节点 {node.val}"
+            
             self.redraw()
             if node in self.node_to_rect:
                 rid = self.node_to_rect[node]
                 self.canvas.itemconfig(rid, fill="yellow")
-            self.update_status(f"Search: 比较到 {node.val} (step {i})")
+                
+            self.update_status(f"查找: 步骤 {i+1}/{len(path_nodes)}")
+            self.update_guide(explanation)
+            
             i += 1
-            self.window.after(520, step)
+            self.window.after(1000, step)
+            
         step()
-
 
     def start_delete_animated(self):
         if self.animating:
@@ -377,87 +504,133 @@ class BSTVisualizer:
             return
         val = self.parse_value(raw)
         self.animating = True
+        self.clear_guide()
+        
+        self.update_guide(f"🗑️ 开始删除值 {val}：首先定位目标节点")
+
         path_nodes = []
+        explanations = []
         cur = self.model.root
+        
+        if cur is None:
+            self.update_guide("❌ 树为空，无法删除")
+            self.animating = False
+            return
+        
+        step_count = 0
         while cur:
+            step_count += 1
             path_nodes.append(cur)
             cmp = self.model.compare_values(val, cur.val)
+            
             if cmp == 0:
+                explanations.append(f"🎯 步骤{step_count}: 找到要删除的节点 {val}，开始删除操作")
                 break
             elif cmp < 0:
+                explanations.append(f"🔍 步骤{step_count}: {val} < {cur.val}，向左子树继续查找")
                 cur = cur.left
             else:
+                explanations.append(f"🔍 步骤{step_count}: {val} > {cur.val}，向右子树继续查找")
                 cur = cur.right
 
         found = (path_nodes and self.model.compare_values(val, path_nodes[-1].val) == 0)
+        
+        if not found and path_nodes:
+            explanations.append(f"❌ 步骤{step_count}: 未找到要删除的值 {val}，删除操作终止")
+            
         i = 0
         def step():
             nonlocal i
             if i >= len(path_nodes):
                 if not found:
                     self.animating = False
-                    self.update_status(f"删除：未找到 {val}")
+                    self.update_guide(f"❌ 删除失败：BST中不存在值 {val}")
                     return
-                self._animate_deletion_process(val)
+                self._animate_deletion_process(val, path_nodes[-1])
                 return
+                
             node = path_nodes[i]
+            explanation = explanations[i] if i < len(explanations) else f"访问节点 {node.val}"
+            
             self.redraw()
             if node in self.node_to_rect:
                 self.canvas.itemconfig(self.node_to_rect[node], fill="yellow")
-            self.update_status(f"删除：比较到 {node.val} (step {i})")
+                
+            self.update_status(f"删除：步骤 {i+1}/{len(path_nodes)}")
+            self.update_guide(explanation)
+            
             i += 1
-            self.window.after(420, step)
+            self.window.after(1000, step)
+            
         step()
 
-
-    def _animate_deletion_process(self, val):
-        node, path = self.model.search_with_path(val)
-        if node is None:
-            self.animating = False
-            self.update_status(f"删除失败：未找到 {val}")
-            return
+    def _animate_deletion_process(self, val, target_node):
         self.redraw()
-        if node in self.node_to_rect:
-            self.canvas.itemconfig(self.node_to_rect[node], fill="red")
-        self.update_status(f"准备删除 {val}")
+        if target_node in self.node_to_rect:
+            self.canvas.itemconfig(self.node_to_rect[target_node], fill="#FF6B6B")
+            self.update_guide(f"🎯 已定位到要删除的节点 {val}，分析节点类型...")
+        
         def after_highlight():
-            if node.left is None and node.right is None:
-                self.model.delete(val)
-                self.redraw()
-                self.update_status(f"删除叶子节点 {val}")
-                self.animating = False
-            elif node.left is None or node.right is None:
-                child = node.left if node.left else node.right
+            # 情况1：叶子节点
+            if target_node.left is None and target_node.right is None:
+                self.update_guide(f"🍃 节点 {val} 是叶子节点（无子节点），直接删除")
+                def do_delete():
+                    self.model.delete(val)
+                    self.redraw()
+                    self.update_guide(f"✅ 叶子节点 {val} 已成功删除")
+                    self.animating = False
+                self.window.after(1200, do_delete)
+                
+            # 情况2：只有一个子节点
+            elif target_node.left is None or target_node.right is None:
+                child = target_node.left if target_node.left else target_node.right
+                child_type = "左" if target_node.left else "右"
+                self.update_guide(f"📋 节点 {val} 有一个{child_type}子节点 {child.val}，用子节点替换当前节点")
+                
                 self.redraw()
                 if child in self.node_to_rect:
-                    self.canvas.itemconfig(self.node_to_rect[child], fill="yellow")
-                self.update_status(f"删除：节点有一个子节点，进行替换")
+                    self.canvas.itemconfig(self.node_to_rect[child], fill="#FFD93D")
+                    
                 def do_transplant():
                     self.model.delete(val)
                     self.redraw()
-                    self.update_status(f"已删除 {val} (单子节点替换)")
+                    self.update_guide(f"✅ 已删除 {val}，其{child_type}子节点 {child.val} 提升到该位置")
                     self.animating = False
-                self.window.after(600, do_transplant)
+                self.window.after(1200, do_transplant)
+                
+            # 情况3：有两个子节点
             else:
-                succ = self.model.find_min(node.right)
+                self.update_guide(f"🔄 节点 {val} 有两个子节点，寻找右子树中的最小值作为后继节点")
+                succ = self.model.find_min(target_node.right)
+                
                 self.redraw()
                 if succ in self.node_to_rect:
-                    self.canvas.itemconfig(self.node_to_rect[succ], fill="orange")
-                self.update_status(f"删除：找到后继 {succ.val}，将其值替换到目标节点")
+                    self.canvas.itemconfig(self.node_to_rect[succ], fill="#6BCF77")
+                    self.update_guide(f"📌 找到后继节点 {succ.val}，用后继节点的值替换目标节点的值")
+                    
                 def swap_and_delete():
-                    node.val, succ.val = succ.val, node.val
+                    # 交换值
+                    old_val = target_node.val
+                    target_node.val = succ.val
+                    succ.val = old_val
+                    
                     self.redraw()
-                    if node in self.node_to_rect:
-                        self.canvas.itemconfig(self.node_to_rect[node], fill="lightgreen")
-                    self.update_status(f"已交换值，接下来删除后继节点 {val}（其已移至 succ 位置）")
+                    if target_node in self.node_to_rect:
+                        self.canvas.itemconfig(self.node_to_rect[target_node], fill="#4ECDC4")
+                        
+                    self.update_guide(f"🔄 值已交换：节点现在包含 {target_node.val}，原值移到后继节点位置")
+                    
                     def final_del():
+                        self.update_guide(f"🗑️ 删除原后继节点（现在包含值 {old_val}）")
                         self.model.delete_node(succ)  
                         self.redraw()
-                        self.update_status(f"删除完成（两子节点情况）")
+                        self.update_guide(f"✅ 删除完成！BST结构已保持有序性")
                         self.animating = False
-                    self.window.after(500, final_del)
-                self.window.after(700, swap_and_delete)
-        self.window.after(500, after_highlight) 
+                    self.window.after(1200, final_del)
+                    
+                self.window.after(1200, swap_and_delete)
+                
+        self.window.after(800, after_highlight)
 
     def clear_canvas(self):
         if self.animating:
@@ -465,6 +638,7 @@ class BSTVisualizer:
         self.model = BSTModel()
         self.redraw()
         self.update_status("已清空")
+        self.clear_guide()
 
     def back_to_main(self):
         if self.animating:
@@ -474,7 +648,7 @@ class BSTVisualizer:
         
 if __name__ == '__main__':
     w = Tk()
-    w.title("BST 可视化")
-    w.geometry("1350x730")
+    w.title("BST 可视化 - 分步引导模式")
+    w.geometry("1350x780")  # 增加高度以容纳新的引导标签
     BSTVisualizer(w)
     w.mainloop()
