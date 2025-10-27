@@ -10,9 +10,10 @@ process_command = _pc
 class HashtableVisualizer:
     def __init__(self, root, capacity: int = 11):
         self.window = root
-        self.window.config(bg="#F0F8FF")
-        self.canvas = Canvas(self.window, bg="white", width=1350, height=500, relief=RAISED, bd=8)
-        self.canvas.pack()
+        self.window.config(bg="#E8F4F9")  # 使用更柔和的背景色
+        self.canvas = Canvas(self.window, bg="#FFFFFF", width=1350, height=500,
+                           relief=RIDGE, bd=3)  # 使用更精致的边框样式
+        self.canvas.pack(pady=10)  # 添加上下间距
 
         self.capacity = capacity
         self.model = HashTableModel(self.capacity)
@@ -44,54 +45,108 @@ class HashtableVisualizer:
         self.update_display()
 
     def create_heading(self):
-        heading = Label(self.window, text="散列表（线性探测法）可视化",
-                        font=("Arial", 26, "bold"), bg="#F0F8FF", fg="darkgreen")
-        heading.place(x=420, y=12)
-        info = Label(self.window, text="散列方式：h(x)=x%capacity；冲突处理：线性探测（向后逐位查找），删除使用墓碑（tombstone）",
-                     font=("Arial", 12), bg="#F0F8FF")
-        info.place(x=300, y=60)
+        # 创建标题容器
+        title_frame = Frame(self.window, bg="#E8F4F9")
+        title_frame.pack(fill=X, padx=20, pady=(15, 5))
+        
+        heading = Label(title_frame, text="散列表（线性探测法）可视化",
+                       font=("Microsoft YaHei UI", 28, "bold"), 
+                       bg="#E8F4F9", fg="#2C3E50")
+        heading.pack()
+        
+        info = Label(title_frame, 
+                    text="散列方式：h(x)=x%capacity；冲突处理：线性探测（向后逐位查找），删除使用墓碑（tombstone）",
+                    font=("Microsoft YaHei UI", 12),
+                    bg="#E8F4F9", fg="#34495E")
+        info.pack(pady=(5, 0))
 
     def create_buttons(self):
-        button_frame = Frame(self.window, bg="#F0F8FF")
-        button_frame.place(x=20, y=540, width=1310, height=150)  # Increased height to accommodate DSL row
+        button_frame = Frame(self.window, bg="#E8F4F9")
+        button_frame.place(x=20, y=540, width=1310, height=150)
+
+        # 定义按钮样式
+        btn_style = {
+            'font': ("Microsoft YaHei UI", 11, "bold"),
+            'width': 12,
+            'height': 1,
+            'relief': 'groove',
+            'bd': 2,
+            'cursor': 'hand2'  # 添加手型光标
+        }
 
         # 第一行：操作按钮
-        Button(button_frame, text="插入 Insert", font=("Arial", 11, "bold"), width=10, height=1, bg="#4CAF50", fg="white",
-               relief="flat", bd=1, command=self.prepare_insert).grid(row=0, column=0, padx=6, pady=4)
-        Button(button_frame, text="查找 Find", font=("Arial", 11, "bold"), width=10, height=1, bg="#2196F3", fg="white",
-               relief="flat", bd=1, command=lambda: self.prepare_find()).grid(row=0, column=1, padx=6, pady=4)
-        Button(button_frame, text="删除 Delete", font=("Arial", 11, "bold"), width=10, height=1, bg="#FF9800", fg="white",
-               relief="flat", bd=1, command=lambda: self.prepare_delete()).grid(row=0, column=2, padx=6, pady=4)
-        Button(button_frame, text="清空 Clear", font=("Arial", 11, "bold"), width=10, height=1, bg="#F44336", fg="white",
-               relief="flat", bd=1, command=self.clear_table).grid(row=0, column=3, padx=6, pady=4)
-        Button(button_frame, text="返回主界面", font=("Arial", 11, "bold"), width=10, height=1, bg="#6C9EFF", fg="white",
-               relief="flat", bd=1, command=self.back_to_main).grid(row=0, column=4, padx=6, pady=4)
+        Button(button_frame, text="插入 Insert", bg="#3498DB", fg="white",
+               activebackground="#2980B9", activeforeground="white",
+               command=self.prepare_insert, **btn_style).grid(row=0, column=0, padx=8, pady=6)
+        Button(button_frame, text="查找 Find", bg="#2ECC71", fg="white",
+               activebackground="#27AE60", activeforeground="white",
+               command=lambda: self.prepare_find(), **btn_style).grid(row=0, column=1, padx=8, pady=6)
+        Button(button_frame, text="删除 Delete", bg="#E74C3C", fg="white",
+               activebackground="#C0392B", activeforeground="white",
+               command=lambda: self.prepare_delete(), **btn_style).grid(row=0, column=2, padx=8, pady=6)
+        Button(button_frame, text="清空 Clear", bg="#95A5A6", fg="white",
+               activebackground="#7F8C8D", activeforeground="white",
+               command=self.clear_table, **btn_style).grid(row=0, column=3, padx=8, pady=6)
+        Button(button_frame, text="返回主界面", bg="#9B59B6", fg="white",
+               activebackground="#8E44AD", activeforeground="white",
+               command=self.back_to_main, **btn_style).grid(row=0, column=4, padx=8, pady=6)
 
-        # 第二行：单值输入
-        Label(button_frame, text="值:", font=("Arial", 11), bg="#F0F8FF").grid(row=1, column=0, sticky="e", padx=(8, 2), pady=4)
-        Entry(button_frame, textvariable=self.value_entry, width=12, font=("Arial", 11)).grid(row=1, column=1, sticky="w", padx=4)
-        Button(button_frame, text="确认", font=("Arial", 11, "bold"), width=6, height=1, bg="#4CAF50", fg="white",
-               relief="flat", bd=1, command=self._on_confirm_value).grid(row=1, column=2, padx=6, pady=4)
-
-        # 第三行：批量构建
-        Label(button_frame, text="批量构建:", font=("Arial", 11), bg="#F0F8FF").grid(row=2, column=0, sticky="e", padx=(8, 2), pady=4)
-        Entry(button_frame, textvariable=self.batch_entry_var, width=25, font=("Arial", 11)).grid(row=2, column=1, columnspan=2, sticky="w", padx=4)
-        Button(button_frame, text="开始", font=("Arial", 11, "bold"), width=6, height=1, bg="#2196F3", fg="white",
-               relief="flat", bd=1, command=self.start_batch_build).grid(row=2, column=3, padx=6, pady=4)
-
-        # 第四行：DSL 命令
-        Label(button_frame, text="DSL 命令:", font=("Arial", 11), bg="#F0F8FF").grid(row=3, column=0, sticky="e", padx=(8, 2), pady=4)
-        dsl_entry = Entry(button_frame, textvariable=self.dsl_var, width=40, font=("Arial", 11))
-        dsl_entry.grid(row=3, column=1, columnspan=3, sticky="w", padx=4)
+        # 创建一个优雅的命令输入区
+        cmd_frame = Frame(button_frame, bg="white", relief="groove", bd=2)
+        cmd_frame.grid(row=1, column=0, columnspan=4, sticky="ew", padx=8, pady=10)
+        
+        # 命令输入框
+        Label(cmd_frame, text="命令:", font=("Microsoft YaHei UI", 11), bg="white", fg="#2C3E50").pack(side=LEFT, padx=(15,5), pady=8)
+        dsl_entry = Entry(cmd_frame, textvariable=self.dsl_var, width=50,
+                         font=("Microsoft YaHei UI", 11), relief="flat",
+                         bg="white", highlightthickness=1,
+                         highlightcolor="#3498DB")
+        dsl_entry.pack(side=LEFT, padx=5, pady=8, fill=X, expand=True)
         dsl_entry.bind("<Return>", lambda e: self.process_dsl())
-        Button(button_frame, text="执行", font=("Arial", 11, "bold"), width=6, height=1, bg="#FF9800", fg="white",
-               relief="flat", bd=1, command=self.process_dsl).grid(row=3, column=4, padx=6, pady=4)
+        
+        # 设置初始示例命令
+        self.dsl_var.set("create 23 17 35 8 42")
+        dsl_entry.select_range(0, END)  # 默认全选，方便用户直接输入新命令
+        
+        # 添加带图标的提示标签
+        cmd_hint = Label(cmd_frame, text="↑ 试试运行这个示例，或输入: insert x | find x | delete x | clear",
+                        font=("Microsoft YaHei UI", 9), bg="white", fg="#2980B9")
+        cmd_hint.pack(side=LEFT, padx=(10,5), pady=8)
+        
+        Button(cmd_frame, text="执行",
+               font=("Microsoft YaHei UI", 11, "bold"),
+               width=6, height=1,
+               bg="#3498DB", fg="white",
+               activebackground="#2980B9",
+               activeforeground="white",
+               relief="groove", bd=1,
+               cursor="hand2",
+               command=self.process_dsl).pack(side=LEFT, padx=(10,15), pady=8)
 
-        # 右侧：保存与打开按钮
-        Button(button_frame, text="保存", font=("Arial", 11, "bold"), width=6, height=1, bg="#6C9EFF", fg="white",
-               relief="flat", bd=1, command=self.save_structure).grid(row=1, column=4, padx=6, pady=4)
-        Button(button_frame, text="打开", font=("Arial", 11, "bold"), width=6, height=1, bg="#6C9EFF", fg="white",
-               relief="flat", bd=1, command=self.load_structure).grid(row=2, column=4, padx=6, pady=4)
+        # 创建文件操作按钮框架
+        file_frame = Frame(button_frame, bg="#E8F4F9")
+        file_frame.grid(row=1, column=4, rowspan=2, padx=6, pady=4)
+        
+        # 保存和打开按钮采用更现代的样式
+        Button(file_frame, text="保存数据",
+               font=("Microsoft YaHei UI", 11, "bold"),
+               width=10, height=1,
+               bg="#3498DB", fg="white",
+               activebackground="#2980B9",
+               activeforeground="white",
+               relief="groove", bd=1,
+               cursor="hand2",
+               command=self.save_structure).pack(pady=2)
+               
+        Button(file_frame, text="打开数据",
+               font=("Microsoft YaHei UI", 11, "bold"),
+               width=10, height=1,
+               bg="#2ECC71", fg="white",
+               activebackground="#27AE60",
+               activeforeground="white",
+               relief="groove", bd=1,
+               cursor="hand2",
+               command=self.load_structure).pack(pady=2)
 
         # 统一设置 sticky 和 pady，确保对齐
         for child in button_frame.winfo_children():
@@ -222,12 +277,35 @@ class HashtableVisualizer:
         if self.input_frame:
             self.input_frame.destroy()  # 销毁旧的 input_frame
         self.value_entry.set(default_value)
-        self.input_frame = Frame(self.window, bg="#F0F8FF")
-        self.input_frame.place(x=420, y=680, width=300, height=40)  # Moved below button frame
-        Label(self.input_frame, text=label_text + ":", font=("Arial", 11), bg="#F0F8FF").grid(row=0, column=0, padx=4, pady=4, sticky="e")
-        Entry(self.input_frame, textvariable=self.value_entry, width=12, font=("Arial", 11)).grid(row=0, column=1, padx=4, pady=4, sticky="w")
-        Button(self.input_frame, text="确认", font=("Arial", 11, "bold"), width=6, height=1, bg="#4CAF50", fg="white",
-               relief="flat", bd=1, command=lambda: self._on_confirm(action)).grid(row=0, column=2, padx=4, pady=4)
+        
+        # 创建一个更现代的输入框
+        self.input_frame = Frame(self.window, bg="#E8F4F9")
+        self.input_frame.place(x=420, y=680, width=360, height=50)
+        
+        # 添加圆角效果的背景
+        input_bg = Frame(self.input_frame, bg="white", relief="groove", bd=2)
+        input_bg.place(relx=0.02, rely=0.1, relwidth=0.96, relheight=0.8)
+        
+        Label(input_bg, text=label_text + ":", 
+              font=("Microsoft YaHei UI", 11),
+              bg="white", fg="#2C3E50").pack(side=LEFT, padx=(15,5), pady=4)
+              
+        entry = Entry(input_bg, textvariable=self.value_entry,
+                     width=12, font=("Microsoft YaHei UI", 11),
+                     relief="flat", bg="white",
+                     highlightthickness=1,
+                     highlightcolor="#3498DB")
+        entry.pack(side=LEFT, padx=5, pady=4)
+        
+        Button(input_bg, text="确认",
+               font=("Microsoft YaHei UI", 11, "bold"),
+               width=6, height=1,
+               bg="#3498DB", fg="white",
+               activebackground="#2980B9",
+               activeforeground="white",
+               relief="groove", bd=1,
+               cursor="hand2",
+               command=lambda: self._on_confirm(action)).pack(side=LEFT, padx=(10,5), pady=4)
         self.window.after(50, lambda: self.input_frame.focus_force())
 
     def _on_confirm(self, action):
@@ -553,8 +631,13 @@ class HashtableVisualizer:
         self.index_texts.clear()
 
         total_width = (self.cell_width + self.spacing) * self.capacity
-        # 背景框
-        self.canvas.create_rectangle(self.start_x - 8, self.start_y - 8, self.start_x + total_width + 8, self.start_y + self.cell_height + 8, outline="#DDD", fill="#FAFAFA")
+        # 背景框 - 使用渐变色效果
+        gradient_colors = ["#F5F9FF", "#EDF7FF"]
+        for i in range(2):
+            self.canvas.create_rectangle(
+                self.start_x - 8 + i*2, self.start_y - 8 + i*2,
+                self.start_x + total_width + 8 - i*2, self.start_y + self.cell_height + 8 - i*2,
+                outline="#D0E3FF", fill=gradient_colors[i], width=1)
 
         # 说明区域
         info_x = 20

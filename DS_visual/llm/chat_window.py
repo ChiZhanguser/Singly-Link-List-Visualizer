@@ -8,6 +8,7 @@ from llm import function_dispatcher
 from llm.function_schemas import get_function_schemas
 from llm.chat_ui import ChatUI  
 import os
+
 class ChatWindow:
     def __init__(self, parent):
         self.client = DoubaoClient()
@@ -21,25 +22,38 @@ class ChatWindow:
         self.canvas = self.ui.canvas
         self.messages_frame = self.ui.messages_frame
         self.entry = self.ui.entry
-        self.send_btn = self.ui.send_btn
+        self.send_btn_canvas = self.ui.send_btn_canvas
         self._streaming = False
     
     def _on_send(self):
         if self._streaming:
             return
         user_text = self.entry.get("1.0", END).strip()
+        if not user_text or user_text == "输入消息... (Shift+Enter 换行)":
+            return
+        
         self._last_user_text = user_text
         self.entry.delete("1.0", END)
+        
+        # 重置占位符状态
+        self.ui._entry_placeholder = True
+        self.entry.insert("1.0", "输入消息... (Shift+Enter 换行)")
+        self.entry.config(fg="#A0AEC0")
+        
         self.ui.add_message_bubble("你", user_text, align="left")
         assistant_var, assistant_lbl, _ = self.ui.add_message_bubble("豆包", "", align="right")
         self.win.after(60, lambda: self.canvas.yview_moveto(1.0))
-        self.send_btn.config(state='disabled', bg="#84BFAA")
+        
+        # 禁用发送按钮
+        self.ui._send_btn_disabled = True
+        self.ui._draw_gradient_button(self.send_btn_canvas, "发送 ✈️", "disabled")
+        
         self._streaming = True
         threading.Thread(target=self._worker_handle_function_call, args=(user_text, assistant_var), daemon=True).start()
 
     def _open_settings(self):
         cur = getattr(self.client, "timeout", None)
-        val = tk.simpledialog.askstring("设置", f"当前 read 超时: {cur}\n输入秒数或 None（不限制）:", parent=self.win)
+        val = tk.simpledialog.askstring("设置", f"当前 read 超时: {cur}\n输入秒数或 None(不限制):", parent=self.win)
         if val is None:
             return
         val = val.strip()
@@ -60,7 +74,7 @@ class ChatWindow:
     def _on_entry_return(self, event):
         if event.state & 0x0001:  # Shift pressed
             return
-        if str(self.send_btn['state']) == 'disabled':
+        if self._streaming or self.ui._send_btn_disabled:
             return "break"
         self._on_send()
         return "break"
@@ -106,7 +120,7 @@ class ChatWindow:
     def _worker_handle_function_call(self, user_text: str, assistant_var):
         try:
             messages = [
-                {"role":"system", "content":"你是一个帮助用户学习数据结构的人，你的任务是根据用户的问题，判断用户是否了解数据结构的相关知识。"},
+                {"role":"system", "content":"你是一个帮助用户学习数据结构的人,你的任务是根据用户的问题,判断用户是否了解数据结构的相关知识。"},
                 {"role":"user","content": user_text}
             ]
             response_text = self.client.send_message(

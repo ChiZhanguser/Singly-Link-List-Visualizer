@@ -9,15 +9,68 @@ from datetime import datetime
 class AVLVisualizer:
     def __init__(self, root):
         self.window = root
-        self.window.title("AVL 可视化")
-        self.window.config(bg="#F7F9FB")
-        self.canvas_w = 1200
-        self.canvas_h = 560
-        self.canvas = Canvas(self.window, bg="white", width=self.canvas_w, height=self.canvas_h, bd=6, relief=RAISED)
-        self.canvas.pack(padx=10, pady=8)
+        self.is_embedded = hasattr(root, 'title') and callable(root.title)  # 检测是否为独立窗口
+        
+        if self.is_embedded:
+            # 独立运行模式
+            self.window.title("🌳 AVL 树可视化系统")
+            self.window.config(bg="#1E1E2E")
+            self.window.geometry("1350x780")
+        else:
+            # 嵌入模式，使用更紧凑的布局
+            self.window.config(bg="#1E1E2E")
+        
+        # 设置现代字体
+        self.title_font = ("Segoe UI", 16, "bold")
+        self.label_font = ("Segoe UI", 11)
+        self.button_font = ("Segoe UI", 10, "bold")
+        self.status_font = ("Segoe UI", 10, "italic")
+        
+        # 色彩方案
+        self.colors = {
+            "bg_primary": "#1E1E2E",
+            "bg_secondary": "#2D2D44",
+            "bg_canvas": "#FFFFFF",
+            "accent_green": "#4CAF50",
+            "accent_blue": "#2196F3",
+            "accent_orange": "#FF9800",
+            "accent_purple": "#9C27B0",
+            "accent_red": "#F44336",
+            "text_light": "#FFFFFF",
+            "text_dark": "#2D2D44",
+            "node_normal": "#E3F2FD",
+            "node_highlight": "#FFF9C4",
+            "node_new": "#C8E6C9",
+            "edge_color": "#616161"
+        }
+        
+        # 根据运行模式调整画布大小
+        if self.is_embedded:
+            self.canvas_w = 1200
+            self.canvas_h = 560
+        else:
+            # 嵌入模式使用更小的画布
+            self.canvas_w = 1100
+            self.canvas_h = 500
+            
+        self.canvas = Canvas(
+            self.window, 
+            bg=self.colors["bg_canvas"], 
+            width=self.canvas_w, 
+            height=self.canvas_h,
+            bd=4, 
+            relief=GROOVE,
+            highlightthickness=2,
+            highlightbackground=self.colors["accent_blue"]
+        )
+        
+        if self.is_embedded:
+            self.canvas.pack(padx=15, pady=10)
+        else:
+            # 嵌入模式使用grid布局，更紧凑
+            self.canvas.grid(row=0, column=0, columnspan=4, padx=10, pady=5, sticky="nsew")
 
         self.model = AVLModel()
-        # node_vis: key -> dict (key is like "val" or "val#k" in a snapshot)
         self.node_vis: Dict[str, Dict] = {}
         self.animating = False
 
@@ -33,32 +86,325 @@ class AVLVisualizer:
         self.draw_instructions()
 
     def create_controls(self):
-        frame = Frame(self.window, bg="#F7F4F8")
-        frame.pack(pady=(0,6), fill=X)
-        Label(frame, text="输入（按插入顺序，逗号分隔）:", bg="#F7F4F8", font=("Arial",11)).pack(side=LEFT, padx=6)
-        entry = Entry(frame, textvariable=self.input_var, width=44, font=("Arial",11))
-        entry.pack(side=LEFT, padx=6)
+        if self.is_embedded:
+            self._create_standalone_controls()
+        else:
+            self._create_embedded_controls()
+
+    def _create_standalone_controls(self):
+        """独立运行时的控件布局"""
+        # 主控制框架
+        main_frame = Frame(self.window, bg=self.colors["bg_primary"])
+        main_frame.pack(pady=(0, 8), fill=X, padx=15)
+        
+        # 标题
+        title_label = Label(
+            main_frame, 
+            text="🎯 AVL 树操作面板", 
+            bg=self.colors["bg_primary"], 
+            fg=self.colors["text_light"],
+            font=self.title_font
+        )
+        title_label.pack(pady=(0, 15))
+
+        # 插入操作框架
+        insert_frame = LabelFrame(
+            main_frame,
+            text="📥 插入节点",
+            bg=self.colors["bg_secondary"],
+            fg=self.colors["text_light"],
+            font=self.label_font,
+            padx=12,
+            pady=12
+        )
+        insert_frame.pack(fill=X, pady=(0, 12))
+
+        # 插入操作的第一行：标签和输入框
+        input_row1 = Frame(insert_frame, bg=self.colors["bg_secondary"])
+        input_row1.pack(fill=X, pady=(0, 8))
+
+        Label(
+            input_row1, 
+            text="输入数字（逗号分隔）:", 
+            bg=self.colors["bg_secondary"], 
+            fg=self.colors["text_light"],
+            font=self.label_font
+        ).pack(side=LEFT, padx=6)
+        
+        entry = Entry(
+            input_row1, 
+            textvariable=self.input_var, 
+            width=35, 
+            font=self.label_font,
+            bd=2,
+            relief=GROOVE
+        )
+        entry.pack(side=LEFT, padx=6, fill=X, expand=True)
         entry.insert(0, "1,2,3")
-        Button(frame, text="Insert (动画)", bg="#2E8B57", fg="white", command=self.start_insert_animated).pack(side=LEFT, padx=6)
-        Button(frame, text="清空", bg="#FFB74D", command=self.clear_canvas).pack(side=LEFT, padx=6)
-        Button(frame, text="返回主界面", bg="#6EA8FE", fg="white", command=self.back_to_main).pack(side=LEFT, padx=6)
-        Button(frame, text="保存", bg="#6C9EFF", command=self.save_structure).pack(side=LEFT, padx=6)
-        Button(frame, text="打开", bg="#6C9EFF", command=self.load_structure).pack(side=LEFT, padx=6)
-        self.status_id = None
         
-        # 添加DSL命令输入框
-        dsl_frame = Frame(self.window, bg="#F7F4F8")
-        dsl_frame.pack(pady=(0,10), fill=X, padx=10)
+        # 插入操作的第二行：按钮
+        input_row2 = Frame(insert_frame, bg=self.colors["bg_secondary"])
+        input_row2.pack(fill=X, pady=(8, 0))
         
-        Label(dsl_frame, text="DSL命令:", bg="#F7F4F8", font=("Arial",11)).pack(side=LEFT, padx=6)
+        self.create_button(
+            input_row2, 
+            "✨ Insert (动画)", 
+            self.colors["accent_green"],
+            self.start_insert_animated
+        ).pack(side=LEFT, padx=4, pady=4)
+        
+        self.create_button(
+            input_row2, 
+            "🗑️ 清空", 
+            self.colors["accent_orange"],
+            self.clear_canvas
+        ).pack(side=LEFT, padx=4, pady=4)
+
+        # 文件操作框架
+        file_frame = LabelFrame(
+            main_frame,
+            text="💾 文件操作",
+            bg=self.colors["bg_secondary"],
+            fg=self.colors["text_light"],
+            font=self.label_font,
+            padx=12,
+            pady=12
+        )
+        file_frame.pack(fill=X, pady=(0, 12))
+
+        # 文件操作按钮容器
+        file_buttons = Frame(file_frame, bg=self.colors["bg_secondary"])
+        file_buttons.pack(fill=X)
+        
+        self.create_button(
+            file_buttons, 
+            "💾 保存", 
+            self.colors["accent_blue"],
+            self.save_structure
+        ).pack(side=LEFT, padx=6, pady=6)
+        
+        self.create_button(
+            file_buttons, 
+            "📂 打开", 
+            self.colors["accent_blue"],
+            self.load_structure
+        ).pack(side=LEFT, padx=6, pady=6)
+        
+        self.create_button(
+            file_buttons, 
+            "🏠 返回主界面", 
+            "#6A5ACD",
+            self.back_to_main
+        ).pack(side=LEFT, padx=6, pady=6)
+
+        # DSL命令框架
+        dsl_frame = LabelFrame(
+            main_frame,
+            text="⚡ DSL 命令",
+            bg=self.colors["bg_secondary"],
+            fg=self.colors["text_light"],
+            font=self.label_font,
+            padx=12,
+            pady=12
+        )
+        dsl_frame.pack(fill=X, pady=(0, 15))
+
+        # DSL第一行：标签和输入框
+        dsl_row1 = Frame(dsl_frame, bg=self.colors["bg_secondary"])
+        dsl_row1.pack(fill=X, pady=(0, 8))
+
+        Label(
+            dsl_row1, 
+            text="DSL命令:", 
+            bg=self.colors["bg_secondary"], 
+            fg=self.colors["text_light"],
+            font=self.label_font
+        ).pack(side=LEFT, padx=6)
         
         self.dsl_var = StringVar()
-        dsl_entry = Entry(dsl_frame, textvariable=self.dsl_var, width=60, font=("Arial",11))
+        dsl_entry = Entry(
+            dsl_row1, 
+            textvariable=self.dsl_var, 
+            width=45, 
+            font=self.label_font,
+            bd=2,
+            relief=GROOVE
+        )
         dsl_entry.pack(side=LEFT, padx=6, fill=X, expand=True)
-        dsl_entry.bind('<Return>', self.execute_dsl_command)  # 绑定回车键
+        dsl_entry.bind('<Return>', self.execute_dsl_command)
         
-        Button(dsl_frame, text="执行DSL", bg="#9C27B0", fg="white", command=self.execute_dsl_command).pack(side=LEFT, padx=6)
-        Button(dsl_frame, text="DSL帮助", bg="#673AB7", fg="white", command=self.show_dsl_help).pack(side=LEFT, padx=6)
+        # DSL第二行：按钮
+        dsl_row2 = Frame(dsl_frame, bg=self.colors["bg_secondary"])
+        dsl_row2.pack(fill=X, pady=(8, 0))
+        
+        self.create_button(
+            dsl_row2, 
+            "🚀 执行DSL", 
+            self.colors["accent_purple"],
+            self.execute_dsl_command
+        ).pack(side=LEFT, padx=6, pady=4)
+        
+        self.create_button(
+            dsl_row2, 
+            "❓ DSL帮助", 
+            "#673AB7",
+            self.show_dsl_help
+        ).pack(side=LEFT, padx=6, pady=4)
+
+        # 状态栏
+        self.status_frame = Frame(self.window, bg=self.colors["bg_secondary"], height=30)
+        self.status_frame.pack(fill=X, side=BOTTOM, pady=(5, 0))
+        self.status_frame.pack_propagate(False)
+        
+        self.status_label = Label(
+            self.status_frame,
+            text="就绪",
+            bg=self.colors["bg_secondary"],
+            fg=self.colors["text_light"],
+            font=self.status_font
+        )
+        self.status_label.pack(side=LEFT, padx=12, pady=6)
+
+    def _create_embedded_controls(self):
+        """嵌入到主程序时的紧凑控件布局"""
+        # 使用grid布局，更紧凑
+        control_frame = Frame(self.window, bg=self.colors["bg_primary"])
+        control_frame.grid(row=1, column=0, columnspan=4, sticky="ew", padx=10, pady=5)
+        
+        # 配置列权重
+        self.window.grid_columnconfigure(0, weight=1)
+        self.window.grid_columnconfigure(1, weight=1)
+        self.window.grid_columnconfigure(2, weight=1)
+        self.window.grid_columnconfigure(3, weight=1)
+        
+        # 第一行：插入操作
+        insert_label = Label(
+            control_frame, 
+            text="插入:", 
+            bg=self.colors["bg_primary"], 
+            fg=self.colors["text_light"],
+            font=self.label_font
+        )
+        insert_label.grid(row=0, column=0, padx=(0, 5), pady=2, sticky="w")
+        
+        entry = Entry(
+            control_frame, 
+            textvariable=self.input_var, 
+            width=20, 
+            font=self.label_font,
+            bd=2,
+            relief=GROOVE
+        )
+        entry.grid(row=0, column=1, padx=5, pady=2, sticky="ew")
+        entry.insert(0, "1,2,3")
+        
+        self.create_button(
+            control_frame, 
+            "✨ Insert", 
+            self.colors["accent_green"],
+            self.start_insert_animated
+        ).grid(row=0, column=2, padx=5, pady=2)
+        
+        self.create_button(
+            control_frame, 
+            "🗑️ 清空", 
+            self.colors["accent_orange"],
+            self.clear_canvas
+        ).grid(row=0, column=3, padx=5, pady=2)
+        
+        # 第二行：文件操作
+        self.create_button(
+            control_frame, 
+            "💾 保存", 
+            self.colors["accent_blue"],
+            self.save_structure
+        ).grid(row=1, column=0, padx=5, pady=2)
+        
+        self.create_button(
+            control_frame, 
+            "📂 打开", 
+            self.colors["accent_blue"],
+            self.load_structure
+        ).grid(row=1, column=1, padx=5, pady=2)
+        
+        # 第三行：DSL命令
+        dsl_label = Label(
+            control_frame, 
+            text="DSL:", 
+            bg=self.colors["bg_primary"], 
+            fg=self.colors["text_light"],
+            font=self.label_font
+        )
+        dsl_label.grid(row=2, column=0, padx=(0, 5), pady=2, sticky="w")
+        
+        self.dsl_var = StringVar()
+        dsl_entry = Entry(
+            control_frame, 
+            textvariable=self.dsl_var, 
+            width=25, 
+            font=self.label_font,
+            bd=2,
+            relief=GROOVE
+        )
+        dsl_entry.grid(row=2, column=1, padx=5, pady=2, sticky="ew")
+        dsl_entry.bind('<Return>', self.execute_dsl_command)
+        
+        self.create_button(
+            control_frame, 
+            "🚀 执行", 
+            self.colors["accent_purple"],
+            self.execute_dsl_command
+        ).grid(row=2, column=2, padx=5, pady=2)
+        
+        self.create_button(
+            control_frame, 
+            "❓ 帮助", 
+            "#673AB7",
+            self.show_dsl_help
+        ).grid(row=2, column=3, padx=5, pady=2)
+        
+        # 状态标签
+        self.status_label = Label(
+            control_frame,
+            text="就绪",
+            bg=self.colors["bg_primary"],
+            fg=self.colors["text_light"],
+            font=self.status_font
+        )
+        self.status_label.grid(row=3, column=0, columnspan=4, padx=5, pady=2, sticky="w")
+
+    def create_button(self, parent, text, color, command):
+        """创建样式统一的按钮"""
+        if self.is_embedded:
+            # 嵌入模式使用更小的按钮
+            return Button(
+                parent,
+                text=text,
+                bg=color,
+                fg=self.colors["text_light"],
+                font=("Segoe UI", 9, "bold"),
+                command=command,
+                bd=0,
+                relief=RAISED,
+                padx=12,
+                pady=4,
+                cursor="hand2"
+            )
+        else:
+            # 独立模式使用正常大小的按钮
+            return Button(
+                parent,
+                text=text,
+                bg=color,
+                fg=self.colors["text_light"],
+                font=self.button_font,
+                command=command,
+                bd=0,
+                relief=RAISED,
+                padx=15,
+                pady=8,
+                cursor="hand2"
+            )
 
     def execute_dsl_command(self, event=None):
         """执行DSL命令"""
@@ -67,14 +413,13 @@ class AVLVisualizer:
             return
             
         try:
-            # 导入并处理DSL命令
             from DSL_utils import avl_dsl
             success = avl_dsl.process(self, dsl_text)
             if success:
-                self.dsl_var.set("")  # 清空输入框
+                self.dsl_var.set("")
+                self.update_status("✅ DSL命令执行成功")
         except Exception as e:
-            from tkinter import messagebox
-            messagebox.showerror("DSL错误", f"执行DSL命令时出错: {str(e)}")
+            messagebox.showerror("❌ DSL错误", f"执行DSL命令时出错: {str(e)}")
 
     def show_dsl_help(self):
         """显示DSL帮助"""
@@ -84,36 +429,61 @@ class AVLVisualizer:
     def draw_instructions(self):
         self.canvas.delete("all")
         self.node_vis.clear()
-        self.canvas.create_text(12, 12, anchor="nw", text="AVL 插入演示：展示插入路径并精确动画显示旋转（节点从旧坐标平滑移动到新坐标）", font=("Arial",11))
-        self.status_id = self.canvas.create_text(self.canvas_w - 12, 12, anchor="ne", text="", font=("Arial",11,"bold"), fill="darkgreen")
+        
+        # 绘制标题和说明
+        title_text = "🌳 AVL 树可视化系统 - 插入演示：展示插入路径并精确动画显示旋转"
+        self.canvas.create_text(
+            self.canvas_w/2, 20, 
+            text=title_text, 
+            font=("Segoe UI", 12, "bold"), 
+            fill=self.colors["text_dark"]
+        )
+        
+        # 状态显示区域
+        self.status_id = self.canvas.create_text(
+            self.canvas_w - 15, 20, 
+            anchor="ne", 
+            text="", 
+            font=self.status_font, 
+            fill=self.colors["accent_green"]
+        )
 
     def update_status(self, txt: str):
+        """更新状态栏和画布状态"""
+        if hasattr(self, 'status_label'):
+            self.status_label.config(text=txt)
+        
         if self.status_id:
             self.canvas.itemconfig(self.status_id, text=txt)
         else:
-            self.status_id = self.canvas.create_text(self.canvas_w - 12, 12, anchor="ne", text=txt, font=("Arial",11,"bold"), fill="darkgreen")
+            self.status_id = self.canvas.create_text(
+                self.canvas_w - 15, 20, 
+                anchor="ne", 
+                text=txt, 
+                font=self.status_font, 
+                fill=self.colors["accent_green"]
+            )
 
     def _draw_connection(self, cx, cy, tx, ty):
-        """Draw two-segment arrow from parent center (cx,cy) to child center (tx,ty)."""
+        """绘制两段式箭头连接线"""
         top = cy + self.node_h/2
         bot = ty - self.node_h/2
         midy = (top + bot) / 2
-        l1 = self.canvas.create_line(cx, top, cx, midy, width=2)
-        l2 = self.canvas.create_line(cx, midy, tx, bot, arrow=LAST, width=2)
+        
+        # 绘制连接线，带有渐变效果
+        l1 = self.canvas.create_line(cx, top, cx, midy, width=2.5, fill=self.colors["edge_color"])
+        l2 = self.canvas.create_line(cx, midy, tx, bot, arrow=LAST, width=2.5, fill=self.colors["edge_color"])
         return (l1, l2)
 
     def compute_positions_for_root(self, root: Optional[AVLNode]) -> Dict[str, Tuple[float, float]]:
-        """
-        Returns mapping key -> (cx,cy) for a given snapshot root.
-        Keys are "val" or "val#k" to disambiguate duplicates (k is occurrence index).
-        """
+        """计算节点位置"""
         res: Dict[str, Tuple[float,float]] = {}
         if not root:
             return res
 
-        # inorder traversal to determine horizontal ordering and depth
         inorder_nodes: List[AVLNode] = []
         depths: Dict[AVLNode, int] = {}
+        
         def inorder(n: Optional[AVLNode], d: int):
             if not n:
                 return
@@ -121,49 +491,60 @@ class AVLVisualizer:
             inorder_nodes.append(n)
             depths[n] = d
             inorder(n.right, d+1)
+            
         inorder(root, 0)
         n = len(inorder_nodes)
         if n == 0:
             return res
+            
         width = max(200, self.canvas_w - 2*self.margin_x)
-        # assign keys while handling duplicates by count
         counts: Dict[str,int] = {}
+        
         for i, node in enumerate(inorder_nodes):
             base = str(node.val)
             cnt = counts.get(base, 0)
             counts[base] = cnt + 1
             key = f"{base}#{cnt}" if cnt > 0 else base
+            
             if n == 1:
                 x = self.canvas_w/2
             else:
                 x = self.margin_x + i * (width / (n-1))
             y = 60 + depths[node] * self.level_gap
             res[key] = (x, y)
+            
         return res
 
     def draw_tree_from_root(self, root: Optional[AVLNode]):
-        """Draw the given snapshot root onto canvas. Build node_vis mapping keyed by 'val' or 'val#k'."""
+        """绘制树结构"""
         self.canvas.delete("all")
         self.draw_instructions()
+        
         if root is None:
-            self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, text="空树", font=("Arial",18), fill="gray")
+            # 绘制空树提示
+            self.canvas.create_text(
+                self.canvas_w/2, self.canvas_h/2, 
+                text="🌲 空树", 
+                font=("Segoe UI", 20), 
+                fill="#888888"
+            )
             return
 
         pos = self.compute_positions_for_root(root)
-
-        # build inorder_nodes to generate stable duplicate keys and node->key mapping
         inorder_nodes: List[AVLNode] = []
+        
         def inorder_collect(n: Optional[AVLNode]):
             if not n:
                 return
             inorder_collect(n.left)
             inorder_nodes.append(n)
             inorder_collect(n.right)
+            
         inorder_collect(root)
 
-        # map node -> key
         node_to_key: Dict[AVLNode, str] = {}
         counts: Dict[str,int] = {}
+        
         for node in inorder_nodes:
             base = str(node.val)
             cnt = counts.get(base, 0)
@@ -171,26 +552,44 @@ class AVLVisualizer:
             key = f"{base}#{cnt}" if cnt > 0 else base
             node_to_key[node] = key
 
-        # [FIXED] Step 1: Draw nodes first and initialize node_vis with edge placeholders
+        # 绘制节点
         self.node_vis.clear()
         for node, key in node_to_key.items():
             cx, cy = pos[key]
             left, top, right, bottom = cx - self.node_w/2, cy - self.node_h/2, cx + self.node_w/2, cy + self.node_h/2
-            rect = self.canvas.create_rectangle(left, top, right, bottom, fill="#F0F8FF", outline="black", width=2)
+            
+            # 绘制带圆角的节点
+            rect = self.canvas.create_rectangle(
+                left, top, right, bottom, 
+                fill=self.colors["node_normal"], 
+                outline=self.colors["accent_blue"], 
+                width=2,
+                stipple="gray50"  # 添加纹理效果
+            )
+            
+            # 节点内部装饰线
             x1, x2 = left + 28, left + 92
-            self.canvas.create_line(x1, top, x1, bottom, width=1)
-            self.canvas.create_line(x2, top, x2, bottom, width=1)
-            txt = self.canvas.create_text((x1+x2)/2, cy, text=str(node.val), font=("Arial",12,"bold"))
+            self.canvas.create_line(x1, top, x1, bottom, width=1, fill="#BBDEFB")
+            self.canvas.create_line(x2, top, x2, bottom, width=1, fill="#BBDEFB")
+            
+            # 节点文本
+            txt = self.canvas.create_text(
+                (x1+x2)/2, cy, 
+                text=str(node.val), 
+                font=("Segoe UI", 12, "bold"),
+                fill=self.colors["text_dark"]
+            )
+            
             self.node_vis[key] = {
                 'rect': rect, 
                 'text': txt, 
                 'cx': cx, 
                 'cy': cy, 
                 'val': str(node.val),
-                'edges': {}  # Placeholder for outgoing edge items
+                'edges': {}
             }
 
-        # [FIXED] Step 2: Draw edges and store their canvas IDs in the parent's node_vis entry
+        # 绘制边
         def setup_edges(n: Optional[AVLNode]):
             if not n:
                 return
@@ -213,49 +612,50 @@ class AVLVisualizer:
                 
         setup_edges(root)
 
-    # ---------- main insertion animation flow ----------
+    # ---------- 插入动画流程 ----------
     def start_insert_animated(self):
         if self.animating:
+            self.update_status("⚠️ 正在执行动画，请稍候...")
             return
+            
         s = self.input_var.get().strip()
         if not s:
-            messagebox.showinfo("提示", "请输入数字，例如：1,2,3")
+            messagebox.showinfo("💡 提示", "请输入数字，例如：1,2,3")
             return
+            
         batch = [p.strip() for p in s.split(",") if p.strip()!=""]
         if not batch:
             return
+            
         self.batch = batch
         self.animating = True
+        self.update_status("🎬 开始插入动画...")
         self._insert_seq(0)
 
     def _insert_seq(self, idx: int):
         if idx >= len(self.batch):
             self.animating = False
-            self.update_status("所有插入完成")
+            self.update_status("✅ 所有插入完成")
             return
 
         val = self.batch[idx]
-
-        # call model: it returns new node, path, rotations, snapshots (snapshots[0]=pre, [1]=after-insert, [2..]=after rotations)
         inserted_node, path_nodes, rotations, snapshots = self.model.insert_with_steps(val)
 
         snap_pre = snapshots[0]
         snap_after_insert = snapshots[1] if len(snapshots) > 1 else None
 
-        # prepare mapping of pre-snapshot keys per value to highlight path
         pos_pre = self.compute_positions_for_root(snap_pre)
         val_to_keys_pre: Dict[str, List[str]] = {}
         for k in pos_pre.keys():
             base = k.split('#')[0]
             val_to_keys_pre.setdefault(base, []).append(k)
 
-        # sequentially highlight path over pre-snapshot
         def highlight_path(i=0):
             if i >= len(path_nodes):
-                # proceed to fly-in
-                self.update_status(f"插入 {val}: 开始落位")
+                self.update_status(f"📥 插入 {val}: 开始落位")
                 self.animate_flyin_new(val, snap_after_insert, lambda: self._after_insert_rotations(rotations, snapshots, idx))
                 return
+                
             node = path_nodes[i]
             v = str(node.val)
             keylist = val_to_keys_pre.get(v, [])
@@ -263,39 +663,47 @@ class AVLVisualizer:
                 key = keylist.pop(0)
                 self.draw_tree_from_root(snap_pre)
                 try:
-                    self.canvas.itemconfig(self.node_vis[key]['rect'], fill="yellow")
+                    self.canvas.itemconfig(self.node_vis[key]['rect'], fill=self.colors["node_highlight"])
                 except Exception:
                     pass
             else:
                 self.draw_tree_from_root(snap_pre)
-            self.update_status(f"搜索路径: 访问 {v} (step {i})")
+                
+            self.update_status(f"🔍 搜索路径: 访问 {v} (步骤 {i+1}/{len(path_nodes)})")
             self.window.after(420, lambda: highlight_path(i+1))
 
         highlight_path(0)
 
     def animate_flyin_new(self, val_str: str, snap_after_insert: Optional[AVLNode], on_complete):
-        """Fly new node into position using snap_after_insert to determine target key."""
+        """新节点飞入动画"""
         if not snap_after_insert:
             on_complete(); return
+            
         pos_after = self.compute_positions_for_root(snap_after_insert)
         candidate_keys = [k for k in pos_after.keys() if k.split('#')[0] == str(val_str)]
         if not candidate_keys:
             on_complete(); return
-        # choose last candidate (heuristic: newly inserted tends to be right-most among equals)
+            
         target_key = candidate_keys[-1]
         tx, ty = pos_after[target_key]
 
-        # create temporary visual at top and animate
+        # 创建临时飞入节点
         sx, sy = self.canvas_w/2, 20
         left, top, right, bottom = sx - self.node_w/2, sy - self.node_h/2, sx + self.node_w/2, sy + self.node_h/2
-        temp_rect = self.canvas.create_rectangle(left, top, right, bottom, fill="#C6F6D5", outline="black", width=2)
-        x1 = left + 28
-        temp_text = self.canvas.create_text(sx, sy, text=str(val_str), font=("Arial",12,"bold"))
+        
+        temp_rect = self.canvas.create_rectangle(
+            left, top, right, bottom, 
+            fill=self.colors["node_new"], 
+            outline=self.colors["accent_green"], 
+            width=2
+        )
+        temp_text = self.canvas.create_text(sx, sy, text=str(val_str), font=("Segoe UI", 12, "bold"))
 
         steps = 30
         dx = (tx - sx)/steps
         dy = (ty - sy)/steps
         delay = 12
+        
         def step(i=0):
             if i < steps:
                 try:
@@ -310,42 +718,34 @@ class AVLVisualizer:
                     self.canvas.delete(temp_text)
                 except Exception:
                     pass
-                # draw after-insert snapshot so new node appears
+                    
                 self.draw_tree_from_root(snap_after_insert)
-                # highlight new node
                 try:
-                    self.canvas.itemconfig(self.node_vis[target_key]['rect'], fill="lightgreen")
+                    self.canvas.itemconfig(self.node_vis[target_key]['rect'], fill=self.colors["node_new"])
                 except Exception:
                     pass
+                    
                 self.window.after(300, on_complete)
         step()
 
-    # [NEW] Helper method to redraw edges during animation
     def _redraw_all_edges_during_animation(self):
-        """
-        Redraws all edges based on the current positions of the nodes on the canvas.
-        This is called every frame during an animation.
-        """
+        """动画期间重绘所有边"""
         for parent_key, parent_vis in self.node_vis.items():
             try:
-                # Get parent's current center coordinates from its rectangle
                 parent_coords = self.canvas.coords(parent_vis['rect'])
                 if not parent_coords or len(parent_coords) < 4: continue
                 parent_cx = (parent_coords[0] + parent_coords[2]) / 2
                 parent_cy = (parent_coords[1] + parent_coords[3]) / 2
 
-                # Iterate over its outgoing edges
                 for child_key, line_ids in parent_vis.get('edges', {}).items():
                     child_vis = self.node_vis.get(child_key)
                     if not child_vis: continue
                     
-                    # Get child's current center coordinates
                     child_coords = self.canvas.coords(child_vis['rect'])
                     if not child_coords or len(child_coords) < 4: continue
                     child_cx = (child_coords[0] + child_coords[2]) / 2
                     child_cy = (child_coords[1] + child_coords[3]) / 2
                     
-                    # Update the line coordinates using the same logic as _draw_connection
                     l1_id, l2_id = line_ids
                     top = parent_cy + self.node_h / 2
                     bot = child_cy - self.node_h / 2
@@ -354,14 +754,13 @@ class AVLVisualizer:
                     self.canvas.coords(l1_id, parent_cx, top, parent_cx, midy)
                     self.canvas.coords(l2_id, parent_cx, midy, child_cx, bot)
             except TclError:
-                # This can happen if a canvas item was unexpectedly deleted. Safe to ignore.
                 continue
 
     def _animate_single_rotation(self, before_root: Optional[AVLNode], after_root: Optional[AVLNode], rotation_info: Dict, on_done):
+        """单次旋转动画"""
         pos_before = self.compute_positions_for_root(before_root)
         pos_after = self.compute_positions_for_root(after_root)
 
-        # draw before_root to get canvas items mapping
         self.draw_tree_from_root(before_root)
 
         keys_common = set(pos_before.keys()) & set(pos_after.keys())
@@ -374,11 +773,12 @@ class AVLVisualizer:
             tx, ty = pos_after[k]
             moves.append((k, item['rect'], item['text'], sx, sy, tx, ty))
 
-        # draw arc/label to indicate rotation direction (best-effort)
+        # 绘制旋转指示
         rtype = rotation_info.get('type', '')
-        label_text = f"旋转: {rtype}"
+        label_text = f"🔄 旋转: {rtype}"
         z = rotation_info.get('z'); y = rotation_info.get('y')
         zkey = None; ykey = None
+        
         if z:
             zkey = next((k for k in pos_before.keys() if k.split('#')[0]==str(z.val)), None)
         if y:
@@ -390,13 +790,22 @@ class AVLVisualizer:
             midx = (zx + yx)/2
             topy = min(zy, yy) - 30
             try:
-                arc_id = self.canvas.create_arc(midx-30, topy-20, midx+30, topy+20, start=0, extent=180, style=ARC, width=2, outline="red")
-                label_id = self.canvas.create_text(midx, topy-28, text=label_text, font=("Arial",10,"bold"), fill="red")
+                arc_id = self.canvas.create_arc(
+                    midx-30, topy-20, midx+30, topy+20, 
+                    start=0, extent=180, style=ARC, width=3, 
+                    outline=self.colors["accent_red"]
+                )
+                label_id = self.canvas.create_text(
+                    midx, topy-28, 
+                    text=label_text, 
+                    font=("Segoe UI", 11, "bold"), 
+                    fill=self.colors["accent_red"]
+                )
             except Exception:
                 arc_id = None; label_id = None
 
-        frames = 30 # Increased for smoother animation
-        delay = 20  # Decreased for faster frame rate
+        frames = 30
+        delay = 20
 
         def rect_center_coords(rect_id):
             coords = self.canvas.coords(rect_id)
@@ -407,7 +816,6 @@ class AVLVisualizer:
 
         def frame_step(f=0):
             if f >= frames:
-                # final: draw after_root snapshot to ensure exact positions
                 self.draw_tree_from_root(after_root)
                 if arc_id:
                     try: self.canvas.delete(arc_id)
@@ -420,11 +828,9 @@ class AVLVisualizer:
             
             t = (f+1)/frames
             for (k, rect_id, text_id, sx, sy, tx, ty) in moves:
-                # compute desired current center (interpolation)
                 cur_cx = sx + (tx - sx) * t
                 cur_cy = sy + (ty - sy) * t
                 try:
-                    # get current center to compute delta for move command
                     ccx, ccy = rect_center_coords(rect_id)
                     if (ccx, ccy) == (0,0): continue
                     dx = cur_cx - ccx
@@ -434,9 +840,7 @@ class AVLVisualizer:
                 except Exception:
                     pass
 
-            # [FIXED] Redraw all edges to keep them connected during animation
             self._redraw_all_edges_during_animation()
-            
             self.window.after(delay, lambda: frame_step(f+1))
         frame_step(0)
 
@@ -451,7 +855,7 @@ class AVLVisualizer:
             before_root = snapshots[1 + i]
             after_root = snapshots[2 + i]
             rot_info = rotations[i]
-            self.update_status(f"执行旋转 {i+1}/{len(rotations)}: {rot_info.get('type')}")
+            self.update_status(f"🔄 执行旋转 {i+1}/{len(rotations)}: {rot_info.get('type')}")
             self._animate_single_rotation(before_root, after_root, rot_info, lambda: step(i+1))
         step(0)
 
@@ -468,15 +872,20 @@ class AVLVisualizer:
 
     def clear_canvas(self):
         if self.animating:
+            self.update_status("⚠️ 正在执行动画，无法清空")
             return
         self.model = AVLModel()
         self.node_vis.clear()
         self.canvas.delete("all")
         self.draw_instructions()
-        self.update_status("已清空")
+        self.update_status("🗑️ 已清空")
 
     def back_to_main(self):
-        self.window.destroy()
+        if self.is_embedded:
+            # 嵌入模式下不关闭窗口，只是隐藏
+            self.window.pack_forget()  # 或者 grid_forget，取决于布局
+        else:
+            self.window.destroy()
 
     def _ensure_avl_folder(self) -> str:
         return storage.ensure_save_subdir("avl")
@@ -495,8 +904,8 @@ class AVLVisualizer:
         if not filepath: return
         ok = storage.save_tree_to_file(root, filepath)
         if ok:
-            messagebox.showinfo("成功", f"AVL 已保存到：\n{filepath}")
-            self.update_status("保存成功")
+            messagebox.showinfo("✅ 成功", f"AVL 已保存到：\n{filepath}")
+            self.update_status("💾 保存成功")
 
     def load_structure(self):
         default_dir = self._ensure_avl_folder()
@@ -511,12 +920,10 @@ class AVLVisualizer:
         newroot = storage.tree_dict_to_nodes(tree_dict, AVLNodeClass)
         self.model.root = newroot
         self.draw_tree_from_root(clone_tree(self.model.root))
-        messagebox.showinfo("成功", f"AVL 已从文件加载并恢复结构：\n{filepath}")
-        self.update_status("已经从文件加载并恢复结构")
+        messagebox.showinfo("✅ 成功", f"AVL 已从文件加载并恢复结构：\n{filepath}")
+        self.update_status("📂 已从文件加载结构")
 
 if __name__ == '__main__':
     w = Tk()
-    w.title("AVL 可视化（增强旋转动画）")
-    w.geometry("1350x730")
-    AVLVisualizer(w)
+    app = AVLVisualizer(w)
     w.mainloop()

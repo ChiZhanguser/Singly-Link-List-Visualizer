@@ -1,0 +1,19 @@
+{
+  "type": "circular_queue",
+  "buffer": [
+    null,
+    null,
+    null,
+    "3",
+    "1",
+    "2",
+    "1",
+    null
+  ],
+  "meta": {
+    "capacity": 8,
+    "head": 3,
+    "tail": 7,
+    "size": 4
+  }
+}

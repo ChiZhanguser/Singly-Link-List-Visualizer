@@ -14,7 +14,7 @@ class SequenceListVisualizer:
     def __init__(self, root):
         self.window = root
         self.window.config(bg="lightgreen")
-        self.canvas = Canvas(self.window, bg="lightyellow", width=1350, height=500, relief=RAISED, bd=8)
+        self.canvas = Canvas(self.window, bg="lightyellow", width=1350, height=450, relief=RAISED, bd=8)
         self.canvas.pack()
         self.model = SequenceListModel()
         # sequence_api.bind_visualizer(self)  # 暂时注释掉
@@ -70,6 +70,8 @@ class SequenceListVisualizer:
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             title="保存顺序表到文件"
         )
+        if not filepath:
+            return
         payload = {"type": "sequence", "data": arr, "metadata": meta}
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
@@ -82,6 +84,8 @@ class SequenceListVisualizer:
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             title="从文件加载顺序表"
         )
+        if not filepath:
+            return
         with open(filepath, "r", encoding="utf-8") as f:
             loaded = json.load(f)
         data_list = loaded.get("data",[])
@@ -92,7 +96,7 @@ class SequenceListVisualizer:
     def prepare_build_list(self):
         self.build_values_entry = StringVar()
         input_frame = Frame(self.window, bg="lightgreen")
-        input_frame.place(x=400, y=650, width=600, height=80)  # 调整位置
+        input_frame.place(x=400, y=600, width=600, height=80)
         value_label = Label(input_frame, text="输入多个值(用逗号分隔):", font=("Arial", 12), bg="lightgreen")
         value_label.grid(row=0, column=0, padx=5, pady=5)
         value_entry = Entry(input_frame, textvariable=self.build_values_entry, font=("Arial", 12), width=30)
@@ -178,7 +182,7 @@ class SequenceListVisualizer:
         self.value_entry.set("")
         
         input_frame = Frame(self.window, bg="lightgreen")
-        input_frame.place(x=500, y=650, width=400, height=80)  # 调整位置
+        input_frame.place(x=500, y=600, width=400, height=80)
         
         value_label = Label(input_frame, text="输入值:", font=("Arial", 12), bg="lightgreen")
         value_label.grid(row=0, column=0, padx=5, pady=5)
@@ -197,7 +201,7 @@ class SequenceListVisualizer:
         self.position_entry.set("")
         
         input_frame = Frame(self.window, bg="lightgreen")
-        input_frame.place(x=400, y=650, width=600, height=80)  # 调整位置
+        input_frame.place(x=400, y=600, width=600, height=80)
         
         value_label = Label(input_frame, text="输入值:", font=("Arial", 12), bg="lightgreen")
         value_label.grid(row=0, column=0, padx=5, pady=5)
@@ -314,7 +318,7 @@ class SequenceListVisualizer:
     def prepare_delete_with_position(self):
         self.position_entry.set("")
         input_frame = Frame(self.window, bg="lightgreen")
-        input_frame.place(x=500, y=650, width=400, height=80)  # 调整位置
+        input_frame.place(x=500, y=600, width=400, height=80)
         pos_label = Label(input_frame, text="位置(1-based):", font=("Arial", 12), bg="lightgreen")
         pos_label.grid(row=0, column=0, padx=5, pady=5)
         pos_entry = Entry(input_frame, textvariable=self.position_entry, font=("Arial", 12))
@@ -360,6 +364,7 @@ class SequenceListVisualizer:
         self.update_display()
         # 启用所有按钮
         self.enable_buttons()
+    
     def clear_list(self):
         if len(self.data_store) == 0:
             messagebox.showinfo("信息", "顺序表已为空")
@@ -376,6 +381,7 @@ class SequenceListVisualizer:
         self.model.clear()
         self.update_display()
         self.enable_buttons()
+    
     def process_dsl(self, event=None):
         txt = (self.dsl_var.get() or "").strip()
         from DSL_utils import process_command
@@ -417,8 +423,8 @@ class SequenceListVisualizer:
 if __name__ == '__main__':
     window = Tk()
     window.title("顺序表可视化")
-    window.geometry("1350x730")
-    window.maxsize(1350, 730)
-    window.minsize(1350, 730)
+    window.geometry("1350x800")
+    window.maxsize(1350, 800)
+    window.minsize(1350, 800)
     SequenceListVisualizer(window)
     window.mainloop()
