@@ -127,6 +127,26 @@ class HashTableModel:
     def get_load_factor(self) -> float:
         """返回负载因子（有效元素/容量）"""
         return self.size / self.capacity
+    def resize(self, new_capacity: int):
+        """调整散列表容量"""
+        if new_capacity <= 0:
+            raise ValueError("capacity must be positive")
+        if new_capacity < self.size:
+            raise ValueError(f"new capacity ({new_capacity}) cannot be less than current size ({self.size})")
+        
+        # 保存当前有效元素（排除None和墓碑）
+        old_table = self.table
+        old_capacity = self.capacity
+        
+        # 创建新表
+        self.capacity = new_capacity
+        self.table = [None] * new_capacity
+        self.size = 0
+        
+        # 重新插入所有有效元素
+        for item in old_table:
+            if item is not None and item is not self.tombstone:
+                self.insert(item)
 
     def __repr__(self):
         return f"HashTableModel(capacity={self.capacity}, size={self.size}, table={self.table})"

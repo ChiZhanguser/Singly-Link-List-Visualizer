@@ -7,7 +7,7 @@ import math
 class BPlusVisualizer:
     def __init__(self, root):
         self.window = root
-        self.window.title("B+ 树 可视化 - 插入与分裂演示 (自适应布局)")
+        self.window.title("")
         self.window.geometry("1280x760")
         self.window.config(bg="#071129")
 
@@ -121,7 +121,7 @@ class BPlusVisualizer:
             self.update_status("已展开控制面板")
         else:
             # collapse
-            self.left_panel.forget()
+            self.left_panel.pack_forget()
             self.left_collapsed = True
             self.update_status("已折叠控制面板（使用全部画布空间）")
         # redraw after layout change
@@ -273,16 +273,15 @@ class BPlusVisualizer:
         return ids
 
     def redraw(self, highlight: Optional[Dict[BPlusNode, str]] = None):
+        # 确保布局正确
+        self.window.update_idletasks()
+        
         self.canvas.delete("all")
         self.node_items.clear()
 
         # background
         self._draw_gradient_background()
-
-        # header
-        self.canvas.create_text(32, 30, anchor="w", text=f"B+ 树（order={self.tree.order}）", font=("Segoe UI",14,"bold"), fill="#A7F3D0")
-        self.canvas.create_text(32, 50, anchor="w", text="插入与节点分裂（自适应布局）", font=("Segoe UI",10), fill="#9fb8d6")
-
+        
         pos = self.compute_positions()
         if not pos:
             self.canvas.create_text(640, 300, text="空树（请插入键）", font=("Arial",20), fill="#94a3b8")
@@ -432,7 +431,16 @@ class BPlusVisualizer:
                 self.window.after(200, step)
         step()
 
+
 if __name__ == '__main__':
     root = Tk()
     app = BPlusVisualizer(root)
+    
+    # 添加窗口显示后的调试
+    def check_initial_state():
+        print("窗口初始化完成")
+        print(f"左侧面板折叠状态: {app.left_collapsed}")
+        print(f"左侧面板是否在pack中: {app.left_panel.winfo_ismapped()}")
+    
+    root.after(500, check_initial_state)  # 延迟检查
     root.mainloop()

@@ -124,7 +124,7 @@ class RBTVisualizer:
                           width=40, font=("微软雅黑", 10),
                           relief=SOLID, bd=1)
         self.entry.grid(row=0, column=1, padx=8, pady=5, sticky=EW)
-        self.entry.insert(0, "1,2,3,4,5")
+        self.entry.insert(0, "1,2,3,4,5,0,6")
         
         # 按钮区域
         btn_frame = Frame(control_frame, bg=self.colors["bg_secondary"])
@@ -165,13 +165,7 @@ class RBTVisualizer:
     def draw_instructions(self):
         """绘制初始说明"""
         self.canvas.delete("all")
-        self.node_vis.clear()
-        
-        # 绘制说明文本
-        self.canvas.create_text(self.canvas_w/2, 30, 
-                              text="红黑树特性演示 - 插入过程展示搜索路径、红节点插入、颜色调整与旋转修复",
-                              font=("微软雅黑", 11, "bold"), fill="#333333")
-        
+        self.node_vis.clear()    
         # 绘制图例
         legend_y = self.canvas_h - 30
         self.draw_legend(legend_y)

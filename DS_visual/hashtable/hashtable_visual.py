@@ -39,6 +39,9 @@ class HashtableVisualizer:
         self.animating = False
         self.batch_queue = []
         self.batch_index = 0
+        
+        self.capacity_var = StringVar(value=str(self.capacity))
+        self.resize_frame = None
 
         self.create_heading()
         self.create_buttons()
@@ -90,6 +93,10 @@ class HashtableVisualizer:
         Button(button_frame, text="返回主界面", bg="#9B59B6", fg="white",
                activebackground="#8E44AD", activeforeground="white",
                command=self.back_to_main, **btn_style).grid(row=0, column=4, padx=8, pady=6)
+            # 新增：调整容量按钮
+        Button(button_frame, text="调整容量", bg="#F39C12", fg="white",
+            activebackground="#E67E22", activeforeground="white",
+            command=self.prepare_resize, **btn_style).grid(row=0, column=4, padx=8, pady=6)
 
         # 创建一个优雅的命令输入区
         cmd_frame = Frame(button_frame, bg="white", relief="groove", bd=2)
@@ -105,7 +112,7 @@ class HashtableVisualizer:
         dsl_entry.bind("<Return>", lambda e: self.process_dsl())
         
         # 设置初始示例命令
-        self.dsl_var.set("create 23 17 35 8 42")
+        self.dsl_var.set("create 23 17 35 8 42 29 56 67")
         dsl_entry.select_range(0, END)  # 默认全选，方便用户直接输入新命令
         
         # 添加带图标的提示标签
@@ -151,6 +158,234 @@ class HashtableVisualizer:
         # 统一设置 sticky 和 pady，确保对齐
         for child in button_frame.winfo_children():
             child.grid_configure(sticky="nsew")
+        
+            # 添加容量调整相关方法：
+    def prepare_resize(self):
+        """准备调整容量"""
+        if self.animating: 
+            return
+        self._open_resize_input()
+
+    def _open_resize_input(self):
+        """打开容量调整输入框"""
+        if self.resize_frame:
+            self.resize_frame.destroy()
+        
+        # 创建容量调整输入框
+        self.resize_frame = Frame(self.window, bg="#E8F4F9")
+        self.resize_frame.place(x=500, y=680, width=300, height=80)
+        
+        # 添加样式背景
+        resize_bg = Frame(self.resize_frame, bg="white", relief="groove", bd=2)
+        resize_bg.place(relx=0.02, rely=0.1, relwidth=0.96, relheight=0.8)
+        
+        Label(resize_bg, text="新容量:", 
+            font=("Microsoft YaHei UI", 11),
+            bg="white", fg="#2C3E50").pack(side=LEFT, padx=(15,5), pady=4)
+        
+        # 显示当前容量作为提示
+        current_info = Label(resize_bg, text=f"(当前: {self.capacity})", 
+                            font=("Microsoft YaHei UI", 9),
+                            bg="white", fg="#7F8C8D")
+        current_info.pack(side=LEFT, padx=5, pady=4)
+        
+        capacity_entry = Entry(resize_bg, textvariable=self.capacity_var,
+                            width=8, font=("Microsoft YaHei UI", 11),
+                            relief="flat", bg="white",
+                            highlightthickness=1,
+                            highlightcolor="#F39C12")
+        capacity_entry.pack(side=LEFT, padx=5, pady=4)
+        
+        Button(resize_bg, text="确认调整",
+            font=("Microsoft YaHei UI", 10, "bold"),
+            width=8, height=1,
+            bg="#F39C12", fg="white",
+            activebackground="#E67E22",
+            activeforeground="white",
+            relief="groove", bd=1,
+            cursor="hand2",
+            command=self._on_confirm_resize).pack(side=LEFT, padx=(10,5), pady=4)
+        
+        Button(resize_bg, text="取消",
+            font=("Microsoft YaHei UI", 10, "bold"),
+            width=6, height=1,
+            bg="#95A5A6", fg="white",
+            activebackground="#7F8C8D",
+            activeforeground="white",
+            relief="groove", bd=1,
+            cursor="hand2",
+            command=lambda: self._close_resize_input()).pack(side=LEFT, padx=5, pady=4)
+        
+        self.window.after(50, lambda: capacity_entry.focus_set())
+        capacity_entry.select_range(0, END)
+
+    def _on_confirm_resize(self):
+        """确认调整容量"""
+        try:
+            new_capacity = int(self.capacity_var.get())
+            if new_capacity <= 0:
+                messagebox.showerror("错误", "容量必须是正整数")
+                return
+            
+            if new_capacity == self.capacity:
+                messagebox.showinfo("提示", "新容量与当前容量相同")
+                self._close_resize_input()
+                return
+            
+            # 检查新容量是否足够容纳当前元素
+            if new_capacity < len(self.model):
+                messagebox.showerror("错误", f"新容量({new_capacity})不能小于当前元素数量({len(self.model)})")
+                return
+            
+            # 执行容量调整
+            self._resize_table(new_capacity)
+            self._close_resize_input()
+            
+        except ValueError:
+            messagebox.showerror("错误", "请输入有效的整数容量")
+        except Exception as e:
+            messagebox.showerror("错误", f"调整容量失败: {str(e)}")
+
+    def _resize_table(self, new_capacity: int):
+        """执行表容量调整"""
+        if self.animating:
+            return
+            
+        self.animating = True
+        self._set_buttons_state("disabled")
+        
+        try:
+            # 保存当前有效元素
+            valid_elements = []
+            for item in self.model.table:
+                if item is not None and item is not self.model.tombstone:
+                    valid_elements.append(item)
+            
+            # 创建新模型
+            old_capacity = self.capacity
+            self.model = HashTableModel(new_capacity)
+            self.capacity = new_capacity
+            
+            # 显示调整动画
+            self._show_resize_animation(old_capacity, new_capacity, valid_elements)
+            
+        except Exception as e:
+            self.animating = False
+            self._set_buttons_state("normal")
+            raise e
+
+    def _show_resize_animation(self, old_capacity: int, new_capacity: int, elements: list):
+        """显示容量调整动画"""
+        # 第一步：显示旧表淡出
+        self.canvas.delete("all")
+        self.canvas.create_text(675, 250, text=f"容量调整: {old_capacity} → {new_capacity}", 
+                            font=("Microsoft YaHei UI", 16, "bold"), fill="#2C3E50")
+        
+        # 绘制旧表（缩小并淡出）
+        old_start_x = 675 - (old_capacity * (self.cell_width + self.spacing)) // 2
+        for i in range(old_capacity):
+            x = old_start_x + i * (self.cell_width + self.spacing)
+            rect = self.canvas.create_rectangle(x, 300, x + self.cell_width, 300 + self.cell_height, 
+                                            fill="#FFEAA7", outline="#FDCB6E", width=2)
+            self.canvas.create_text(x + self.cell_width/2, 300 + self.cell_height/2, 
+                                text=str(i), font=("Arial", 10))
+        
+        self.window.after(1000, lambda: self._show_new_table_animation(new_capacity, elements))
+
+    def _show_new_table_animation(self, new_capacity: int, elements: list):
+        """显示新表构建动画"""
+        self.canvas.delete("all")
+        
+        # 绘制新表框架
+        total_width = (self.cell_width + self.spacing) * new_capacity
+        start_x = 675 - total_width // 2
+        
+        # 绘制空表
+        cell_rects = []
+        for i in range(new_capacity):
+            x = start_x + i * (self.cell_width + self.spacing)
+            rect = self.canvas.create_rectangle(x, 300, x + self.cell_width, 300 + self.cell_height, 
+                                            fill="white", outline="#3498DB", width=2)
+            cell_rects.append(rect)
+            self.canvas.create_text(x + self.cell_width/2, 280, 
+                                text=str(i), font=("Arial", 10, "bold"))
+        
+        self.canvas.create_text(675, 250, text=f"新容量: {new_capacity}", 
+                            font=("Microsoft YaHei UI", 16, "bold"), fill="#2C3E50")
+        
+        # 逐步插入元素
+        self._animate_elements_insertion(elements, start_x, cell_rects, new_capacity)
+
+    def _animate_elements_insertion(self, elements: list, start_x: int, cell_rects: list, new_capacity: int):
+        """动画显示元素重新插入过程"""
+        if not elements:
+            # 所有元素插入完成
+            self.window.after(500, self._finish_resize)
+            return
+        
+        element = elements[0]
+        remaining_elements = elements[1:]
+        
+        # 计算新哈希位置
+        new_index = self.model._hash(element)
+        
+        # 创建移动元素
+        elem_x = 675
+        elem_y = 150
+        rect = self.canvas.create_rectangle(elem_x-30, elem_y-20, elem_x+30, elem_y+20, 
+                                        fill="#ABEBC6", outline="#27AE60", width=2)
+        text = self.canvas.create_text(elem_x, elem_y, text=str(element), 
+                                    font=("Arial", 12, "bold"))
+        
+        # 目标位置
+        target_x = start_x + new_index * (self.cell_width + self.spacing) + self.cell_width/2
+        target_y = 300 + self.cell_height/2
+        
+        # 移动动画
+        self._animate_element_move(rect, text, elem_x, elem_y, target_x, target_y, 
+                                remaining_elements, start_x, cell_rects, new_capacity, element, new_index)
+
+    def _animate_element_move(self, rect, text, start_x, start_y, target_x, target_y, 
+                            remaining_elements, start_x_table, cell_rects, new_capacity, element, target_index):
+        """动画显示单个元素移动"""
+        steps = 20
+        dx = (target_x - start_x) / steps
+        dy = (target_y - start_y) / steps
+        
+        def move_step(step=0):
+            if step < steps:
+                self.canvas.move(rect, dx, dy)
+                self.canvas.move(text, dx, dy)
+                self.window.after(30, lambda: move_step(step + 1))
+            else:
+                # 移动完成，实际插入元素
+                self.model.insert(element)
+                self.canvas.delete(rect)
+                self.canvas.delete(text)
+                
+                # 高亮显示插入的位置
+                self.canvas.itemconfig(cell_rects[target_index], fill="#ABEBC6")
+                self.canvas.create_text(target_x, target_y, text=str(element), 
+                                    font=("Arial", 12, "bold"))
+                
+                # 继续插入下一个元素
+                self.window.after(300, lambda: self._animate_elements_insertion(
+                    remaining_elements, start_x_table, cell_rects, new_capacity))
+
+        move_step()
+
+    def _finish_resize(self):
+        """完成容量调整"""
+        self.animating = False
+        self._set_buttons_state("normal")
+        self.update_display()
+        messagebox.showinfo("成功", f"容量已调整为 {self.capacity}")
+
+    def _close_resize_input(self):
+        """关闭容量调整输入框"""
+        if self.resize_frame:
+            self.resize_frame.destroy()
+            self.resize_frame = None
 
     def process_dsl(self):
         text = self.dsl_var.get().strip()
