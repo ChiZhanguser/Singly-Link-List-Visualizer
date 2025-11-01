@@ -15,7 +15,8 @@ class AVLVisualizer:
             # 独立运行模式
             self.window.title("🌳 AVL 树可视化系统")
             self.window.config(bg="#1E1E2E")
-            self.window.geometry("1350x780")
+            # 恢复到合理的紧凑高度，现在并排布局可以容纳所有控件
+            self.window.geometry("1350x780") 
         else:
             # 嵌入模式，使用更紧凑的布局
             self.window.config(bg="#1E1E2E")
@@ -107,9 +108,68 @@ class AVLVisualizer:
         )
         title_label.pack(pady=(0, 15))
 
-        # 插入操作框架
+        # --- 新增容器，用于实现并排布局 ---
+        top_controls_container = Frame(main_frame, bg=self.colors["bg_primary"])
+        top_controls_container.pack(fill=X, pady=(0, 12)) 
+        
+        # 1. DSL命令框架 (放在左边)
+        dsl_frame = LabelFrame(
+            top_controls_container, # <--- 放置在容器内
+            text="⚡ DSL 命令",
+            bg=self.colors["bg_secondary"],
+            fg=self.colors["text_light"],
+            font=self.label_font,
+            padx=12,
+            pady=12
+        )
+        # 使用 side=LEFT 实现并排
+        dsl_frame.pack(side=LEFT, fill=BOTH, expand=True, padx=(0, 6)) 
+
+        # DSL第一行：标签和输入框
+        dsl_row1 = Frame(dsl_frame, bg=self.colors["bg_secondary"])
+        dsl_row1.pack(fill=X, pady=(0, 8))
+
+        Label(
+            dsl_row1, 
+            text="DSL命令:", 
+            bg=self.colors["bg_secondary"], 
+            fg=self.colors["text_light"],
+            font=self.label_font
+        ).pack(side=LEFT, padx=6)
+        
+        self.dsl_var = StringVar()
+        dsl_entry = Entry(
+            dsl_row1, 
+            textvariable=self.dsl_var, 
+            width=35, # 调整宽度以适应并排布局
+            font=self.label_font,
+            bd=2,
+            relief=GROOVE
+        )
+        dsl_entry.pack(side=LEFT, padx=6, fill=X, expand=True)
+        dsl_entry.bind('<Return>', self.execute_dsl_command)
+        
+        # DSL第二行：按钮
+        dsl_row2 = Frame(dsl_frame, bg=self.colors["bg_secondary"])
+        dsl_row2.pack(fill=X, pady=(8, 0))
+        
+        self.create_button(
+            dsl_row2, 
+            "🚀 执行DSL", 
+            self.colors["accent_purple"],
+            self.execute_dsl_command
+        ).pack(side=LEFT, padx=6, pady=4)
+        
+        self.create_button(
+            dsl_row2, 
+            "❓ DSL帮助", 
+            "#673AB7",
+            self.show_dsl_help
+        ).pack(side=LEFT, padx=6, pady=4)
+
+        # 2. 插入操作框架 (放在右边)
         insert_frame = LabelFrame(
-            main_frame,
+            top_controls_container, # <--- 放置在容器内
             text="📥 插入节点",
             bg=self.colors["bg_secondary"],
             fg=self.colors["text_light"],
@@ -117,7 +177,8 @@ class AVLVisualizer:
             padx=12,
             pady=12
         )
-        insert_frame.pack(fill=X, pady=(0, 12))
+        # 使用 side=LEFT 实现并排
+        insert_frame.pack(side=LEFT, fill=BOTH, expand=True, padx=(6, 0)) 
 
         # 插入操作的第一行：标签和输入框
         input_row1 = Frame(insert_frame, bg=self.colors["bg_secondary"])
@@ -134,7 +195,7 @@ class AVLVisualizer:
         entry = Entry(
             input_row1, 
             textvariable=self.input_var, 
-            width=35, 
+            width=25, # 调整宽度以适应并排布局
             font=self.label_font,
             bd=2,
             relief=GROOVE
@@ -160,7 +221,7 @@ class AVLVisualizer:
             self.clear_canvas
         ).pack(side=LEFT, padx=4, pady=4)
 
-        # 文件操作框架
+        # 文件操作框架 (保持在底部)
         file_frame = LabelFrame(
             main_frame,
             text="💾 文件操作",
@@ -197,60 +258,6 @@ class AVLVisualizer:
             self.back_to_main
         ).pack(side=LEFT, padx=6, pady=6)
 
-        # DSL命令框架
-        dsl_frame = LabelFrame(
-            main_frame,
-            text="⚡ DSL 命令",
-            bg=self.colors["bg_secondary"],
-            fg=self.colors["text_light"],
-            font=self.label_font,
-            padx=12,
-            pady=12
-        )
-        dsl_frame.pack(fill=X, pady=(0, 15))
-
-        # DSL第一行：标签和输入框
-        dsl_row1 = Frame(dsl_frame, bg=self.colors["bg_secondary"])
-        dsl_row1.pack(fill=X, pady=(0, 8))
-
-        Label(
-            dsl_row1, 
-            text="DSL命令:", 
-            bg=self.colors["bg_secondary"], 
-            fg=self.colors["text_light"],
-            font=self.label_font
-        ).pack(side=LEFT, padx=6)
-        
-        self.dsl_var = StringVar()
-        dsl_entry = Entry(
-            dsl_row1, 
-            textvariable=self.dsl_var, 
-            width=45, 
-            font=self.label_font,
-            bd=2,
-            relief=GROOVE
-        )
-        dsl_entry.pack(side=LEFT, padx=6, fill=X, expand=True)
-        dsl_entry.bind('<Return>', self.execute_dsl_command)
-        
-        # DSL第二行：按钮
-        dsl_row2 = Frame(dsl_frame, bg=self.colors["bg_secondary"])
-        dsl_row2.pack(fill=X, pady=(8, 0))
-        
-        self.create_button(
-            dsl_row2, 
-            "🚀 执行DSL", 
-            self.colors["accent_purple"],
-            self.execute_dsl_command
-        ).pack(side=LEFT, padx=6, pady=4)
-        
-        self.create_button(
-            dsl_row2, 
-            "❓ DSL帮助", 
-            "#673AB7",
-            self.show_dsl_help
-        ).pack(side=LEFT, padx=6, pady=4)
-
         # 状态栏
         self.status_frame = Frame(self.window, bg=self.colors["bg_secondary"], height=30)
         self.status_frame.pack(fill=X, side=BOTTOM, pady=(5, 0))
@@ -264,6 +271,8 @@ class AVLVisualizer:
             font=self.status_font
         )
         self.status_label.pack(side=LEFT, padx=12, pady=6)
+
+    # --- 保持其他方法不变 ---
 
     def _create_embedded_controls(self):
         """嵌入到主程序时的紧凑控件布局"""
@@ -407,14 +416,18 @@ class AVLVisualizer:
             )
 
     def execute_dsl_command(self, event=None):
-        """执行DSL命令"""
+        """执行DSL命令 (已更新为使用主DSL路由器)"""
         dsl_text = self.dsl_var.get().strip()
         if not dsl_text:
             return
             
         try:
-            from DSL_utils import avl_dsl
-            success = avl_dsl.process(self, dsl_text)
+            # 导入顶层的 DSL 处理器 (即 __init__.py 中的 process_command)
+            from DSL_utils import process_command 
+            
+            # 让主处理器自动识别 visualizer 类型并执行命令
+            success = process_command(self, dsl_text) 
+            
             if success:
                 self.dsl_var.set("")
                 self.update_status("✅ DSL命令执行成功")
@@ -422,9 +435,13 @@ class AVLVisualizer:
             messagebox.showerror("❌ DSL错误", f"执行DSL命令时出错: {str(e)}")
 
     def show_dsl_help(self):
-        """显示DSL帮助"""
-        from avl import avl_dsl
-        avl_dsl._show_help()
+        """显示DSL帮助 (已修复导入路径)"""
+        try:
+            # 修复了不一致的导入路径
+            from DSL_utils import avl_dsl
+            avl_dsl._show_help()
+        except ImportError:
+             messagebox.showerror("❌ 导入错误", "无法加载 AVL DSL 帮助。\n请确保 'DSL_utils' 包已正确安装。")
         
     def draw_instructions(self):
         self.canvas.delete("all")

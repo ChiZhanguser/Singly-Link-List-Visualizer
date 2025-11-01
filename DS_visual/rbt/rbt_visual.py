@@ -4,7 +4,7 @@ from tkinter import messagebox, filedialog
 from typing import Dict, Tuple, List, Optional
 from rbt.rbt_model import RBModel, RBNode, clone_tree
 import storage as storage
-
+from DSL_utils import process_command 
 
 class RBTVisualizer:
     def __init__(self, root):
@@ -106,54 +106,82 @@ class RBTVisualizer:
         self.canvas.pack(padx=10, pady=(0, 10), fill=BOTH, expand=True)
 
     def create_control_panel(self):
-        """创建控制面板"""
+        """创建控制面板（包含：输入行、DSL 行与操作按钮）"""
         control_frame = Frame(self.main_frame, bg=self.colors["bg_secondary"],
                             relief=SOLID, bd=1)
         control_frame.pack(fill=X)
-        
-        # 输入区域
+
+        # 输入区域（单行：输入节点值 + DSL + 执行按钮）
         input_frame = Frame(control_frame, bg=self.colors["bg_secondary"])
         input_frame.pack(fill=X, padx=15, pady=12)
-        
-        Label(input_frame, text="输入节点值:", 
-              font=("微软雅黑", 10), 
-              bg=self.colors["bg_secondary"]).grid(row=0, column=0, sticky=W, pady=5)
-        
+
+        # 输入节点值 Label + Entry（左侧）
+        Label(input_frame, text="输入节点值:",
+            font=("微软雅黑", 10),
+            bg=self.colors["bg_secondary"]).grid(row=0, column=0, sticky=W, padx=(0,6), pady=5)
+
         self.input_var = StringVar()
-        self.entry = Entry(input_frame, textvariable=self.input_var, 
-                          width=40, font=("微软雅黑", 10),
-                          relief=SOLID, bd=1)
-        self.entry.grid(row=0, column=1, padx=8, pady=5, sticky=EW)
-        self.entry.insert(0, "1,2,3,4,5,0,6")
-        
+        self.input_entry = Entry(input_frame, textvariable=self.input_var,
+                                font=("微软雅黑", 10), relief=SOLID, bd=1)
+        self.input_entry.grid(row=0, column=1, padx=(0,12), pady=5, sticky=EW)
+        # 恢复默认内容
+        self.input_entry.insert(0, "1,2,3,4,5,0,6")
+        # 按回车默认触发动画插入（如需改为直接插入可改为 self.insert_direct）
+        self.input_entry.bind("<Return>", lambda e: self.start_insert_animated())
+
+        # DSL Label + Entry（右侧，与输入节点值并排）
+        Label(input_frame, text="DSL 命令:",
+            font=("微软雅黑", 10),
+            bg=self.colors["bg_secondary"]).grid(row=0, column=2, sticky=W, padx=(6,6), pady=5)
+
+        self.dsl_var = StringVar()
+        self.dsl_entry = Entry(input_frame, textvariable=self.dsl_var,
+                            font=("微软雅黑", 10), relief=SOLID, bd=1)
+        self.dsl_entry.grid(row=0, column=3, padx=(0,6), pady=5, sticky=EW)
+        self.dsl_entry.insert(0, "create 1 2 3 4 5 0 6")
+        # 回车执行 DSL
+        self.dsl_entry.bind("<Return>", lambda e: self.execute_dsl())
+
+        # DSL 执行按钮（在最右侧）
+        self.execute_dsl_btn = Button(input_frame, text="执行 DSL", command=self.execute_dsl,
+                                    bg=self.colors["btn_primary"], fg="white",
+                                    font=("微软雅黑", 9), relief=FLAT, bd=0, padx=10, pady=4,
+                                    cursor="hand2")
+        self.execute_dsl_btn.grid(row=0, column=4, padx=(6,0), pady=5, sticky=W)
+
+        # 关键：让左右两个 Entry 能够水平扩展（列 1 和列 3）
+        input_frame.columnconfigure(1, weight=1)
+        input_frame.columnconfigure(3, weight=1)
+
+        # 兼容旧代码：如果其他函数还引用 self.entry，保持兼容
+        self.entry = self.input_entry
+
         # 按钮区域
         btn_frame = Frame(control_frame, bg=self.colors["bg_secondary"])
         btn_frame.pack(fill=X, padx=15, pady=10)
-        
+
         # 第一行按钮
         btn_row1 = Frame(btn_frame, bg=self.colors["bg_secondary"])
         btn_row1.pack(fill=X, pady=5)
-        
-        self.create_button(btn_row1, "插入节点 (动画演示)", 
-                         self.start_insert_animated, self.colors["btn_success"]).pack(side=LEFT, padx=4)
-        self.create_button(btn_row1, "插入节点 (直接)", 
-                         self.insert_direct, self.colors["btn_primary"]).pack(side=LEFT, padx=4)
-        self.create_button(btn_row1, "清空树", 
-                         self.clear_canvas, self.colors["btn_warning"]).pack(side=LEFT, padx=4)
-        
+
+        self.create_button(btn_row1, "插入节点 (动画演示)",
+                        self.start_insert_animated, self.colors["btn_success"]).pack(side=LEFT, padx=4)
+        self.create_button(btn_row1, "插入节点 (直接)",
+                        self.insert_direct, self.colors["btn_primary"]).pack(side=LEFT, padx=4)
+        self.create_button(btn_row1, "清空树",
+                        self.clear_canvas, self.colors["btn_warning"]).pack(side=LEFT, padx=4)
+
         # 第二行按钮
         btn_row2 = Frame(btn_frame, bg=self.colors["bg_secondary"])
         btn_row2.pack(fill=X, pady=5)
-        
-        self.create_button(btn_row2, "保存结构", 
-                         self.save_structure, "#9C27B0").pack(side=LEFT, padx=4)
-        self.create_button(btn_row2, "加载结构", 
-                         self.load_structure, "#9C27B0").pack(side=LEFT, padx=4)
-        self.create_button(btn_row2, "返回主界面", 
-                         self.back_to_main, self.colors["btn_danger"]).pack(side=LEFT, padx=4)
-        
-        # 配置网格权重
-        input_frame.columnconfigure(1, weight=1)
+
+        self.create_button(btn_row2, "保存结构",
+                        self.save_structure, "#9C27B0").pack(side=LEFT, padx=4)
+        self.create_button(btn_row2, "加载结构",
+                        self.load_structure, "#9C27B0").pack(side=LEFT, padx=4)
+        self.create_button(btn_row2, "返回主界面",
+                        self.back_to_main, self.colors["btn_danger"]).pack(side=LEFT, padx=4)
+
 
     def create_button(self, parent, text, command, color):
         """创建样式化按钮"""
@@ -192,6 +220,39 @@ class RBTVisualizer:
     def update_status(self, text: str):
         """更新状态栏"""
         self.status_label.config(text=text)
+    
+    def execute_dsl(self):
+        """执行 DSL 命令（由按钮或 Enter 触发）"""
+        cmd = self.dsl_var.get().strip()
+        if not cmd:
+            messagebox.showinfo("提示", "请输入 DSL 命令，例如：\n  create 1,2,3\n  clear")
+            return
+
+        # 如果 process_command 未导入（None），提示用户并返回
+        if process_command is None:
+            messagebox.showerror("模块缺失", "未找到 DSL_utils 模块，无法执行 DSL 命令。\n"
+                                 "请确认 DSL_utils 包存在并已正确导入。")
+            self.update_status("DSL 执行失败：缺少 DSL_utils")
+            return
+
+        try:
+            # process_command 负责识别 visualizer 类型并调用相应的处理器（rbt_dsl）
+            result = process_command(self, cmd)
+            # process_command 可能返回 True/False/None，统一处理显示状态
+            if result is False:
+                self.update_status(f"DSL 命令执行失败: {cmd}")
+            else:
+                self.update_status(f"DSL 命令已执行: {cmd}")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("DSL 执行异常", f"执行 DSL 时发生异常：\n{e}")
+            self.update_status("DSL 执行异常")
+
+# （可选）你也可以添加一个快捷清空输入的函数，但不是必须
+    def clear_dsl_input(self):
+        self.dsl_var.set("")
+        self.update_status("DSL 输入已清空")
 
     def _draw_connection(self, cx, cy, tx, ty):
         """绘制节点连接线"""

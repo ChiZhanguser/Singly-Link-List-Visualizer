@@ -317,6 +317,102 @@ class MainWindow:
         self.desc_text.delete("1.0", END)
         self.desc_text.insert("1.0", "例如：这是一个包含1,2,3的链表")
     
+# 在 main.py 中修改以下方法
+
+    def _clean_dsl_response(self, response):
+        """清理DSL响应，提取纯命令"""
+        if not response:
+            return ""
+        
+        cleaned = response.strip()
+        
+        # 移除可能的markdown代码块
+        if "```" in cleaned:
+            code_blocks = re.findall(r'```(?:\w+)?\s*(.*?)\s*```', cleaned, re.DOTALL)
+            if code_blocks:
+                cleaned = code_blocks[0].strip()
+        
+        # 检查是否是Python对象表示（如LinkedList、Node等）
+        if any(keyword in cleaned for keyword in ['LinkedList', 'Node', 'data=', 'next=', 'head=']):
+            numbers = re.findall(r'\b\d+\b', cleaned)
+            if numbers:
+                return f"create {','.join(numbers)}"
+        
+        # 移除常见的非命令文本前缀
+        unwanted_prefixes = [
+            "dsl命令:", "命令:", "生成的dsl命令:", "根据图片分析",
+            "这个图示", "图片显示", "数据结构", "链表", "栈", "队列", "树",
+            "LinkedList", "Node", "insert", ";"
+        ]
+        
+        for prefix in unwanted_prefixes:
+            if cleaned.lower().startswith(prefix.lower()):
+                cleaned = cleaned[len(prefix):].strip()
+        
+        # **新增：处理多条 insert 命令的情况（BST图片识别场景）**
+        # 如果响应包含多个 insert 语句（用分号分隔），转换为 create 命令
+        if 'insert' in cleaned.lower() and ';' in cleaned:
+            # 提取所有数字
+            numbers = re.findall(r'\b\d+\b', cleaned)
+            if numbers:
+                return f"create {','.join(numbers)}"
+        
+        # 只保留看起来像DSL命令的行
+        lines = cleaned.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and not any(word in line.lower() for word in ['分析', '解释', '说明', '示例', '图片', '结构', 'python', '代码']):
+                # 检查是否包含DSL命令关键字
+                dsl_keywords = ['create', 'insert', 'delete', 'push', 'pop', 'enqueue', 'dequeue', 'clear', 'search']
+                if any(keyword in line.lower() for keyword in dsl_keywords):
+                    # **额外检查：如果是单个insert但应该用create**
+                    if line.lower().startswith('insert') and ',' not in line:
+                        # 这可能是图片识别场景，尝试提取所有数字
+                        all_numbers = re.findall(r'\b\d+\b', cleaned)
+                        if len(all_numbers) > 1:
+                            return f"create {','.join(all_numbers)}"
+                    return line
+        
+        # 如果没有找到明确命令，尝试手动解析结构
+        parsed_command = self._parse_tree_from_response(cleaned)
+        if parsed_command:
+            return parsed_command
+        
+        # 返回原始响应的第一行
+        return lines[0].strip() if lines else ""
+
+    def _parse_tree_from_response(self, response):
+        """从响应中手动解析树结构（新增方法）"""
+        try:
+            # 尝试匹配常见的树表示格式
+            patterns = [
+                r'BST\(.*?(\d+).*?(\d+).*?(\d+)',  # BST包含数字
+                r'Tree.*?(\d+).*?(\d+).*?(\d+)',   # Tree描述
+                r'根节点.*?(\d+)',                  # 中文根节点描述
+            ]
+            
+            for pattern in patterns:
+                matches = re.findall(pattern, response)
+                if matches:
+                    if isinstance(matches[0], tuple):
+                        numbers = list(matches[0])
+                    else:
+                        numbers = matches
+                    if len(numbers) >= 2:
+                        return f"create {','.join(map(str, numbers))}"
+            
+            # 提取所有数字作为最后的备选方案
+            numbers = re.findall(r'\b\d+\b', response)
+            if len(numbers) >= 2:
+                return f"create {','.join(numbers)}"
+            
+            return None
+        except Exception as e:
+            print(f"解析树响应失败: {e}")
+            return None
+
+
+    # 同时修改 _analyze_image 方法中的系统提示词
     def _analyze_image(self):
         """分析图片并生成DSL命令"""
         image_path = self.image_processor.get_image_path()
@@ -327,14 +423,12 @@ class MainWindow:
             return
         
         try:
-            # 显示加载状态
             self.image_window.config(cursor="watch")
             
-            # 初始化LLM客户端
             from llm.doubao_client import DoubaoClient
             client = DoubaoClient()
             
-            # 更具体和严格的系统提示
+            # **优化后的系统提示词 - 强调使用 create 命令**
             system_prompt = (
                 "你是一个数据结构可视化助手。你的唯一任务是分析用户上传的图片，识别其中的数据结构，并生成相应的DSL命令。\n\n"
                 "重要规则：\n"
@@ -342,42 +436,43 @@ class MainWindow:
                 "2. 不要使用markdown格式\n"
                 "3. 不要添加任何前缀或后缀\n"
                 "4. 不要返回Python代码或对象表示\n"
-                "5. 如果无法识别，返回 'error'\n\n"
+                "5. 如果无法识别，返回 'error'\n"
+                "6. **对于树结构（BST、二叉树等），必须使用单个 create 命令，不要使用多个 insert 命令**\n\n"
                 "DSL命令格式（只使用以下格式）：\n"
                 "- 清空：clear\n"
-                "- 链表批量创建：create 1,2,3\n"
+                "- 批量创建（推荐用于树和链表）：create 1,2,3,4,5\n"
                 "- 链表插入：insert 5 或 insert 5 at 2\n"
                 "- 链表删除：delete first 或 delete last 或 delete 2\n"
                 "- 栈操作：push 5 或 pop\n"
                 "- 队列操作：enqueue 5 或 dequeue\n"
-                "- 树操作：insert 5（用于二叉搜索树）\n"
+                "- 树操作：insert 5（用于单个节点）\n"
                 "- 搜索：search 5\n\n"
                 "示例：\n"
-                "- 如果图片显示链表包含 1->2->3，则返回 'create 1,2,3'\n"
-                "- 如果图片显示栈顶有5，下面有3,1，则返回 'create 1,3,5'\n"
-                "- 如果图片显示二叉树包含1,2,3，则返回 'create 1,2,3'\n\n"
+                "- 如果图片显示BST包含节点 5,2,6,1,4,7,3，则返回 'create 5,2,6,1,4,7,3'\n"
+                "- 如果图片显示链表 1->2->3，则返回 'create 1,2,3'\n"
+                "- 如果图片显示栈顶有5，下面有3,1，则返回 'create 1,3,5'\n\n"
+                "**关键：对于树结构，始终使用 create 命令列出所有节点值（用逗号分隔），不要使用分号分隔的多条 insert 命令。**\n\n"
                 "现在请严格按照上述规则，只返回DSL命令："
             )
             
-            # 用户描述文本 - 更明确的指令
-            user_prompt = "分析这张图片中的数据结构，只返回DSL命令，不要任何解释、代码或对象表示。"
+            # 用户描述文本
+            user_prompt = "分析这张图片中的数据结构，只返回单个DSL命令（如 'create 1,2,3'），不要任何解释、代码或对象表示。"
             if description and description != "例如：这是一个包含1,2,3的链表":
-                user_prompt = f"{description} 只返回DSL命令，不要任何解释、代码或对象表示。"
+                user_prompt = f"{description} 只返回单个DSL命令，不要任何解释、代码或对象表示。"
             
             # 发送多模态请求
             response = client.send_multimodal_message(
                 text=user_prompt,
                 image_path=image_path,
-                temperature=0.0  # 使用最低温度以获得确定性输出
+                temperature=0.0
             )
             
             print(f"图片识别原始响应: {response}")
             
-            # 更严格的命令清理
+            # 清理DSL命令
             dsl_command = self._clean_dsl_response(response)
             if not dsl_command or dsl_command.lower() == 'error':
                 messagebox.showerror("错误", "无法识别图片中的数据结构")
-                # 恢复光标状态
                 self.image_window.config(cursor="")
                 return
             
@@ -386,10 +481,7 @@ class MainWindow:
             # 执行DSL命令
             self._execute_dsl_command_from_image(dsl_command)
             
-            # 恢复光标状态
             self.image_window.config(cursor="")
-            
-            # 关闭图片窗口
             self.image_window.destroy()
             messagebox.showinfo("成功", f"已识别并执行命令: {dsl_command}")
             
@@ -398,60 +490,10 @@ class MainWindow:
             print(f"图片识别错误: {str(e)}")
             import traceback
             traceback.print_exc()
-            # 确保在异常情况下也恢复光标状态
             try:
                 self.image_window.config(cursor="")
             except:
-                pass  # 如果窗口已经不存在，忽略错误
-        
-    def _clean_dsl_response(self, response):
-        """清理DSL响应，提取纯命令"""
-        if not response:
-            return ""
-        
-        # 移除可能的markdown代码块
-        cleaned = response.strip()
-        if "```" in cleaned:
-            # 提取代码块内的内容
-            code_blocks = re.findall(r'```(?:\w+)?\s*(.*?)\s*```', cleaned, re.DOTALL)
-            if code_blocks:
-                cleaned = code_blocks[0].strip()
-        
-        # 检查是否是Python对象表示（如LinkedList、Node等）
-        if any(keyword in cleaned for keyword in ['LinkedList', 'Node', 'data=', 'next=', 'head=']):
-            # 尝试从对象表示中提取数字
-            numbers = re.findall(r'\b\d+\b', cleaned)
-            if numbers:
-                return f"create {','.join(numbers)}"
-        
-        # 移除常见的非命令文本
-        unwanted_prefixes = [
-            "dsl命令:", "命令:", "生成的dsl命令:", "根据图片分析",
-            "这个图示", "图片显示", "数据结构", "链表", "栈", "队列", "树",
-            "LinkedList", "Node"
-        ]
-        
-        for prefix in unwanted_prefixes:
-            if cleaned.lower().startswith(prefix.lower()):
-                cleaned = cleaned[len(prefix):].strip()
-        
-        # 只保留看起来像DSL命令的行
-        lines = cleaned.split('\n')
-        for line in lines:
-            line = line.strip()
-            if line and not any(word in line.lower() for word in ['分析', '解释', '说明', '示例', '图片', '结构', 'python', '代码']):
-                # 检查是否包含DSL命令关键字
-                dsl_keywords = ['create', 'insert', 'delete', 'push', 'pop', 'enqueue', 'dequeue', 'clear', 'search']
-                if any(keyword in line.lower() for keyword in dsl_keywords):
-                    return line
-        
-        # 如果没有找到明确命令，尝试手动解析链表结构
-        parsed_command = self._parse_linked_list_from_response(cleaned)
-        if parsed_command:
-            return parsed_command
-        
-        # 如果还是没有，返回原始响应的第一行
-        return lines[0].strip() if lines else ""
+                pass
     
     def _parse_linked_list_from_response(self, response):
         """从响应中手动解析链表结构"""

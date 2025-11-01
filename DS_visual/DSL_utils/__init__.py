@@ -4,6 +4,8 @@ from . import sequence_dsl
 from . import bst_dsl
 from . import trie_dsl
 from . import huffman_dsl
+from . import avl_dsl  
+from . import rbt_dsl
 
 def process_command(visualizer, text):
     if not visualizer or not text or not text.strip():
@@ -22,6 +24,7 @@ def process_command(visualizer, text):
     except Exception as e:
         print(f"DEBUG: Huffman processing error: {e}")
         pass
+    
     try:
         # LinkList or LinkedListVisualizer
         if type(visualizer).__name__ in ("LinkList", "LinkedListVisualizer") or "linked" in visualizer_type:
@@ -37,8 +40,9 @@ def process_command(visualizer, text):
     except Exception as e:
         print(f"Error in linked list command processing: {e}")  
         pass
+    
     try:
-        # Circular Queue Visualizer (检查要放在栈之前，因为条件更具体)
+        # Circular Queue Visualizer (检查要放在栈之前,因为条件更具体)
         if ("circularqueue" in visualizer_type.replace("_", "") or
             "queue" in visualizer_type.lower() or
             hasattr(visualizer, "animate_enqueue") and hasattr(visualizer, "animate_dequeue")):
@@ -101,6 +105,21 @@ def process_command(visualizer, text):
         pass
 
     try:
+        # Red-Black Tree Visualizer (在AVL之前检查,避免混淆)
+        if ("rbt" in visualizer_type or 
+            "redblack" in visualizer_type.replace("_", "").replace("-", "") or
+            (hasattr(visualizer, "model") and 
+             hasattr(visualizer.model, "root") and
+             hasattr(visualizer, "start_insert_animated") and
+             # 检查节点是否有color属性(红黑树特征)
+             (visualizer.model.root is None or hasattr(visualizer.model.root, "color")))):
+            print(f"DEBUG: Processing as Red-Black Tree visualizer")
+            return rbt_dsl.process(visualizer, text)
+    except Exception as e:
+        print(f"DEBUG: RBT processing error: {e}")
+        pass
+
+    try:
         # AVL Visualizer
         if ("avl" in visualizer_type or 
             hasattr(visualizer, "start_insert_animated") and 
@@ -108,7 +127,6 @@ def process_command(visualizer, text):
             hasattr(visualizer, "model") and
             hasattr(visualizer.model, "_balance_factor")):
             print(f"DEBUG: Processing as AVL visualizer")
-            from . import avl_dsl
             return avl_dsl.process(visualizer, text)
     except Exception as e:
         print(f"DEBUG: AVL processing error: {e}")
@@ -135,32 +153,6 @@ def process_command(visualizer, text):
     except Exception as e:
         print(f"DEBUG: Trie processing error: {e}")
         pass
-
-    try:
-        # Circular Queue Visualizer
-        if ("circularqueue" in visualizer_type.replace("_", "") or
-            hasattr(visualizer, "animate_enqueue") and
-            hasattr(visualizer, "animate_dequeue")):
-            print(f"DEBUG: Processing as Circular Queue visualizer")
-            # Convert commands for circular queue
-            text_parts = text.strip().split()
-            if not text_parts:
-                return
-            
-            cmd = text_parts[0].lower()
-            args = text_parts[1:]
-            
-            # Command conversion for queue operations
-            if cmd in ("insert", "add", "push"):
-                text = "enqueue " + " ".join(args)
-            elif cmd in ("delete", "remove", "pop"):
-                text = "dequeue"
-            print(f"DEBUG: Circular Queue command conversion: {text}")
-            from . import circular_queue_dsl
-            return circular_queue_dsl._fallback_process_command(visualizer, text)
-    except Exception as e:
-        print(f"DEBUG: Circular Queue processing error: {e}")
-        pass
     
     from tkinter import messagebox
     messagebox.showinfo("未识别可视化类型", 
@@ -169,5 +161,8 @@ def process_command(visualizer, text):
         "2. 栈 (Stack)\n"
         "3. 顺序表 (Sequence List)\n"
         "4. 二叉搜索树 (BST)\n"
-        "5. 字典树 (Trie)\n\n"
+        "5. AVL树 (AVL)\n"
+        "6. 红黑树 (RBT)\n"
+        "7. 字典树 (Trie)\n"
+        "8. 哈夫曼树 (Huffman)\n\n"
         f"当前类型 '{type(visualizer).__name__}' 未能匹配到对应的DSL处理器。")
