@@ -112,7 +112,7 @@ def process_command(visualizer, text):
              hasattr(visualizer.model, "root") and
              hasattr(visualizer, "start_insert_animated") and
              # 检查节点是否有color属性(红黑树特征)
-             (visualizer.model.root is None or hasattr(visualizer.model.root, "color")))):
+             (visualizer.model.root is None and hasattr(visualizer.model.root, "color")))):
             print(f"DEBUG: Processing as Red-Black Tree visualizer")
             return rbt_dsl.process(visualizer, text)
     except Exception as e:
