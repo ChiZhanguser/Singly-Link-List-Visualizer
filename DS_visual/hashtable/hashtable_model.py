@@ -1,7 +1,13 @@
-from typing import List, Optional, Any, Tuple
+from typing import List, Optional, Any, Tuple, Union
 from dataclasses import dataclass
+from enum import Enum
 
 TOMBSTONE = object()
+
+class CollisionMethod(Enum):
+    """冲突处理方法"""
+    OPEN_ADDRESSING = "open_addressing"  # 开放寻址法
+    CHAINING = "chaining"  # 拉链法
 
 @dataclass
 class ProbeResult:
@@ -10,15 +16,21 @@ class ProbeResult:
     target_index: Optional[int]  # 目标位置（插入位置或找到的位置）
     probe_path: List[int]  # 探测路径
     is_full: bool = False  # 表是否已满
+    chain_position: Optional[int] = None  # 在链表中的位置（仅拉链法）
 
 class HashTableModel:
-    def __init__(self, capacity: int = 11):
+    def __init__(self, capacity: int = 11, method: CollisionMethod = CollisionMethod.OPEN_ADDRESSING):
         if capacity <= 0:
             raise ValueError("capacity must be positive")
         self.capacity = capacity
-        self.table: List[Optional[Any]] = [None] * capacity
+        self.method = method
         self.tombstone = TOMBSTONE
-        self.size = 0  # 有效元素计数（不含墓碑）
+        self.size = 0  # 有效元素计数
+        
+        if method == CollisionMethod.OPEN_ADDRESSING:
+            self.table: List[Optional[Any]] = [None] * capacity
+        else:  # CHAINING
+            self.table: List[List[Any]] = [[] for _ in range(capacity)]
 
     def _hash(self, x: Any) -> int:
         """计算元素的哈希值"""
@@ -28,8 +40,10 @@ class HashTableModel:
             xi = hash(str(x))
         return abs(xi) % self.capacity
 
-    def _probe_find(self, x: Any) -> ProbeResult:
-        """查找元素，返回探测结果"""
+
+    # ==================== 开放寻址法 ====================
+    def _probe_find_open(self, x: Any) -> ProbeResult:
+        """开放寻址法：查找元素"""
         start = self._hash(x)
         probe_path = []
         i = start
@@ -50,14 +64,12 @@ class HashTableModel:
         
         return ProbeResult(False, -1, probe_path)
 
-    def _probe_insert(self, x: Any) -> ProbeResult:
-        """探测插入位置，返回探测结果"""
-        # 先尝试查找是否存在
-        find_result = self._probe_find(x)
+    def _probe_insert_open(self, x: Any) -> ProbeResult:
+        """开放寻址法：探测插入位置"""
+        find_result = self._probe_find_open(x)
         if find_result.found:
             return find_result
 
-        # 开始插入探测
         start = self._hash(x)
         probe_path = []
         i = start
@@ -68,7 +80,6 @@ class HashTableModel:
             val = self.table[i]
             
             if val is None:
-                # 找到空位
                 target = first_tombstone if first_tombstone != -1 else i
                 return ProbeResult(False, target, probe_path)
             
@@ -79,43 +90,90 @@ class HashTableModel:
             if i == start:
                 break
 
-        # 表满，但有墓碑可用
         if first_tombstone != -1:
             return ProbeResult(False, first_tombstone, probe_path)
             
-        # 表完全满
         return ProbeResult(False, None, probe_path, is_full=True)
 
-    def find(self, x: Any) -> Tuple[bool, List[int]]:
-        """查找元素，返回 (是否找到, 探测路径)"""
-        result = self._probe_find(x)
-        return result.found, result.probe_path
+    # ==================== 拉链法 ====================
+    def _probe_find_chain(self, x: Any) -> ProbeResult:
+        """拉链法：查找元素"""
+        idx = self._hash(x)
+        probe_path = [idx]
+        chain = self.table[idx]
+        
+        for pos, val in enumerate(chain):
+            if val == x:
+                return ProbeResult(True, idx, probe_path, chain_position=pos)
+        
+        return ProbeResult(False, idx, probe_path)
 
-    def insert(self, x: Any) -> Tuple[Optional[int], List[int], bool]:
-        """插入元素，返回 (插入位置, 探测路径, 是否表满)"""
-        result = self._probe_insert(x)
-        if result.target_index is not None:
-            if not result.found:  # 新插入而不是找到已存在
+    def _probe_insert_chain(self, x: Any) -> ProbeResult:
+        """拉链法：探测插入位置"""
+        idx = self._hash(x)
+        probe_path = [idx]
+        chain = self.table[idx]
+        
+        # 检查是否已存在
+        for pos, val in enumerate(chain):
+            if val == x:
+                return ProbeResult(True, idx, probe_path, chain_position=pos)
+        
+        # 不存在，返回插入位置
+        return ProbeResult(False, idx, probe_path, chain_position=len(chain))
+
+    # ==================== 统一接口 ====================
+    def find(self, x: Any) -> Tuple[bool, List[int], Optional[int]]:
+        """查找元素，返回 (是否找到, 探测路径, 链表位置)"""
+        if self.method == CollisionMethod.OPEN_ADDRESSING:
+            result = self._probe_find_open(x)
+            return result.found, result.probe_path, None
+        else:
+            result = self._probe_find_chain(x)
+            return result.found, result.probe_path, result.chain_position
+
+    def insert(self, x: Any) -> Tuple[Optional[int], List[int], bool, Optional[int]]:
+        """插入元素，返回 (插入位置, 探测路径, 是否表满, 链表位置)"""
+        if self.method == CollisionMethod.OPEN_ADDRESSING:
+            result = self._probe_insert_open(x)
+            if result.target_index is not None and not result.found:
                 self.table[result.target_index] = x
                 self.size += 1
-        return result.target_index, result.probe_path, result.is_full
+            return result.target_index, result.probe_path, result.is_full, None
+        else:
+            result = self._probe_insert_chain(x)
+            if not result.found:
+                self.table[result.target_index].append(x)
+                self.size += 1
+            return result.target_index, result.probe_path, False, result.chain_position
 
-    def delete(self, x: Any) -> Tuple[Optional[int], List[int]]:
-        """删除元素，返回 (删除位置, 探测路径)"""
-        result = self._probe_find(x)
-        if result.found:
-            self.table[result.target_index] = self.tombstone
-            self.size -= 1
-            return result.target_index, result.probe_path
-        return None, result.probe_path
+    def delete(self, x: Any) -> Tuple[Optional[int], List[int], Optional[int]]:
+        """删除元素，返回 (删除位置, 探测路径, 链表位置)"""
+        if self.method == CollisionMethod.OPEN_ADDRESSING:
+            result = self._probe_find_open(x)
+            if result.found:
+                self.table[result.target_index] = self.tombstone
+                self.size -= 1
+                return result.target_index, result.probe_path, None
+            return None, result.probe_path, None
+        else:
+            result = self._probe_find_chain(x)
+            if result.found:
+                self.table[result.target_index].pop(result.chain_position)
+                self.size -= 1
+                return result.target_index, result.probe_path, result.chain_position
+            return None, result.probe_path, None
 
     def clear(self):
         """清空哈希表"""
-        self.table = [None] * self.capacity
+        if self.method == CollisionMethod.OPEN_ADDRESSING:
+            self.table = [None] * self.capacity
+        else:
+            self.table = [[] for _ in range(self.capacity)]
         self.size = 0
 
     def __len__(self):
-        """返回有效元素数量（不含墓碑）"""
+        """返回有效元素数量"""
         return self.size
 
     def load_list(self, items: List[Any]):
@@ -125,28 +183,49 @@ class HashTableModel:
             self.insert(x)
 
     def get_load_factor(self) -> float:
-        """返回负载因子（有效元素/容量）"""
+        """返回负载因子"""
         return self.size / self.capacity
+
     def resize(self, new_capacity: int):
         """调整散列表容量"""
         if new_capacity <= 0:
             raise ValueError("capacity must be positive")
-        if new_capacity < self.size:
+        if self.method == CollisionMethod.OPEN_ADDRESSING and new_capacity < self.size:
             raise ValueError(f"new capacity ({new_capacity}) cannot be less than current size ({self.size})")
         
-        # 保存当前有效元素（排除None和墓碑）
+        # 保存当前有效元素
         old_table = self.table
         old_capacity = self.capacity
         
         # 创建新表
         self.capacity = new_capacity
-        self.table = [None] * new_capacity
+        if self.method == CollisionMethod.OPEN_ADDRESSING:
+            self.table = [None] * new_capacity
+        else:
+            self.table = [[] for _ in range(new_capacity)]
         self.size = 0
         
         # 重新插入所有有效元素
-        for item in old_table:
-            if item is not None and item is not self.tombstone:
-                self.insert(item)
+        if self.method == CollisionMethod.OPEN_ADDRESSING:
+            for item in old_table:
+                if item is not None and item is not self.tombstone:
+                    self.insert(item)
+        else:
+            for chain in old_table:
+                for item in chain:
+                    self.insert(item)
+
+    def get_chain_length(self, index: int) -> int:
+        """获取指定索引处的链长度（仅拉链法）"""
+        if self.method == CollisionMethod.CHAINING:
+            return len(self.table[index])
+        return 0
+
+    def get_max_chain_length(self) -> int:
+        """获取最大链长度（仅拉链法）"""
+        if self.method == CollisionMethod.CHAINING:
+            return max(len(chain) for chain in self.table) if self.table else 0
+        return 0
 
     def __repr__(self):
-        return f"HashTableModel(capacity={self.capacity}, size={self.size}, table={self.table})"
+        return f"HashTableModel(capacity={self.capacity}, size={self.size}, method={self.method.value}, table={self.table})"

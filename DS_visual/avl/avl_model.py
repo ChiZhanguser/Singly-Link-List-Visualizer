@@ -41,6 +41,31 @@ class AVLModel:
     def _balance_factor(self, node: AVLNode) -> int:
         return self._height(node.left) - self._height(node.right)
 
+    def _compare(self, val1: Any, val2: Any) -> int:
+        """比较两个值，优先按数字比较，失败则按字符串比较
+        返回: -1 if val1 < val2, 0 if val1 == val2, 1 if val1 > val2
+        """
+        try:
+            # 尝试转换为数字进行比较
+            num1 = float(val1)
+            num2 = float(val2)
+            if num1 < num2:
+                return -1
+            elif num1 > num2:
+                return 1
+            else:
+                return 0
+        except (ValueError, TypeError):
+            # 转换失败，使用字符串比较
+            str1 = str(val1)
+            str2 = str(val2)
+            if str1 < str2:
+                return -1
+            elif str1 > str2:
+                return 1
+            else:
+                return 0
+
     # rotations (same as before)
     def _rotate_right(self, z: AVLNode) -> AVLNode:
         y = z.left
@@ -116,7 +141,7 @@ class AVLModel:
         while cur:
             parent = cur
             path_nodes.append(cur)
-            if str(val) < str(cur.val):
+            if self._compare(val, cur.val) < 0:
                 cur = cur.left
             else:
                 cur = cur.right
@@ -124,7 +149,7 @@ class AVLModel:
         # attach new node
         new_node = AVLNode(val)
         new_node.parent = parent
-        if str(val) < str(parent.val):
+        if self._compare(val, parent.val) < 0:
             parent.left = new_node
         else:
             parent.right = new_node

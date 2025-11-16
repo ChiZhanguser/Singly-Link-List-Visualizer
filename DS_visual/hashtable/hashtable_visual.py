@@ -1,17 +1,13 @@
 # -*- coding: utf-8 -*-
 from tkinter import *
-from tkinter import messagebox, filedialog
+from tkinter import messagebox, filedialog, ttk
 import json
 import os
 from datetime import datetime
-from hashtable.hashtable_model import HashTableModel, TOMBSTONE
-from DSL_utils import process_command as _pc
-
-process_command = _pc
-
+from hashtable.hashtable_model import HashTableModel, TOMBSTONE, CollisionMethod
 
 class HashtableVisualizer:
-    def __init__(self, root, capacity: int = 11):
+    def __init__(self, root, capacity: int = 11, method: CollisionMethod = CollisionMethod.OPEN_ADDRESSING):
         self.window = root
         self.window.config(bg="#E8F4F9")
         self.canvas = Canvas(self.window, bg="#FFFFFF", width=1350, height=500,
@@ -19,16 +15,18 @@ class HashtableVisualizer:
         self.canvas.pack(pady=10)
 
         self.capacity = capacity
-        self.model = HashTableModel(self.capacity)
+        self.method = method
+        self.model = HashTableModel(self.capacity, self.method)
 
         # 可视元素引用
         self.cell_rects = []
         self.cell_texts = []
         self.index_texts = []
+        self.chain_elements = []  # 拉链法专用
 
         # 布局参数
         self.start_x = 60
-        self.start_y = 250   # 下移避免重叠
+        self.start_y = 250
         self.cell_width = 90
         self.cell_height = 60
         self.spacing = 12
@@ -45,6 +43,10 @@ class HashtableVisualizer:
         self.capacity_var = StringVar(value=str(self.capacity))
         self.resize_frame = None
 
+        # 动画临时数据
+        self._anim_highlights = []
+        self._anim_temp = None
+
         self.create_heading()
         self.create_buttons()
         self.update_display()
@@ -56,13 +58,18 @@ class HashtableVisualizer:
         title_frame = Frame(self.window, bg="#E8F4F9")
         title_frame.pack(fill=X, padx=20, pady=(15, 5))
 
-        heading = Label(title_frame, text="散列表（线性探测法）可视化",
+        method_name = "开放寻址法" if self.method == CollisionMethod.OPEN_ADDRESSING else "拉链法"
+        heading = Label(title_frame, text=f"散列表（{method_name}）可视化",
                         font=("Microsoft YaHei UI", 28, "bold"),
                         bg="#E8F4F9", fg="#2C3E50")
         heading.pack()
 
-        info = Label(title_frame,
-                     text="散列方式：h(x)=x%capacity；冲突处理：线性探测（向后逐位查找），删除使用墓碑（tombstone）",
+        if self.method == CollisionMethod.OPEN_ADDRESSING:
+            info_text = "散列方式：h(x)=x%capacity；冲突处理：线性探测（向后逐位查找），删除使用墓碑（tombstone）"
+        else:
+            info_text = "散列方式：h(x)=x%capacity；冲突处理：拉链法（链表存储冲突元素）"
+        
+        info = Label(title_frame, text=info_text,
                      font=("Microsoft YaHei UI", 12),
                      bg="#E8F4F9", fg="#34495E")
         info.pack(pady=(5, 0))
@@ -93,9 +100,9 @@ class HashtableVisualizer:
         Button(button_frame, text="清空 Clear", bg="#95A5A6", fg="white",
                activebackground="#7F8C8D", activeforeground="white",
                command=self.clear_table, **btn_style).grid(row=0, column=3, padx=8, pady=6)
-        Button(button_frame, text="返回主界面", bg="#9B59B6", fg="white",
+        Button(button_frame, text="切换模式", bg="#9B59B6", fg="white",
                activebackground="#8E44AD", activeforeground="white",
-               command=self.back_to_main, **btn_style).grid(row=0, column=4, padx=8, pady=6)
+               command=self.switch_method, **btn_style).grid(row=0, column=4, padx=8, pady=6)
         Button(button_frame, text="调整容量", bg="#F39C12", fg="white",
                activebackground="#E67E22", activeforeground="white",
                command=self.prepare_resize, **btn_style).grid(row=0, column=5, padx=8, pady=6)
@@ -143,8 +150,36 @@ class HashtableVisualizer:
                relief="groove", bd=1, cursor="hand2",
                command=self.load_structure).pack(pady=2)
 
-        for child in button_frame.winfo_children():
-            child.grid_configure(sticky="nsew")
+    # ------------------------------------------------------------------ #
+    #                         模式切换
+    # ------------------------------------------------------------------ #
+    def switch_method(self):
+        if self.animating:
+            messagebox.showinfo("提示", "动画进行中，无法切换")
+            return
+        
+        # 保存当前数据
+        if self.method == CollisionMethod.OPEN_ADDRESSING:
+            old_data = [v for v in self.model.table if v is not None and v is not self.model.tombstone]
+            new_method = CollisionMethod.CHAINING
+        else:
+            old_data = [item for chain in self.model.table for item in chain]
+            new_method = CollisionMethod.OPEN_ADDRESSING
+        
+        # 切换模式
+        self.method = new_method
+        self.model = HashTableModel(self.capacity, self.method)
+        
+        # 重新插入数据
+        for item in old_data:
+            self.model.insert(item)
+        
+        # 更新界面
+        self.create_heading()
+        self.update_display()
+        
+        method_name = "拉链法" if new_method == CollisionMethod.CHAINING else "开放寻址法"
+        messagebox.showinfo("切换成功", f"已切换到{method_name}")
 
     # ------------------------------------------------------------------ #
     #                         容量调整
@@ -196,100 +231,19 @@ class HashtableVisualizer:
                 messagebox.showinfo("提示", "新容量与当前容量相同")
                 self._close_resize_input()
                 return
-            if new_cap < len(self.model):
+            if self.method == CollisionMethod.OPEN_ADDRESSING and new_cap < len(self.model):
                 messagebox.showerror("错误",
                                      f"新容量({new_cap})不能小于当前元素数量({len(self.model)})")
                 return
-            self._resize_table(new_cap)
+            self.model.resize(new_cap)
+            self.capacity = new_cap
+            self.update_display()
             self._close_resize_input()
+            messagebox.showinfo("成功", f"容量已调整为 {self.capacity}")
         except ValueError:
             messagebox.showerror("错误", "请输入有效的整数容量")
         except Exception as e:
             messagebox.showerror("错误", f"调整容量失败: {str(e)}")
-
-    def _resize_table(self, new_capacity: int):
-        if self.animating: return
-        self.animating = True
-        self._set_buttons_state("disabled")
-
-        valid_elements = [v for v in self.model.table if v is not None and v is not self.model.tombstone]
-        old_cap = self.capacity
-        self.model = HashTableModel(new_capacity)
-        self.capacity = new_capacity
-        self._show_resize_animation(old_cap, new_capacity, valid_elements)
-
-    def _show_resize_animation(self, old_cap, new_cap, elements):
-        self.canvas.delete("all")
-        self.canvas.create_text(675, 250,
-                                text=f"容量调整: {old_cap} → {new_cap}",
-                                font=("Microsoft YaHei UI", 16, "bold"), fill="#2C3E50")
-        old_start_x = 675 - (old_cap * (self.cell_width + self.spacing)) // 2
-        for i in range(old_cap):
-            x = old_start_x + i * (self.cell_width + self.spacing)
-            self.canvas.create_rectangle(x, 300, x + self.cell_width, 300 + self.cell_height,
-                                         fill="#FFEAA7", outline="#FDCB6E", width=2)
-            self.canvas.create_text(x + self.cell_width / 2, 300 + self.cell_height / 2,
-                                    text=str(i), font=("Arial", 10))
-        self.window.after(1000, lambda: self._show_new_table_animation(new_cap, elements))
-
-    def _show_new_table_animation(self, new_cap, elements):
-        self.canvas.delete("all")
-        total_w = (self.cell_width + self.spacing) * new_cap
-        start_x = 675 - total_w // 2
-        cell_rects = []
-        for i in range(new_cap):
-            x = start_x + i * (self.cell_width + self.spacing)
-            r = self.canvas.create_rectangle(x, 300, x + self.cell_width, 300 + self.cell_height,
-                                             fill="white", outline="#3498DB", width=2)
-            cell_rects.append(r)
-            self.canvas.create_text(x + self.cell_width / 2, 280,
-                                    text=str(i), font=("Arial", 10, "bold"))
-        self.canvas.create_text(675, 250,
-                                text=f"新容量: {new_cap}",
-                                font=("Microsoft YaHei UI", 16, "bold"), fill="#2C3E50")
-        self._animate_elements_insertion(elements, start_x, cell_rects, new_cap)
-
-    def _animate_elements_insertion(self, elements, start_x, cell_rects, new_cap):
-        if not elements:
-            self.window.after(500, self._finish_resize)
-            return
-        elem = elements[0]
-        remain = elements[1:]
-        new_idx = self.model._hash(elem)
-        ex, ey = 675, 150
-        rect = self.canvas.create_rectangle(ex - 30, ey - 20, ex + 30, ey + 20,
-                                            fill="#ABEBC6", outline="#27AE60", width=2)
-        txt = self.canvas.create_text(ex, ey, text=str(elem), font=("Arial", 12, "bold"))
-        target_x = start_x + new_idx * (self.cell_width + self.spacing) + self.cell_width / 2
-        target_y = 300 + self.cell_height / 2
-        self._animate_element_move(rect, txt, ex, ey, target_x, target_y,
-                                   remain, start_x, cell_rects, new_cap, elem, new_idx)
-
-    def _animate_element_move(self, rect, txt, sx, sy, tx, ty,
-                              remain, start_x, cell_rects, new_cap, elem, idx):
-        steps = 20
-        dx = (tx - sx) / steps
-        dy = (ty - sy) / steps
-        def step(i=0):
-            if i < steps:
-                self.canvas.move(rect, dx, dy)
-                self.canvas.move(txt, dx, dy)
-                self.window.after(30, lambda: step(i + 1))
-            else:
-                self.canvas.delete(rect)
-                self.canvas.delete(txt)
-                self.model.insert(elem)
-                self.canvas.itemconfig(cell_rects[idx], fill="#ABEBC6")
-                self.canvas.create_text(tx, ty, text=str(elem), font=("Arial", 12, "bold"))
-                self.window.after(300, lambda: self._animate_elements_insertion(
-                    remain, start_x, cell_rects, new_cap))
-        step()
-
-    def _finish_resize(self):
-        self.animating = False
-        self._set_buttons_state("normal")
-        self.update_display()
-        messagebox.showinfo("成功", f"容量已调整为 {self.capacity}")
 
     def _close_resize_input(self):
         if self.resize_frame:
@@ -312,11 +266,6 @@ class HashtableVisualizer:
                 except ValueError:
                     messagebox.showerror("错误", "create 后请提供整数")
                     return
-                if len(values) > self.capacity:
-                    if not messagebox.askyesno("容量不足",
-                                               f"要插入 {len(values)} 个元素，容量={self.capacity}。是否只插入前 {self.capacity} 个？"):
-                        return
-                    values = values[:self.capacity]
                 self.batch_queue = values
                 self.batch_index = 0
                 self._set_buttons_state("disabled")
@@ -349,42 +298,45 @@ class HashtableVisualizer:
     # ------------------------------------------------------------------ #
     #                         文件 IO
     # ------------------------------------------------------------------ #
-    def _ensure_folder(self):
-        base = os.path.dirname(os.path.abspath(__file__))
-        p = os.path.join(base, "save", "hashtable")
-        os.makedirs(p, exist_ok=True)
-        return p
-
     def save_structure(self):
-        payload = {"type": "hashtable", "capacity": self.capacity, "data": self.model.table}
-        default_dir = self._ensure_folder()
-        default_name = f"hashtable_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        filepath = filedialog.asksaveasfilename(initialdir=default_dir,
-                                                initialfile=default_name,
-                                                defaultextension=".json",
-                                                filetypes=[("JSON", "*.json")])
+        payload = {
+            "type": "hashtable",
+            "capacity": self.capacity,
+            "method": self.method.value,
+            "data": self.model.table
+        }
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON", "*.json")]
+        )
         if not filepath: return
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
         messagebox.showinfo("保存成功", f"已保存到 {filepath}")
 
     def load_structure(self):
-        default_dir = self._ensure_folder()
-        filepath = filedialog.askopenfilename(initialdir=default_dir,
-                                              filetypes=[("JSON", "*.json")])
+        filepath = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
         if not filepath: return
         with open(filepath, "r", encoding="utf-8") as f:
             loaded = json.load(f)
-        data = loaded["data"]
-        if len(data) != self.capacity:
-            if messagebox.askyesno("容量不符",
-                                   f"文件容量 {len(data)} 与当前 {self.capacity} 不符，是否以文件容量重建？"):
-                self.capacity = len(data)
-                self.model = HashTableModel(self.capacity)
-            else:
-                data = (data + [None] * self.capacity)[:self.capacity]
-        conv = [self.model.tombstone if v == "__TOMBSTONE__" else v for v in data]
-        self.model.table = conv
+        
+        method_str = loaded.get("method", "open_addressing")
+        new_method = CollisionMethod.CHAINING if method_str == "chaining" else CollisionMethod.OPEN_ADDRESSING
+        
+        if new_method != self.method:
+            self.method = new_method
+            self.create_heading()
+        
+        self.capacity = loaded["capacity"]
+        self.model = HashTableModel(self.capacity, self.method)
+        self.model.table = loaded["data"]
+        
+        # 重新计算size
+        if self.method == CollisionMethod.OPEN_ADDRESSING:
+            self.model.size = sum(1 for v in self.model.table if v is not None and v is not TOMBSTONE)
+        else:
+            self.model.size = sum(len(chain) for chain in self.model.table)
+        
         self.update_display()
         messagebox.showinfo("加载成功", "已加载散列表")
 
@@ -442,267 +394,229 @@ class HashtableVisualizer:
          "delete": self.delete_value}[action](int(val) if val.isdigit() else val)
 
     # ------------------------------------------------------------------ #
-    #                         动画核心
+    #                         操作实现
     # ------------------------------------------------------------------ #
-    def animate_insert(self, value, target_idx, probe_path):
+    def insert_value(self, value):
+        """对开放寻址法增加动画演示：探测路径高亮 + 值移动动画"""
         if self.animating: return
+
+        if self.method != CollisionMethod.OPEN_ADDRESSING:
+            # 对于拉链法直接插入并更新显示
+            target_idx, probe_path, is_full, chain_pos = self.model.insert(value)
+            if target_idx is None and self.method == CollisionMethod.OPEN_ADDRESSING:
+                messagebox.showinfo("提示", "值已存在")
+            self.update_display()
+            # 如果批量处理中，继续下一步
+            if self.batch_queue and self.batch_index < len(self.batch_queue):
+                self.window.after(150, self._batch_step)
+            return
+
+        # Snapshot table before insertion so we can animate on previous state
+        # 对于拉链法，table 项是 list，需要深拷贝链表
+        def snapshot_table(tbl):
+            if self.method == CollisionMethod.OPEN_ADDRESSING:
+                return list(tbl)
+            else:
+                return [list(chain) if isinstance(chain, list) else chain for chain in tbl]
+
+        before = snapshot_table(self.model.table)
+
+        # 执行插入以得到 probe_path 和结果，同时保留插入后的表
+        target_idx, probe_path, is_full, chain_pos = self.model.insert(value)
+        after = snapshot_table(self.model.table)
+
+        # 立即回滚到插入前状态，等待动画结束后再设置为插入后状态
+        self.model.table = before
+        # 重新计算 size
+        if self.method == CollisionMethod.OPEN_ADDRESSING:
+            self.model.size = sum(1 for v in self.model.table if v is not None and v is not TOMBSTONE)
+        else:
+            self.model.size = sum(len(chain) for chain in self.model.table)
+
+        # 如果表满或值已存在，直接提示并刷新
+        if is_full:
+            self.update_display()
+            messagebox.showerror("错误", "散列表已满，无法插入")
+            # 继续批量（如果有）
+            if self.batch_queue and self.batch_index < len(self.batch_queue):
+                self.window.after(150, self._batch_step)
+            return
+        if target_idx is None:
+            self.update_display()
+            messagebox.showinfo("提示", "值已存在")
+            if self.batch_queue and self.batch_index < len(self.batch_queue):
+                self.window.after(150, self._batch_step)
+            return
+
+        # 开始动画流程
         self.animating = True
         self._set_buttons_state("disabled")
+        self._anim_highlights = []
 
-        start_x = -(self.cell_width + 40)
-        start_y = self.start_y
-        rect = self.canvas.create_rectangle(start_x, start_y,
-                                            start_x + self.cell_width,
-                                            start_y + self.cell_height,
-                                            fill="lightgreen", outline="black", width=2)
-        txt = self.canvas.create_text(start_x + self.cell_width / 2,
-                                      start_y + self.cell_height / 2,
-                                      text=str(value), font=("Arial", 14, "bold"))
+        # 绘制初始（回滚后）视图
+        self.update_display()
 
-        total_steps = 30
-        target_x = self.start_x + (self.cell_width + self.spacing) * target_idx
-        dx = (target_x - start_x) / total_steps
+        # 逐步高亮探测路径
+        step_delay = 450  # 每步显示时长（ms）
+        highlights = []
 
-        def probe_step(i=0):
-            if i < len(probe_path):
-                idx = probe_path[i]
-                self.canvas.itemconfig(self.cell_rects[idx], outline="red", width=3)
-                self.window.after(220, lambda: unprobe(i))
-            else:
-                move_step(0)
+        def make_highlight(idx, color="#FFD54F"):
+            x = self.start_x + idx * (self.cell_width + self.spacing)
+            h = self.canvas.create_rectangle(x, self.start_y,
+                                             x + self.cell_width, self.start_y + self.cell_height,
+                                             outline="#E67E22", width=4)
+            return h
 
-        def unprobe(i):
-            idx = probe_path[i]
-            self.canvas.itemconfig(self.cell_rects[idx], outline="black", width=2)
-            self.window.after(60, lambda: probe_step(i + 1))
+        # schedule highlight steps
+        current = {'i': 0}
 
-        def move_step(step=0):
-            if step < total_steps:
-                self.canvas.move(rect, dx, 0)
-                self.canvas.move(txt, dx, 0)
-                self.window.after(12, lambda: move_step(step + 1))
-            else:
-                self.canvas.delete(rect)
-                self.canvas.delete(txt)
+        def highlight_step():
+            i = current['i']
+            if i > 0:
+                # 将上一步恢复为原样（轻微淡化）
                 try:
-                    self.model.insert(value)
+                    self.canvas.delete(highlights[i - 1])
                 except Exception:
                     pass
+            if i >= len(probe_path):
+                # 探测结束 -> 执行动画：把值移动到 target_idx
+                self._animate_move_into_cell(value, target_idx, after)
+                return
+            idx = probe_path[i]
+            h = make_highlight(idx)
+            highlights.append(h)
+            current['i'] += 1
+            # 在单元顶部显示当前探测索引提示
+            # 先删除之前的提示
+            if self._anim_temp:
+                try:
+                    self.canvas.delete(self._anim_temp)
+                except Exception:
+                    pass
+                self._anim_temp = None
+            top_x = self.start_x + (self.cell_width + self.spacing) * idx + self.cell_width / 2
+            self._anim_temp = self.canvas.create_text(top_x, self.start_y - 40, text=f"探测 -> {idx}",
+                                                      font=("Arial", 12, "bold"))
+
+            self.window.after(step_delay, highlight_step)
+
+        # 启动高亮步骤
+        self.window.after(150, highlight_step)
+
+    def _animate_move_into_cell(self, value, target_idx, final_table):
+        """把值从上方移动到目标单元格，并在末尾把模型替换为插入后的 final_table"""
+        # 创建一个临时文本在画布顶部（居中在表格上方）
+        start_x = self.start_x + (self.cell_width + self.spacing) * 0 + self.cell_width / 2
+        start_y = self.start_y - 80
+        tx = self.canvas.create_text(start_x, start_y, text=str(value), font=("Arial", 12, "bold"))
+        self._anim_temp = tx
+
+        # 目标坐标
+        tgt_x = self.start_x + target_idx * (self.cell_width + self.spacing) + self.cell_width / 2
+        tgt_y = self.start_y + self.cell_height / 2
+
+        steps = 12
+        dx = (tgt_x - start_x) / steps
+        dy = (tgt_y - start_y) / steps
+        step = {'i': 0}
+
+        def move_step():
+            if step['i'] >= steps:
+                # 到达目标位置：删除临时文本，应用 final_table，刷新显示，清理高亮
+                try:
+                    self.canvas.delete(tx)
+                except Exception:
+                    pass
+                self._anim_temp = None
+                # 应用插入后的表
+                self.model.table = list(final_table)
+                # 重新计算 size
+                if self.method == CollisionMethod.OPEN_ADDRESSING:
+                    self.model.size = sum(1 for v in self.model.table if v is not None and v is not TOMBSTONE)
+                else:
+                    self.model.size = sum(len(chain) for chain in self.model.table)
+                # 刷新显示并结束动画
                 self.update_display()
+                # 清除所有高亮
+                for h in list(self._anim_highlights):
+                    try:
+                        self.canvas.delete(h)
+                    except Exception:
+                        pass
+                self._anim_highlights = []
                 self.animating = False
                 self._set_buttons_state("normal")
-
-        probe_step()
-
-    def insert_value(self, value):
-        if self.animating: return
-        start = self.model._hash(value)
-        i = start
-        probe = []
-        first_tomb = -1
-        while True:
-            probe.append(i)
-            val = self.model.table[i]
-            if val is None:
-                target = first_tomb if first_tomb != -1 else i
-                break
-            if val is self.model.tombstone and first_tomb == -1:
-                first_tomb = i
-            if val == value:
-                self._probe_highlight(probe, found=True, found_idx=i,
-                                      msg=f"值已存在于索引 {i}")
+                # 继续批量
+                if self.batch_queue and self.batch_index < len(self.batch_queue):
+                    self.window.after(200, self._batch_step)
                 return
-            i = (i + 1) % self.capacity
-            if i == start:
-                target = first_tomb if first_tomb != -1 else None
-                break
-        if target is None:
-            self._probe_highlight(probe, found=False,
-                                  msg="散列表已满，无法插入")
-            return
-        self.animate_insert(value, target, probe)
+            # 移动一步
+            try:
+                self.canvas.move(tx, dx, dy)
+            except Exception:
+                pass
+            step['i'] += 1
+            self.window.after(40, move_step)
 
-    def _probe_highlight(self, probe_path, found=False, found_idx=None, msg=None):
-        if self.animating: return
-        self.animating = True
-        self._set_buttons_state("disabled")
-
-        def step(i=0):
-            if i < len(probe_path):
-                idx = probe_path[i]
-                self.canvas.itemconfig(self.cell_rects[idx], outline="red", width=3)
-                self.window.after(220, lambda: unstep(i))
-            else:
-                if found and found_idx is not None:
-                    self.canvas.itemconfig(self.cell_rects[found_idx],
-                                           outline="lime", width=4)
-                    self.window.after(600, finish)
-                else:
-                    self.window.after(200, finish)
-
-        def unstep(i):
-            idx = probe_path[i]
-            self.canvas.itemconfig(self.cell_rects[idx], outline="black", width=2)
-            self.window.after(60, lambda: step(i + 1))
-
-        def finish():
-            if msg:
-                messagebox.showinfo("提示", msg)
-            self.animating = False
-            self._set_buttons_state("normal")
-            self.update_display()
-
-        step()
+        move_step()
 
     def find_value(self, value):
         if self.animating: return
-        start = self.model._hash(value)
-        i = start
-        probe = []
-        while True:
-            probe.append(i)
-            val = self.model.table[i]
-            if val is None:
-                self._probe_highlight(probe, found=False,
-                                      msg=f"未找到 {value}")
-                return
-            if val is not self.model.tombstone and val == value:
-                self._probe_highlight(probe, found=True, found_idx=i,
-                                      msg=f"找到 {value}，索引 {i}")
-                return
-            i = (i + 1) % self.capacity
-            if i == start:
-                self._probe_highlight(probe, found=False,
-                                      msg=f"未找到 {value}（全表）")
-                return
+        
+        found, probe_path, chain_pos = self.model.find(value)
+        
+        if found:
+            if self.method == CollisionMethod.CHAINING:
+                messagebox.showinfo("查找", f"找到 {value}，索引 {probe_path[0]}，链表位置 {chain_pos}")
+            else:
+                messagebox.showinfo("查找", f"找到 {value}，索引 {probe_path[-1]}")
+        else:
+            messagebox.showinfo("查找", f"未找到 {value}")
 
     def delete_value(self, value):
         if self.animating: return
-        start = self.model._hash(value)
-        i = start
-        probe = []
-        while True:
-            probe.append(i)
-            val = self.model.table[i]
-            if val is None:
-                self._probe_highlight(probe, found=False,
-                                      msg=f"未找到 {value}，无法删除")
-                return
-            if val is not self.model.tombstone and val == value:
-                def after():
-                    idx = self.model.delete(value)
-                    if idx is not None:
-                        messagebox.showinfo("删除", f"已在索引 {idx} 用墓碑删除 {value}")
-                    self.update_display()
-                self._probe_highlight_with_callback(probe, True, i, after)
-                return
-            i = (i + 1) % self.capacity
-            if i == start:
-                self._probe_highlight(probe, found=False,
-                                      msg=f"未找到 {value}（全表）")
-                return
-
-    def _probe_highlight_with_callback(self, probe_path, found, found_idx, callback):
-        if self.animating: return
-        self.animating = True
-        self._set_buttons_state("disabled")
-
-        def step(i=0):
-            if i < len(probe_path):
-                idx = probe_path[i]
-                self.canvas.itemconfig(self.cell_rects[idx], outline="red", width=3)
-                self.window.after(220, lambda: un(i))
-            else:
-                if found:
-                    self.canvas.itemconfig(self.cell_rects[found_idx],
-                                           outline="orange", width=4)
-                    self.window.after(360, finish)
-                else:
-                    self.window.after(200, finish)
-
-        def un(i):
-            idx = probe_path[i]
-            self.canvas.itemconfig(self.cell_rects[idx], outline="black", width=2)
-            self.window.after(60, lambda: step(i + 1))
-
-        def finish():
-            callback()
-            self.animating = False
-            self._set_buttons_state("normal")
+        
+        del_idx, probe_path, chain_pos = self.model.delete(value)
+        
+        if del_idx is not None:
             self.update_display()
-
-        step()
+            if self.method == CollisionMethod.CHAINING:
+                messagebox.showinfo("删除", f"已从索引 {del_idx} 的链表删除 {value}")
+            else:
+                messagebox.showinfo("删除", f"已在索引 {del_idx} 用墓碑删除 {value}")
+        else:
+            messagebox.showinfo("删除", f"未找到 {value}，无法删除")
 
     def clear_table(self):
         if self.animating: return
-        if all(v is None for v in self.model.table):
-            messagebox.showinfo("清空", "散列表已为空")
-            return
-        self.animating = True
-        self._set_buttons_state("disabled")
-        idxs = list(range(self.capacity - 1, -1, -1))
-
-        def step(i=0):
-            if i >= len(idxs):
-                self.animating = False
-                self._set_buttons_state("normal")
-                self.update_display()
-                return
-            idx = idxs[i]
-            self.canvas.itemconfig(self.cell_rects[idx], fill="#ffdddd")
-            self.window.after(80, lambda: self.canvas.itemconfig(self.cell_rects[idx], fill="white"))
-            self.model.table[idx] = None
-            self.update_display()
-            self.window.after(100, lambda: step(i + 1))
-
-        step()
+        self.model.clear()
+        self.update_display()
+        messagebox.showinfo("清空", "散列表已清空")
 
     # ------------------------------------------------------------------ #
-    #                         批量 & 其它
+    #                         批量处理
     # ------------------------------------------------------------------ #
-    def start_batch_build(self):
-        if self.animating: return
-        text = self.batch_entry_var.get().strip()
-        if not text:
-            messagebox.showinfo("提示", "请输入批量值，逗号分隔")
-            return
-        items = [s.strip() for s in text.replace("，", ",").split(",") if s.strip()]
-        if len(items) > self.capacity:
-            if not messagebox.askyesno("容量不足",
-                                       f"要插入 {len(items)} 个，容量={self.capacity}。是否只插入前 {self.capacity} 个？"):
-                return
-            items = items[:self.capacity]
-        self.batch_queue = items
-        self.batch_index = 0
-        self._set_buttons_state("disabled")
-        self._batch_step()
-
     def _batch_step(self):
         if self.batch_index >= len(self.batch_queue):
             self.batch_queue = []
             self.batch_index = 0
             self._set_buttons_state("normal")
             return
+        
         val = self.batch_queue[self.batch_index]
         self.batch_index += 1
-
-        def cont():
-            if self.animating:
-                self.window.after(120, cont)
-            else:
-                self._batch_step()
-
+        # 插入会在动画结束后自动触发下一步
         self.insert_value(val)
-        self.window.after(150, cont)
 
     # ------------------------------------------------------------------ #
-    #                         显示更新（关键：2×2 布局）
+    #                         显示更新
     # ------------------------------------------------------------------ #
     def update_display(self):
         self.canvas.delete("all")
         self.cell_rects.clear()
         self.cell_texts.clear()
         self.index_texts.clear()
+        self.chain_elements.clear()
 
         total_width = (self.cell_width + self.spacing) * self.capacity
 
@@ -714,9 +628,19 @@ class HashtableVisualizer:
                 self.start_y + self.cell_height + 8 - i * 2,
                 outline="#D0E3FF", fill=["#F5F9FF", "#EDF7FF"][i], width=1)
 
-        # ---------- 信息面板：2×2 布局 ----------
+        # 信息面板
+        self._draw_info_panel()
+
+        # 绘制哈希表
+        if self.method == CollisionMethod.OPEN_ADDRESSING:
+            self._draw_open_addressing()
+        else:
+            self._draw_chaining()
+
+    def _draw_info_panel(self):
         card_x, card_y = 20, 10
-        card_w, card_h = 380, 150  # 高度略增
+        card_w, card_h = 380, 150
+        
         self._draw_rounded_rect(card_x - 8, card_y - 8,
                                 card_x + card_w + 8, card_y + card_h + 8,
                                 radius=12, fill="#F7FFF7", outline="#DDD", tags="card_shadow")
@@ -724,14 +648,12 @@ class HashtableVisualizer:
                                 card_x + card_w, card_y + card_h,
                                 radius=12, fill="#FFFFFF", outline="#E0E0E0", tags="card_body")
 
-        # 标题 + 图标
+        # 标题
+        method_name = "开放寻址法" if self.method == CollisionMethod.OPEN_ADDRESSING else "拉链法"
         self.canvas.create_text(card_x + 20, card_y + 22,
-                                text="信息面板",
+                                text=f"信息面板 ({method_name})",
                                 anchor="w", font=("Microsoft YaHei UI", 14, "bold"),
                                 fill="#2C3E50")
-        self.canvas.create_text(card_x + card_w - 20, card_y + 22,
-                                text="i", anchor="e",
-                                font=("Segoe UI Emoji", 16), fill="#3498DB")
 
         # 统计信息
         stats = f"容量: {self.capacity}   有效元素数: {len(self.model)}"
@@ -739,14 +661,22 @@ class HashtableVisualizer:
                                 text=stats, anchor="w",
                                 font=("Microsoft YaHei UI", 12), fill="#34495E")
 
-        # 操作说明：2×2 网格
+        if self.method == CollisionMethod.CHAINING:
+            max_chain = self.model.get_max_chain_length()
+            avg_chain = len(self.model) / self.capacity if self.capacity > 0 else 0
+            chain_stats = f"最大链长: {max_chain}   平均链长: {avg_chain:.2f}"
+            self.canvas.create_text(card_x + 20, card_y + 75,
+                                    text=chain_stats, anchor="w",
+                                    font=("Microsoft YaHei UI", 11), fill="#7F8C8D")
+
+        # 操作说明
         ops = [
             ("插入", "insert x", "#3498DB"),
             ("查找", "find x", "#2ECC71"),
             ("删除", "delete x", "#E74C3C"),
             ("清空", "clear", "#95A5A6")
         ]
-        base_y = card_y + 78
+        base_y = card_y + 100
         row_height = 26
         col1_x = card_x + 35
         col2_x = card_x + 200
@@ -768,7 +698,8 @@ class HashtableVisualizer:
                                     font=("Microsoft YaHei UI", 10),
                                     fill="#7F8C8D")
 
-        # ---------- 绘制哈希表格子 ----------
+    def _draw_open_addressing(self):
+        """绘制开放寻址法表格"""
         for i in range(self.capacity):
             x = self.start_x + i * (self.cell_width + self.spacing)
             rect = self.canvas.create_rectangle(x, self.start_y,
@@ -791,18 +722,79 @@ class HashtableVisualizer:
                 self.canvas.itemconfig(rect, fill="#eeeeee")
             else:
                 txt = str(val)
+            
             cell_txt = self.canvas.create_text(x + self.cell_width / 2,
                                                self.start_y + self.cell_height / 2,
                                                text=txt, font=("Arial", 12))
             self.cell_texts.append(cell_txt)
 
-        # 右侧标题
-        self.canvas.create_text(self.start_x + total_width + 40,
-                                self.start_y + self.cell_height / 2,
-                                text="散列表格", font=("Arial", 12, "bold"))
+    def _draw_chaining(self):
+        """绘制拉链法表格"""
+        for i in range(self.capacity):
+            x = self.start_x + i * (self.cell_width + self.spacing)
+            
+            # 主格子
+            rect = self.canvas.create_rectangle(x, self.start_y,
+                                                x + self.cell_width,
+                                                self.start_y + self.cell_height,
+                                                fill="white", outline="black", width=2)
+            self.cell_rects.append(rect)
 
-    # ---------- 辅助：绘制圆角矩形 ----------
+            # 索引
+            idx_txt = self.canvas.create_text(x + self.cell_width / 2,
+                                              self.start_y - 16,
+                                              text=str(i),
+                                              font=("Arial", 10, "bold"))
+            self.index_texts.append(idx_txt)
+
+            # 链表元素
+            chain = self.model.table[i]
+            if not chain:
+                cell_txt = self.canvas.create_text(x + self.cell_width / 2,
+                                                   self.start_y + self.cell_height / 2,
+                                                   text="NULL", font=("Arial", 10),
+                                                   fill="#999999")
+                self.cell_texts.append(cell_txt)
+            else:
+                # 显示链长
+                chain_len_txt = self.canvas.create_text(x + self.cell_width / 2,
+                                                        self.start_y + 15,
+                                                        text=f"链长:{len(chain)}",
+                                                        font=("Arial", 8),
+                                                        fill="#666666")
+                
+                # 绘制链表节点
+                node_y = self.start_y + self.cell_height + 10
+                for j, item in enumerate(chain):
+                    node_x = x + self.cell_width / 2
+                    node_rect = self.canvas.create_rectangle(
+                        node_x - 25, node_y + j * 35,
+                        node_x + 25, node_y + j * 35 + 30,
+                        fill="#E8F8F5", outline="#27AE60", width=2
+                    )
+                    node_txt = self.canvas.create_text(
+                        node_x, node_y + j * 35 + 15,
+                        text=str(item), font=("Arial", 11, "bold")
+                    )
+                    self.chain_elements.append((node_rect, node_txt))
+                    
+                    # 绘制箭头
+                    if j < len(chain) - 1:
+                        self.canvas.create_line(
+                            node_x, node_y + j * 35 + 30,
+                            node_x, node_y + (j + 1) * 35,
+                            arrow=LAST, fill="#27AE60", width=2
+                        )
+                    else:
+                        # 最后一个节点指向NULL
+                        self.canvas.create_text(
+                            node_x, node_y + j * 35 + 40,
+                            text="↓ NULL", font=("Arial", 8),
+                            fill="#999999"
+                        )
+
     def _draw_rounded_rect(self, x0, y0, x1, y1, radius=10, **kwargs):
+        """绘制圆角矩形"""
         points = [
             x0 + radius, y0,
             x1 - radius, y0,
@@ -819,8 +811,8 @@ class HashtableVisualizer:
         ]
         return self.canvas.create_polygon(points, **kwargs, smooth=True)
 
-    # ------------------------------------------------------------------ #
     def _set_buttons_state(self, state):
+        """设置按钮状态"""
         for w in self.window.winfo_children():
             if isinstance(w, Frame):
                 for c in w.winfo_children():
@@ -830,6 +822,7 @@ class HashtableVisualizer:
                         pass
 
     def back_to_main(self):
+        """返回主界面"""
         if self.animating:
             messagebox.showinfo("提示", "动画进行中，无法返回")
             return
@@ -841,5 +834,9 @@ if __name__ == "__main__":
     root.title("散列表可视化")
     root.geometry("1350x770")
     root.minsize(1350, 770)
-    HashtableVisualizer(root, capacity=13)
+    
+    # 可以选择启动模式
+    # HashtableVisualizer(root, capacity=11, method=CollisionMethod.OPEN_ADDRESSING)
+    HashtableVisualizer(root, capacity=11, method=CollisionMethod.OPEN_ADDRESSING)
+    
     root.mainloop()

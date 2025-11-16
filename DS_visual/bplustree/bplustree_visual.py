@@ -7,11 +7,11 @@ import math
 class BPlusVisualizer:
     def __init__(self, root):
         self.window = root
-        self.window.title("")
+        self.window.title("B+树可视化")
         self.window.geometry("1280x760")
         self.window.config(bg="#071129")
 
-        # UI 布局参数
+        # UI布局参数
         self.left_width = 360
         self.left_collapsed = False
 
@@ -25,6 +25,8 @@ class BPlusVisualizer:
 
         # status var
         self.status_var = StringVar(value="就绪：请输入键并插入（支持整数或字符串）")
+        # explanation var - 用于显示当前操作的详细解释
+        self.explanation_var = StringVar(value="")
 
         self._build_left_panel()
 
@@ -50,15 +52,15 @@ class BPlusVisualizer:
         # 模型与视觉参数
         self.tree = BPlusTree(order=4)
 
-        # base visual params (调整后会按画布大小自适应)
-        self.base_node_w = 160
-        self.base_node_h = 56
+        # base visual params
+        self.base_node_w = 180
+        self.base_node_h = 70
         self.node_w = self.base_node_w
         self.node_h = self.base_node_h
-        self.base_level_gap = 140
+        self.base_level_gap = 160
         self.level_gap = self.base_level_gap
-        self.margin_x = 36
-        self.top_margin = 56
+        self.margin_x = 50
+        self.top_margin = 100
 
         # spacing & zoom
         self.min_spacing = self.node_w + 40
@@ -74,10 +76,9 @@ class BPlusVisualizer:
         # initial draw
         self.redraw()
 
-    # ---------------- left panel ----------------
     def _build_left_panel(self):
         pad = 12
-        Label(self.left_panel, text="B+ 树 可视化", fg="#A3E1FF",
+        Label(self.left_panel, text="B+ 树可视化", fg="#A3E1FF",
               font=("Segoe UI", 16, "bold"), bg="#071129").pack(pady=(18,6))
         Label(self.left_panel, text="插入与分裂演示（order = 4）", bg="#071129", fg="#9fb8d6").pack()
 
@@ -100,51 +101,27 @@ class BPlusVisualizer:
         Button(fit_frame, text="Fit", command=self.toggle_fit_mode, width=6, bg="#1E293B", fg="#A3E1FF", bd=0).pack(side=LEFT)
         Button(fit_frame, text="Zoom +", command=self.zoom_in, width=8, bg="#1E293B", fg="#A3E1FF", bd=0).pack(side=LEFT, padx=(8,0))
         Button(fit_frame, text="Zoom -", command=self.zoom_out, width=8, bg="#1E293B", fg="#A3E1FF", bd=0).pack(side=LEFT, padx=(8,0))
-        Button(fit_frame, text="Collapse controls", command=self.toggle_left_panel, width=14, bg="#0b2b3b", fg="#A3E1FF", bd=0).pack(side=LEFT, padx=(8,0))
 
         Frame(self.left_panel, height=1, bg="#0b2236").pack(fill=X, padx=pad, pady=(12,12))
-        Label(self.left_panel, text="当前叶子序列（从左到右）：", bg="#071129", fg="#9fb8d6").pack(anchor="w", padx=pad)
+        
+        # 当前操作说明框 - 高亮显示
+        explain_frame = Frame(self.left_panel, bg="#0a2540", bd=2, relief=SOLID)
+        explain_frame.pack(fill=X, padx=pad, pady=(0,12))
+        Label(explain_frame, text="🔍 当前操作：", bg="#0a2540", fg="#FCD34D", 
+              font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=8, pady=(8,4))
+        Label(explain_frame, textvariable=self.explanation_var, bg="#0a2540", 
+              wraplength=self.left_width-32, justify=LEFT, fg="#E6F7FF",
+              font=("Segoe UI", 9)).pack(padx=8, pady=(0,8), anchor="w")
+
+        Frame(self.left_panel, height=1, bg="#0b2236").pack(fill=X, padx=pad, pady=(0,12))
+        
+        Label(self.left_panel, text="当前叶节点序列（从左到右）：", bg="#071129", fg="#9fb8d6").pack(anchor="w", padx=pad)
         self.leaf_listbox = Listbox(self.left_panel, height=6, bg="#0f2740", fg="#E6F7FF", bd=0, highlightthickness=0)
         self.leaf_listbox.pack(fill=X, padx=pad, pady=(8,0))
 
         Frame(self.left_panel, height=1, bg="#0b2236").pack(fill=X, padx=pad, pady=(12,8))
         Label(self.left_panel, textvariable=self.status_var, bg="#071129", wraplength=self.left_width-24, justify=LEFT, fg="#9fe9c9").pack(padx=pad, pady=(6,10))
-        help_text = ("提示：\n• Collapse controls 隐藏左侧面板以扩大画布。\n• Fit 会尝试横向压缩/拉伸节点以填满可见宽度。\n• Zoom 改变显示尺度，必要时拖动画布查看完整树。")
-        Label(self.left_panel, text=help_text, bg="#071129", fg="#7ea9bf", justify=LEFT, wraplength=self.left_width-24).pack(padx=pad, pady=(6,10))
 
-    # ---------------- collapse left panel ----------------
-    def toggle_left_panel(self):
-        if self.left_collapsed:
-            # expand
-            self.left_panel.pack(side=LEFT, fill=Y)
-            self.left_collapsed = False
-            self.update_status("已展开控制面板")
-        else:
-            # collapse
-            self.left_panel.pack_forget()
-            self.left_collapsed = True
-            self.update_status("已折叠控制面板（使用全部画布空间）")
-        # redraw after layout change
-        self.window.after(80, self.redraw)
-
-    # ---------------- status / parse ----------------
-    def update_status(self, txt: str):
-        self.status_var.set(txt)
-
-    def parse_input_keys(self) -> List[Any]:
-        text = self.input_var.get().strip()
-        if not text:
-            return []
-        parts = [p.strip() for p in text.replace(",", " ").split() if p.strip()]
-        out: List[Any] = []
-        for p in parts:
-            try:
-                out.append(int(p))
-            except:
-                out.append(p)
-        return out
-
-    # ---------------- zoom / fit ----------------
     def toggle_fit_mode(self):
         self.fit_mode = not self.fit_mode
         self.update_status(f"Fit 模式: {'开' if self.fit_mode else '关'}")
@@ -168,7 +145,26 @@ class BPlusVisualizer:
         self.level_gap = max(60, int(self.base_level_gap * self.zoom_scale))
         self.min_spacing = self.node_w + 40
 
-    # ---------------- compute positions: 放大利用画布 ----------------
+    def update_status(self, txt: str):
+        self.status_var.set(txt)
+        
+    def update_explanation(self, txt: str):
+        """更新操作解释"""
+        self.explanation_var.set(txt)
+
+    def parse_input_keys(self) -> List[Any]:
+        text = self.input_var.get().strip()
+        if not text:
+            return []
+        parts = [p.strip() for p in text.replace(",", " ").split() if p.strip()]
+        out: List[Any] = []
+        for p in parts:
+            try:
+                out.append(int(p))
+            except:
+                out.append(p)
+        return out
+
     def compute_positions(self) -> Dict[BPlusNode, Tuple[float,float]]:
         pos: Dict[BPlusNode, Tuple[float,float]] = {}
         levels = self.tree.nodes_by_level()
@@ -176,9 +172,7 @@ class BPlusVisualizer:
             return pos
         max_depth = max(levels.keys())
         level_counts = {d: len(nodes) for d, nodes in levels.items()}
-        max_nodes = max(level_counts.values())
 
-        # canvas available size
         self.canvas.update_idletasks()
         avail_w = max(self.canvas.winfo_width(), 600)
         avail_h = max(self.canvas.winfo_height(), 400)
@@ -186,44 +180,33 @@ class BPlusVisualizer:
         inner_w = avail_w - 2*self.margin_x
         inner_h = avail_h - 2*self.top_margin
 
-        # dynamic vertical spacing: 将层级均匀分配在 inner_h 中（至少保留 base gap）
         if max_depth > 0:
             vgap = max(inner_h / (max_depth+1), 60)
         else:
             vgap = min(inner_h, self.level_gap)
-        # limit vgap to reasonable bounds
         vgap = max(60, min(vgap, self.level_gap * 1.6))
-        # update level_gap used for positioning
         self.level_gap = int(vgap)
 
-        # dynamic node width when nodes are few: 尝试扩大节点宽度以填满空间
-        # compute average nodes per level; if small, allow node_w to grow up to a cap
         avg_nodes = sum(level_counts.values()) / len(level_counts)
         if avg_nodes <= 3:
-            # expand node width as fraction of available width
             desired_w = int(inner_w / max(3, int(avg_nodes)+1) * 0.6)
             self.node_w = max(60, min(desired_w, int(self.base_node_w * 2.2)))
         else:
             self.node_w = self.base_node_w
 
-        # recompute min spacing
         spacing_base = max(self.node_w + 24, 100)
 
-        # compute horizontal spacing per level:
         for depth in range(0, max_depth+1):
             nodes = levels.get(depth, [])
             n = len(nodes)
             if n == 0:
                 continue
-            # choose spacing:
             if self.fit_mode and n > 1:
                 total_span = inner_w
                 spacing = min(spacing_base, total_span / (n+1))
             else:
                 spacing = spacing_base
-            # ensure spacing not too small
             spacing = max(28, spacing)
-            # total span occupied
             total_span = spacing * (n - 1) if n>1 else 0
             start_x = self.margin_x + (inner_w - total_span) / 2.0
             for i, node in enumerate(nodes):
@@ -231,12 +214,10 @@ class BPlusVisualizer:
                     x = self.margin_x + inner_w / 2.0
                 else:
                     x = start_x + i * spacing
-                # vertical pos: center levels across inner_h
                 y = self.top_margin + depth * vgap
                 pos[node] = (x, y)
         return pos
 
-    # ---------------- drawing ----------------
     def _draw_gradient_background(self):
         w = max(self.canvas.winfo_width(), 1200)
         h = max(self.canvas.winfo_height(), 700)
@@ -255,7 +236,6 @@ class BPlusVisualizer:
             y0 = int(i * (h/steps))
             y1 = int((i+1) * (h/steps))
             self.canvas.create_rectangle(0, y0, w, y1, outline="", fill=c)
-        # faint grid
         grid = "#0e2a3a"
         for gx in range(0, w, 80):
             self.canvas.create_line(gx, 0, gx, h, fill=grid)
@@ -272,40 +252,79 @@ class BPlusVisualizer:
         ids.append(self.canvas.create_oval(right-2*r, bottom-2*r, right, bottom, **kwargs))
         return ids
 
-    def redraw(self, highlight: Optional[Dict[BPlusNode, str]] = None):
-        # 确保布局正确
+    def redraw(self, highlight: Optional[Dict[BPlusNode, str]] = None, 
+               highlight_edges: Optional[List[Tuple[BPlusNode, BPlusNode]]] = None):
         self.window.update_idletasks()
         
         self.canvas.delete("all")
         self.node_items.clear()
 
-        # background
         self._draw_gradient_background()
+        
+        # 添加图例说明
+        legend_y = 20
+        self.canvas.create_text(20, legend_y, text="图例：", 
+                               font=("Arial", 11, "bold"), fill="#A3E1FF", anchor="w")
+        
+        # 黄色 - 访问
+        self.canvas.create_rectangle(80, legend_y-8, 100, legend_y+8, fill="#FCD34D", outline="#F59E0B", width=2)
+        self.canvas.create_text(110, legend_y, text="", font=("Arial", 9), fill="#E6F7FF", anchor="w")
+        
+        # 绿色 - 插入
+        self.canvas.create_rectangle(200, legend_y-8, 220, legend_y+8, fill="#10B981", outline="#059669", width=2)
+        self.canvas.create_text(230, legend_y, text="插入成功", font=("Arial", 9), fill="#E6F7FF", anchor="w")
+        
+        # 红色 - 分裂
+        self.canvas.create_rectangle(320, legend_y-8, 340, legend_y+8, fill="#EF4444", outline="#DC2626", width=2)
+        self.canvas.create_text(350, legend_y, text="节点分裂", font=("Arial", 9), fill="#E6F7FF", anchor="w")
+        
+        # 蓝色 - 新节点
+        self.canvas.create_rectangle(440, legend_y-8, 460, legend_y+8, fill="#3B82F6", outline="#2563EB", width=2)
+        self.canvas.create_text(470, legend_y, text="新建节点", font=("Arial", 9), fill="#E6F7FF", anchor="w")
         
         pos = self.compute_positions()
         if not pos:
-            self.canvas.create_text(640, 300, text="空树（请插入键）", font=("Arial",20), fill="#94a3b8")
+            self.canvas.create_text(640, 300, text="空树（请输入键并插入）", 
+                                   font=("Arial",20), fill="#94a3b8")
             self.canvas.config(scrollregion=(0,0,1400,900))
             self._refresh_leaf_list()
             return
 
-        # draw edges (glow)
+        # 绘制边（高亮特定路径）
         for node, (cx, cy) in pos.items():
             if not node.is_leaf:
                 for child in node.children:
                     if child in pos:
                         px, py = pos[child]
-                        self.canvas.create_line(cx, cy + self.node_h/2, px, py - self.node_h/2, width=4, fill="#072c37", smooth=True)
-                        self.canvas.create_line(cx, cy + self.node_h/2, px, py - self.node_h/2, width=2, fill="#5eead4", smooth=True)
+                        # 检查是否需要高亮这条边
+                        is_highlighted = False
+                        if highlight_edges:
+                            for parent, child_node in highlight_edges:
+                                if parent == node and child_node == child:
+                                    is_highlighted = True
+                                    break
+                        
+                        if is_highlighted:
+                            # 高亮路径 - 更粗更亮
+                            self.canvas.create_line(cx, cy + self.node_h/2, px, py - self.node_h/2, 
+                                                   width=8, fill="#FCD34D", smooth=True)
+                            self.canvas.create_line(cx, cy + self.node_h/2, px, py - self.node_h/2, 
+                                                   width=4, fill="#FBBF24", smooth=True)
+                        else:
+                            # 普通边
+                            self.canvas.create_line(cx, cy + self.node_h/2, px, py - self.node_h/2, 
+                                                   width=4, fill="#072c37", smooth=True)
+                            self.canvas.create_line(cx, cy + self.node_h/2, px, py - self.node_h/2, 
+                                                   width=2, fill="#5eead4", smooth=True)
 
-        # draw nodes (rounded cards)
+        # 绘制节点
         for node, (cx, cy) in pos.items():
             color = None
             if highlight and node in highlight:
                 color = highlight[node]
             self._draw_node(node, cx, cy, fill_color=color)
 
-        # draw leaf pointers
+        # 绘制叶节点链表指针
         for leaf in self.tree.leaves():
             pos_map = pos
             if leaf in pos_map and leaf.next in pos_map:
@@ -313,9 +332,9 @@ class BPlusVisualizer:
                 nx, ny = pos_map[leaf.next]
                 left = lx + self.node_w/2
                 right = nx - self.node_w/2
-                self.canvas.create_line(left, ly, right, ny, arrow=LAST, dash=(6,4), fill="#7dd3fc")
+                self.canvas.create_line(left, ly, right, ny, arrow=LAST, 
+                                       dash=(6,4), fill="#7dd3fc", width=2)
 
-        # update scrollregion and center if fit
         bbox = self.canvas.bbox("all")
         if bbox:
             l,t,r,b = bbox
@@ -343,18 +362,54 @@ class BPlusVisualizer:
         right = cx + self.node_w/2
         bottom = cy + self.node_h/2
 
-        base_fill = fill_color or ("#052635" if node.is_leaf else "#073146")
-        # outer glow rect
+        # 根据状态选择颜色和边框
+        if fill_color:
+            base_fill = fill_color
+            if fill_color == "#FCD34D":  # 访问中
+                border_color = "#F59E0B"
+                border_width = 3
+            elif fill_color == "#10B981":  # 插入成功
+                border_color = "#059669"
+                border_width = 3
+            elif fill_color == "#EF4444":  # 分裂
+                border_color = "#DC2626"
+                border_width = 3
+            elif fill_color == "#3B82F6":  # 新节点
+                border_color = "#2563EB"
+                border_width = 3
+            else:
+                border_color = "#0fe6c4"
+                border_width = 2
+        else:
+            base_fill = "#052635" if node.is_leaf else "#073146"
+            border_color = "#0fe6c4"
+            border_width = 2
+
+        # 外层光晕
         glow_l, glow_t, glow_r, glow_b = left-6, top-6, right+6, bottom+6
         self._rounded_rect(glow_l, glow_t, glow_r, glow_b, r=12, fill="#06343b", outline="")
-        # main card
-        self._rounded_rect(left, top, right, bottom, r=10, fill=base_fill, outline="#0fe6c4")
-        # inner border
-        self.canvas.create_rectangle(left+6, top+6, right-6, bottom-6, outline="#073b40", width=1)
-        # text
+        
+        # 主卡片
+        self._rounded_rect(left, top, right, bottom, r=10, fill=base_fill, 
+                          outline=border_color, width=border_width)
+        
+        # 节点类型标签
+        node_type = "LEAF" if node.is_leaf else "INTERNAL"
+        type_color = "#10B981" if node.is_leaf else "#3B82F6"
+        self.canvas.create_text(cx, top - 18, text=node_type, 
+                               font=("Arial", 8, "bold"), fill=type_color)
+        
+        # 键值
         text = " | ".join(str(k) for k in node.keys)
-        marker = " L" if node.is_leaf else ""
-        self.canvas.create_text(cx, cy, text=text + marker, font=("Segoe UI",11,"bold"), fill="#E6F7FF")
+        if not text:
+            text = "empty"
+        self.canvas.create_text(cx, cy, text=text, 
+                               font=("Consolas", 12, "bold"), fill="#E6F7FF")
+        
+        # 显示键的数量
+        key_count = f"keys: {len(node.keys)}"
+        self.canvas.create_text(cx, bottom + 18, text=key_count,
+                               font=("Arial", 8), fill="#64748b")
 
     def _refresh_leaf_list(self):
         self.leaf_listbox.delete(0, END)
@@ -362,13 +417,13 @@ class BPlusVisualizer:
         for leaf in leaves:
             self.leaf_listbox.insert(END, ", ".join(str(k) for k in leaf.keys))
 
-    # ---------------- user actions ----------------
     def clear_tree(self):
         if self.animating:
             return
         self.tree.clear()
         self.redraw()
         self.update_status("已清空 B+ 树")
+        self.update_explanation("")
 
     def start_insert_animated(self):
         if self.animating:
@@ -384,16 +439,18 @@ class BPlusVisualizer:
             if key_idx >= len(keys):
                 self.animating = False
                 self.update_status("批量插入完成")
+                self.update_explanation("所有键已成功插入到 B+ 树中")
                 return
             k = keys[key_idx]
             key_idx += 1
-            self.update_status(f"开始插入：{k}")
+            self.update_status(f"开始插入：{k} (剩余 {len(keys)-key_idx} 个)")
             events = self.tree.insert_with_steps(k)
-            self._animate_events(events, lambda: self.window.after(300, process_next))
+            self._animate_events(events, lambda: self.window.after(200, process_next))
         process_next()
 
     def _animate_events(self, events: List[Dict], callback):
         i = 0
+        
         def step():
             nonlocal i
             if i >= len(events):
@@ -402,30 +459,76 @@ class BPlusVisualizer:
                 return
             ev = events[i]
             evtype = ev.get('type')
+            
             if evtype == 'visit':
                 node = ev['node']
-                self.redraw(highlight={node: "#FCD34D"})
-                self.update_status(f"访问节点 {node.keys}")
+                # 计算访问路径（从根到当前节点的边）
+                edges = []
+                current = node
+                while current.parent:
+                    edges.append((current.parent, current))
+                    current = current.parent
+                
+                self.redraw(highlight={node: "#FCD34D"}, highlight_edges=edges)
+                
+                node_type = "叶节点" if node.is_leaf else "内部节点"
+                self.update_status(f"访问{node_type}: {node.keys}")
+                
+                # 详细解释
+                if node.is_leaf:
+                    explain = f"到达叶节点 {node.keys}\n准备在此节点插入数据"
+                else:
+                    explain = f"在内部节点 {node.keys} 中查找\n根据键值选择子节点继续向下"
+                self.update_explanation(explain)
+                
                 i += 1
-                self.window.after(380, step)
+                self.window.after(500, step)
+                
             elif evtype == 'insert':
                 node = ev['node']
                 self.redraw(highlight={node: "#10B981"})
-                self.update_status(f"在叶节点插入：{node.keys}")
+                self.update_status(f"插入成功: {node.keys}")
+                
+                explain = f"键已插入到叶节点\n当前节点包含 {len(node.keys)} 个键"
+                if len(node.keys) >= self.tree.order - 1:
+                    explain += f"\n⚠️ 节点已满 (最多 {self.tree.order-1} 个键)"
+                self.update_explanation(explain)
+                
                 i += 1
-                self.window.after(520, step)
+                self.window.after(700, step)
+                
             elif evtype == 'split':
                 node = ev['node']
                 new_node = ev.get('new_node')
                 promoted = ev.get('promoted')
                 is_leaf = ev.get('is_leaf', False)
-                hl = {node: "#F87171"}
+                
+                hl = {node: "#EF4444"}
                 if new_node is not None:
-                    hl[new_node] = "#86efac"
+                    hl[new_node] = "#3B82F6"
+                    
                 self.redraw(highlight=hl)
-                self.update_status(f"节点分裂（is_leaf={is_leaf}），升键：{promoted}")
+                
+                node_type = "叶节点" if is_leaf else "内部节点"
+                self.update_status(f"{node_type}分裂: 提升键 {promoted}")
+                
+                # 详细解释分裂过程
+                if new_node:
+                    explain = f"节点分裂！\n"
+                    explain += f"原节点（红色）: {node.keys}\n"
+                    explain += f"新节点（蓝色）: {new_node.keys}\n"
+                    explain += f"提升键 {promoted} 到父节点"
+                    if is_leaf:
+                        explain += f"\n\n叶节点分裂：保留提升键在右侧叶节点中"
+                    else:
+                        explain += f"\n\n内部节点分裂：提升键不保留在子节点中"
+                else:
+                    explain = f"创建新的根节点\n提升键: {promoted}"
+                    
+                self.update_explanation(explain)
+                
                 i += 1
-                self.window.after(700, step)
+                self.window.after(900, step)
             else:
                 i += 1
                 self.window.after(200, step)
@@ -435,12 +538,4 @@ class BPlusVisualizer:
 if __name__ == '__main__':
     root = Tk()
     app = BPlusVisualizer(root)
-    
-    # 添加窗口显示后的调试
-    def check_initial_state():
-        print("窗口初始化完成")
-        print(f"左侧面板折叠状态: {app.left_collapsed}")
-        print(f"左侧面板是否在pack中: {app.left_panel.winfo_ismapped()}")
-    
-    root.after(500, check_initial_state)  # 延迟检查
     root.mainloop()

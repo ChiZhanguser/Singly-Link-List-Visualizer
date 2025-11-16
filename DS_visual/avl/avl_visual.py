@@ -201,7 +201,7 @@ class AVLVisualizer:
             relief=GROOVE
         )
         entry.pack(side=LEFT, padx=6, fill=X, expand=True)
-        entry.insert(0, "10, 20, 5, 3, 15, 25, 4")
+        entry.insert(0, "30, 20, 10, 25, 28, 27, 50, 40, 45")
         
         # 插入操作的第二行：按钮
         input_row2 = Frame(insert_frame, bg=self.colors["bg_secondary"])
@@ -305,7 +305,7 @@ class AVLVisualizer:
             relief=GROOVE
         )
         entry.grid(row=0, column=1, padx=5, pady=2, sticky="ew")
-        entry.insert(0, "10, 20, 5, 3, 15, 25, 4")
+        entry.insert(0, "30, 20, 40, 10, 25, 35, 50, 5, 15")
         
         self.create_button(
             control_frame, 
