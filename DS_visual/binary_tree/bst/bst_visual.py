@@ -292,18 +292,29 @@ class BSTVisualizer:
         process_command(self, text)
         self.dsl_var.set("")
     
-    def update_status(self, text: str):
-        """更新状态文本"""
-        self.status_label.config(text=text)
+    def update_status(self, text: str, color: Optional[str] = None):
+        """更新状态文本。可以指定颜色（默认为成功色）。
+        同步更新顶部状态标签和画布上的状态文本。
+        """
+        use_color = color if color is not None else self.colors.get("status_success", "#2E7D32")
+        # 更新顶部状态标签
+        try:
+            self.status_label.config(text=text, fg=use_color)
+        except Exception:
+            pass
+
         # 同时在画布上也显示状态
         if not self.status_text_id:
             self.status_text_id = self.canvas.create_text(
-                self.canvas_width-10, 10, anchor="ne", 
-                text=text, font=("微软雅黑", 10, "bold"), 
-                fill=self.colors["status_success"]
+                self.canvas_width - 10, 10, anchor="ne",
+                text=text, font=("微软雅黑", 10, "bold"),
+                fill=use_color
             )
         else:
-            self.canvas.itemconfig(self.status_text_id, text=text)
+            try:
+                self.canvas.itemconfig(self.status_text_id, text=text, fill=use_color)
+            except Exception:
+                pass
 
     # 其他方法保持不变...
     def _ensure_tree_folder(self) -> str:
@@ -715,7 +726,10 @@ class BSTVisualizer:
             
             if cur is None:
                 self.update_guide("❌ 树为空，无法查找")
+                self.update_status("❌ 查找失败：树为空", color=self.colors.get("status_error"))
                 self.animating = False
+                # 弹窗提示并返回
+                self.window.after(100, lambda: messagebox.showinfo("查找结果", "树为空，无法执行查找。"))
                 return
             
             step_count = 0
@@ -753,7 +767,19 @@ class BSTVisualizer:
                             self.update_guide(f"🎉 查找成功！在BST中找到值 {val}")
                         self.window.after(1500, lambda: self.canvas.itemconfig(rid, fill=self.colors["node_default"]) if 'rid' in locals() else None)
                     else:
-                        self.update_guide(f"❌ 查找失败：BST中不存在值 {val}")
+                            # 强调查找失败：高亮最后访问节点，更新顶部状态为错误色，并弹窗提示
+                            self.update_guide(f"❌ 查找失败：BST中不存在值 {val}")
+                            self.update_status(f"❌ 查找失败：未找到 {val}", color=self.colors.get("status_error"))
+                            if path_nodes:
+                                last = path_nodes[-1]
+                                if last in self.node_to_rect:
+                                    last_rid = self.node_to_rect[last]
+                                    try:
+                                        self.canvas.itemconfig(last_rid, fill=self.colors.get("node_warning", "#FFCDD2"))
+                                    except Exception:
+                                        pass
+                            # 也弹出一个信息框以提示用户
+                            self.window.after(300, lambda: messagebox.showinfo("查找结果", f"未找到值 {val} 于 BST"))
                     return
                     
                 node = path_nodes[i]

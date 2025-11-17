@@ -1,0 +1,54 @@
+{
+  "type": "tree",
+  "tree": {
+    "nodes": [
+      {
+        "id": "n3",
+        "val": 5,
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n2",
+        "val": 4,
+        "left": null,
+        "right": "n3"
+      },
+      {
+        "id": "n4",
+        "val": 7,
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n1",
+        "val": 6,
+        "left": "n2",
+        "right": "n4"
+      },
+      {
+        "id": "n6",
+        "val": 71,
+        "left": null,
+        "right": null
+      },
+      {
+        "id": "n5",
+        "val": 23,
+        "left": null,
+        "right": "n6"
+      },
+      {
+        "id": "n0",
+        "val": 15,
+        "left": "n1",
+        "right": "n5"
+      }
+    ],
+    "root": "n0"
+  },
+  "metadata": {
+    "saved_at": "2025-11-17T16:15:23.799375",
+    "node_count": 7
+  }
+}
