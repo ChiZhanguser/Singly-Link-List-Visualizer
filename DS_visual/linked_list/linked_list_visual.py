@@ -6,6 +6,7 @@ import storage as storage
 from llm import function_dispatcher
 from linked_list.ui_utils import heading_with_label_subheading, make_start_with_other, make_btn, make_batch_create_ui, draw_gradient
 from DSL_utils import process_command
+
 class LinkList:
     def __init__(self, root):
         self.window = root
@@ -101,6 +102,7 @@ class LinkList:
             if b:
                 try: b.config(state=state)
                 except: pass
+
     def process_dsl(self, event=None):
         txt = self.dsl_var.get().strip()
         try:
@@ -187,7 +189,7 @@ class LinkList:
             pos = int(self.position_entry.get())
             if pos < 1 or pos > len(self.node_value_store):
                 messagebox.showerror("Not found","目标节点不存在")
-                self.information.config(text="start 是一个指向第一个节点的指针，而 temp 指针在进行“尾部插入（insert last）”和“尾部删除（delete last）”操作时，用来遍历到目标位置。")
+                self.information.config(text="start 是一个指向第一个节点的指针，而 temp 指针在进行尾部插入和尾部删除操作时，用来遍历到目标位置。")
             else:
                 self.insert_after_node.config(state=DISABLED)
                 self.information.config(text="目标节点已找到")
@@ -403,142 +405,823 @@ class LinkList:
         except Exception as e:
             print("programmatic_insert_last error:", e)
 
+    def programmatic_insert_at_position(self, pos, value):
+        """在指定位置插入节点的动画版本"""
+        if pos < 1 or pos > len(self.node_value_store) + 1:
+            messagebox.showerror("错误", f"位置越界：当前链表长度 {len(self.node_value_store)}")
+            return
+
+        self.toggle_action_buttons(DISABLED)
+        
+        try:
+            # 设置位置和值
+            self.position_entry.set(str(pos))
+            self.value_entry.set(str(value))
+            
+            # 模拟插入过程
+            if pos == 1:
+                # 头部插入
+                self._animate_insert_at_head(value)
+            elif pos == len(self.node_value_store) + 1:
+                # 尾部插入
+                self.programmatic_insert_last(value)
+            else:
+                # 中间插入
+                self._animate_insert_at_middle(pos, value)
+                
+        except Exception as e:
+            messagebox.showerror("错误", f"插入失败：{e}")
+        finally:
+            self.toggle_action_buttons(NORMAL)
+
+    def _animate_insert_at_head(self, value):
+        """在头部插入节点的动画"""
+        self.information.config(text="在链表头部插入新节点")
+        
+        # 创建新节点
+        self._create_new_node_visual(value)
+        
+        # 动画：新节点下移
+        self._animate_node_down()
+        
+        # 动画：新节点右移到头部位置
+        self._animate_node_to_head_position()
+        
+        # 更新指针连接
+        self._update_pointers_after_head_insert()
+        
+        # 更新数据结构
+        self._finalize_head_insert(value)
+
+    def _animate_insert_at_middle(self, pos, value):
+        """在中间位置插入节点的动画"""
+        self.information.config(text=f"在位置 {pos} 插入新节点")
+        
+        # 创建新节点
+        self._create_new_node_visual(value)
+        
+        # 动画：新节点下移
+        self._animate_node_down()
+        
+        # 动画：移动temp指针到前一个节点
+        self._animate_temp_to_previous_node(pos)
+        
+        # 动画：新节点右移到目标位置
+        self._animate_node_to_middle_position(pos)
+        
+        # 更新指针连接
+        self._update_pointers_after_middle_insert(pos)
+        
+        # 更新数据结构
+        self._finalize_middle_insert(pos, value)
+
+    def _create_new_node_visual(self, value):
+        """创建新节点的可视化元素"""
+        self.new_node_label = Label(self.canvas_make, text="New node", font=("Arial",13,"bold"), bg="chocolate", fg="green")
+        self.new_node_label.place(x=30, y=90)
+        
+        self.data = self.make_rect(self.data_left, self.data_up, self.data_left+40, self.data_up+30, 
+                                 outline="green", fill="yellow", width=3)
+        self.data_label = Label(self.canvas_make, text="data", font=("Arial",13,"bold"), bg="chocolate", fg="green")
+        self.data_label.place(x=self.data_label_x, y=self.data_label_y)
+        
+        self.next = self.make_rect(self.data_left+50, self.data_up, self.data_left+90, self.data_up+30, 
+                                 outline="green", fill="yellow", width=3)
+        self.next_label = Label(self.canvas_make, text="next", font=("Arial",13,"bold"), bg="chocolate", fg="green")
+        self.next_label.place(x=self.data_label_x+50, y=self.data_label_y)
+        
+        self.main_container_node = self.make_rect(self.main_node_left, self.main_node_up, 
+                                                self.main_node_left+100, self.main_node_up+65, 
+                                                outline="brown", width=3)
+        
+        self.value_set = Label(self.canvas_make, text=str(value), font=("Arial", 10, "bold"), 
+                             fg="green", bg="yellow")
+        self.value_set.place(x=self.data_left + 8, y=self.data_up + 3)
+        
+        self.arrow = self.canvas_make.create_line(self.data_left+75, self.data_up+15, 
+                                                self.data_left+115, self.data_up+15, width=4)
+        self.next_set = Label(self.canvas_make, text="NULL", font=("Arial", 15, "bold"), 
+                            fg="green", bg="chocolate")
+        self.next_set.place(x=self.data_left+102, y=self.data_up + 3)
+
+    def _animate_node_down(self):
+        """动画：新节点下移"""
+        try:
+            self.start_initial_point_null.place_forget()
+        except:
+            pass
+        
+        while self.main_node_up + 65 < 320:
+            self.canvas_make.delete(self.main_container_node, self.data, self.next, self.arrow)
+            self.next_label.place_forget()
+            self.data_label.place_forget()
+            self.value_set.place_forget()
+            self.next_set.place_forget()
+            
+            self.main_node_up += 10
+            self.data_up += 10
+            self.data_label_y += 10
+            
+            self.main_container_node = self.make_rect(self.main_node_left, self.main_node_up, 
+                                                    self.main_node_left+100, self.main_node_up+65, 
+                                                    outline="brown", width=3)
+            self.data = self.make_rect(self.data_left, self.data_up, self.data_left+40, self.data_up+30, 
+                                     outline="green", fill="yellow", width=3)
+            self.next = self.make_rect(self.data_left+50, self.data_up, self.data_left+90, self.data_up+30, 
+                                     outline="green", fill="yellow", width=3)
+            self.next_label.place(x=self.data_label_x+50, y=self.data_label_y)
+            self.data_label.place(x=self.data_label_x, y=self.data_label_y)
+            self.value_set.place(x=self.data_left + 8, y=self.data_up + 3)
+            self.arrow = self.canvas_make.create_line(self.data_left+75, self.data_up+15, 
+                                                    self.data_left+115, self.data_up+15, width=4)
+            self.next_set.place(x=self.data_left+102, y=self.data_up + 2)
+            
+            time.sleep(0.04)
+            self.window.update()
+
+    def _animate_node_to_head_position(self):
+        """动画：新节点移动到头部位置"""
+        if len(self.linked_list_data_next_store) > 0:
+            try:
+                self.linked_list_data_next_store[-1].pop().place_forget()
+            except:
+                pass
+            
+            target_x = 25  # 头部位置
+            while self.main_node_left > target_x:
+                self.canvas_make.delete(self.main_container_node, self.data, self.next, self.arrow)
+                self.next_label.place_forget()
+                self.data_label.place_forget()
+                self.value_set.place_forget()
+                self.next_set.place_forget()
+                
+                self.main_node_left -= 10
+                self.data_left -= 10
+                self.data_label_x -= 10
+                
+                self.main_container_node = self.make_rect(self.main_node_left, self.main_node_up, 
+                                                        self.main_node_left+100, self.main_node_up+65, 
+                                                        outline="brown", width=3)
+                self.data = self.make_rect(self.data_left, self.data_up, self.data_left+40, self.data_up+30, 
+                                         outline="green", fill="yellow", width=3)
+                self.next = self.make_rect(self.data_left+50, self.data_up, self.data_left+90, self.data_up+30, 
+                                         outline="green", fill="yellow", width=3)
+                self.next_label.place(x=self.data_label_x+50, y=self.data_label_y)
+                self.data_label.place(x=self.data_label_x, y=self.data_label_y)
+                self.value_set.place(x=self.data_left + 8, y=self.data_up + 3)
+                self.arrow = self.canvas_make.create_line(self.data_left+75, self.data_up+15, 
+                                                        self.data_left+115, self.data_up+15, width=4)
+                self.next_set.place(x=self.data_left+102, y=self.data_up + 2)
+                
+                time.sleep(0.04)
+                self.window.update()
+
+    def _animate_temp_to_previous_node(self, pos):
+        """动画：移动temp指针到前一个节点"""
+        if len(self.linked_list_data_next_store) > 1:
+            self.next_set.place_forget()
+            self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
+            self.pointing_line_temp = self.canvas_make.create_line(self.pointing_line_temp_left, 
+                                                                 self.pointing_line_temp_up,
+                                                                 self.pointing_line_temp_left, 
+                                                                 self.pointing_line_temp_up + 65, width=2)
+            
+            goto = pos - 2  # 前一个节点的索引
+            target_x = self.linked_list_position[goto][4] + 60
+            
+            self.information.config(text="temp指针正在移动到目标位置")
+            
+            while self.temp_label_x < target_x:
+                self.temp_label.place_forget()
+                self.canvas_make.delete(self.pointing_line_temp, self.temp_pointer)
+                self.temp_label_x += 10
+                self.pointing_line_temp_left += 10
+                self.temp_pointer_left += 10
+                
+                self.temp_pointer = self.make_rect(self.temp_pointer_left, self.temp_pointer_up, 
+                                                 self.temp_pointer_left + 30, self.temp_pointer_up + 30, 
+                                                 fill="blue", outline="black", width=3)
+                self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
+                self.pointing_line_temp = self.canvas_make.create_line(self.pointing_line_temp_left, 
+                                                                     self.pointing_line_temp_up,
+                                                                     self.pointing_line_temp_left, 
+                                                                     self.pointing_line_temp_up + 65, width=2)
+                time.sleep(0.05)
+                self.window.update()
+
+    def _animate_node_to_middle_position(self, pos):
+        """动画：新节点移动到中间位置"""
+        if len(self.linked_list_data_next_store) > 0:
+            try:
+                self.linked_list_data_next_store[-1].pop().place_forget()
+            except:
+                pass
+            
+            target_x = self.linked_list_position[pos-1][4] - 120  # 目标位置
+            
+            self.information.config(text="新节点正在移动到目标位置")
+            
+            while self.main_node_left < target_x:
+                self.canvas_make.delete(self.main_container_node, self.data, self.next, self.arrow)
+                self.next_label.place_forget()
+                self.data_label.place_forget()
+                self.value_set.place_forget()
+                self.next_set.place_forget()
+                
+                self.main_node_left += 10
+                self.data_left += 10
+                self.data_label_x += 10
+                
+                self.main_container_node = self.make_rect(self.main_node_left, self.main_node_up, 
+                                                        self.main_node_left+100, self.main_node_up+65, 
+                                                        outline="brown", width=3)
+                self.data = self.make_rect(self.data_left, self.data_up, self.data_left+40, self.data_up+30, 
+                                         outline="green", fill="yellow", width=3)
+                self.next = self.make_rect(self.data_left+50, self.data_up, self.data_left+90, self.data_up+30, 
+                                         outline="green", fill="yellow", width=3)
+                self.next_label.place(x=self.data_label_x+50, y=self.data_label_y)
+                self.data_label.place(x=self.data_label_x, y=self.data_label_y)
+                self.value_set.place(x=self.data_left + 8, y=self.data_up + 3)
+                self.arrow = self.canvas_make.create_line(self.data_left+75, self.data_up+15, 
+                                                        self.data_left+115, self.data_up+15, width=4)
+                self.next_set.place(x=self.data_left+102, y=self.data_up + 2)
+                
+                time.sleep(0.04)
+                self.window.update()
+
+    def _update_pointers_after_head_insert(self):
+        """更新头部插入后的指针连接"""
+        # 新节点的next指向原来的头节点
+        if len(self.linked_list_data_next_store) > 0:
+            first_node_x = self.linked_list_position[0][4] + 25
+            first_node_y = self.linked_list_position[0][5] + 32
+            
+            self.canvas_make.coords(self.arrow, 
+                                  self.data_left+75, self.data_up+15,
+                                  first_node_x, first_node_y)
+            self.next_set.place_forget()
+        
+        # 更新start指针指向新节点
+        new_head_x = self.main_node_left + 50
+        new_head_y = self.main_node_up + 32
+        self.canvas_make.coords(self.pointing_line_start, 65, 327, new_head_x, new_head_y)
+
+    def _update_pointers_after_middle_insert(self, pos):
+        """更新中间插入后的指针连接"""
+        # 新节点的next指向原位置节点
+        current_node_x = self.linked_list_position[pos][4] + 25
+        current_node_y = self.linked_list_position[pos][5] + 32
+        
+        self.canvas_make.coords(self.arrow, 
+                              self.data_left+75, self.data_up+15,
+                              current_node_x, current_node_y)
+        self.next_set.place_forget()
+        
+        # 前一个节点的next指向新节点
+        prev_arrow_id = self.linked_list_data_next_store[pos-1][1]
+        prev_node_x = self.linked_list_position[pos-1][0]
+        prev_node_y = self.linked_list_position[pos-1][1]
+        new_node_x = self.main_node_left + 25
+        new_node_y = self.main_node_up + 32
+        
+        self.canvas_make.coords(prev_arrow_id, 
+                              prev_node_x+75, prev_node_y+15,
+                              new_node_x, new_node_y)
+
+    def _finalize_head_insert(self, value):
+        """完成头部插入的最终处理"""
+        # 添加可视化元素到存储
+        self.linked_list_canvas_small_widget_label.append([self.data_label, self.next_label])
+        self.linked_list_canvas_small_widget.append([self.data, self.next, self.main_container_node])
+        
+        loc = [self.data_left, self.data_up, self.data_left+50, self.data_up, 
+               self.main_node_left, self.main_node_up]
+        self.linked_list_position.insert(0, loc)
+        
+        # 添加数据到存储
+        self.node_value_store.insert(0, str(value))
+        self.linked_list_data_next_store.insert(0, [self.value_set, self.arrow, self.next_set])
+        
+        # 右移所有后续节点
+        self._shift_nodes_right(1, 120)
+        
+        # 清理临时指针
+        try:
+            self.temp_label.place_forget()
+            self.canvas_make.delete(self.pointing_line_temp, self.temp_pointer)
+        except:
+            pass
+        
+        self.temp_label_x = 40
+        self.pointing_line_temp_left = 65
+        self.temp_pointer_left = 50
+        
+        self.reset_coords()
+        self.information.config(text="头部插入完成")
+
+    def _finalize_middle_insert(self, pos, value):
+        """完成中间插入的最终处理"""
+        # 添加可视化元素到存储
+        self.linked_list_canvas_small_widget_label.append([self.data_label, self.next_label])
+        self.linked_list_canvas_small_widget.append([self.data, self.next, self.main_container_node])
+        
+        loc = [self.data_left, self.data_up, self.data_left+50, self.data_up, 
+               self.main_node_left, self.main_node_up]
+        self.linked_list_position.insert(pos, loc)
+        
+        # 添加数据到存储
+        self.node_value_store.insert(pos, str(value))
+        self.linked_list_data_next_store.insert(pos, [self.value_set, self.arrow, self.next_set])
+        
+        # 右移所有后续节点
+        self._shift_nodes_right(pos + 1, 120)
+        
+        # 清理临时指针
+        try:
+            self.temp_label.place_forget()
+            self.canvas_make.delete(self.pointing_line_temp, self.temp_pointer)
+        except:
+            pass
+        
+        self.temp_label_x = 40
+        self.pointing_line_temp_left = 65
+        self.temp_pointer_left = 50
+        
+        self.reset_coords()
+        self.information.config(text=f"位置 {pos} 插入完成")
+
+    def _shift_nodes_right(self, start_idx, shift_distance):
+        """将start_idx开始的节点右移"""
+        for i in range(start_idx, len(self.linked_list_position)):
+            # 更新位置信息
+            self.linked_list_position[i][0] += shift_distance
+            self.linked_list_position[i][2] += shift_distance
+            self.linked_list_position[i][4] += shift_distance
+            
+            # 移动画布元素
+            node_group = self.linked_list_canvas_small_widget[i]
+            for element in node_group:
+                self.canvas_make.move(element, shift_distance, 0)
+            
+            # 移动标签和箭头
+            value_set, arrow_id, next_set = self.linked_list_data_next_store[i]
+            value_set.place_configure(x=value_set.place_info().get('x', 0) + shift_distance)
+            
+            if next_set:
+                next_set.place_configure(x=next_set.place_info().get('x', 0) + shift_distance)
+            
+            # 更新箭头坐标
+            if i < len(self.linked_list_data_next_store) - 1:
+                next_node_x = self.linked_list_position[i+1][4] + 25
+                next_node_y = self.linked_list_position[i+1][5] + 32
+                data_x = self.linked_list_position[i][0]
+                data_y = self.linked_list_position[i][1]
+                self.canvas_make.coords(arrow_id, 
+                                      data_x+75, data_y+15,
+                                      next_node_x, next_node_y)
+            
+            # 更新标签位置
+            data_label, next_label = self.linked_list_canvas_small_widget_label[i]
+            data_label.place_configure(x=data_label.place_info().get('x', 0) + shift_distance)
+            next_label.place_configure(x=next_label.place_info().get('x', 0) + shift_distance)
+            
+            time.sleep(0.05)
+            self.window.update()
+
     def reset_with_store(self, take_notation):
+        # Add the new node's logical value and visual items (they were created at the end)
         self.node_value_store.append(self.value_entry.get())
         self.linked_list_data_next_store.append([self.value_set, self.arrow, self.next_set])
         print(self.linked_list_data_next_store); print(self.linked_list_canvas_small_widget)
         print(self.linked_list_position); print(self.linked_list_canvas_small_widget_label); print(self.node_value_store)
 
-        try: self.element_take_label.place_forget(); self.value_entry.set(" "); self.element_take_entry.place_forget(); self.add_btn.place_forget()
+        try:
+            self.element_take_label.place_forget(); self.value_entry.set(" "); self.element_take_entry.place_forget(); self.add_btn.place_forget()
         except: pass
 
+        # For insert-at-begin (take_notation == 1) the original shifting behavior is OK
         if take_notation == 1 and len(self.linked_list_data_next_store) > 1:
             temp_val = self.node_value_store[-1]
             for i in range(len(self.node_value_store)-2, -1, -1):
                 self.node_value_store[i+1] = self.node_value_store[i]
             self.node_value_store[0] = temp_val
             for i in range(len(self.node_value_store)):
-                self.linked_list_data_next_store[i][0].config(text=self.node_value_store[i])
-        if take_notation == 2:
-            temp_value = self.node_value_store[-1]
-            pos = int(self.position_entry.get())
-            for i in range(len(self.node_value_store)-2, pos-1, -1):
-                self.node_value_store[i+1] = self.node_value_store[i]
-            self.node_value_store[pos] = temp_value
-            for i in range(pos, len(self.linked_list_data_next_store)):
-                self.linked_list_data_next_store[i][0].config(text=self.node_value_store[i])
+                try: self.linked_list_data_next_store[i][0].config(text=self.node_value_store[i])
+                except: pass
+
+        # For insert-at-position (take_notation == 2) perform an in-place insertion of the visual node
+        elif take_notation == 2:
+            try:
+                temp_value = self.node_value_store[-1]
+                pos = int(self.position_entry.get())  # position is 1-based and insertion is after that position
+                insert_idx = pos  # corresponds to placing new node at index == pos (0-based)
+
+                # remove the last-created visual group (it was appended at the end)
+                new_visual = self.linked_list_data_next_store.pop()  # [value_set, arrow, next_set]
+                new_canvas_group = None
+                try:
+                    new_canvas_group = self.linked_list_canvas_small_widget.pop()
+                except: pass
+                try:
+                    new_pos_loc = self.linked_list_position.pop()
+                except: new_pos_loc = None
+
+                # Insert logical value into model/list
+                try:
+                    self.node_value_store.insert(insert_idx, temp_value)
+                except Exception:
+                    # Fallback: if model doesn't support insert, emulate by shifting
+                    for i in range(len(self.node_value_store)-2, insert_idx-1, -1):
+                        self.node_value_store[i+1] = self.node_value_store[i]
+                    self.node_value_store[insert_idx] = temp_value
+
+                # Insert the visual group into the lists at the insertion index
+                self.linked_list_data_next_store.insert(insert_idx, new_visual)
+                if new_canvas_group is not None:
+                    self.linked_list_canvas_small_widget.insert(insert_idx, new_canvas_group)
+                if new_pos_loc is not None:
+                    # new_pos_loc holds coordinates where the node was created (end). We'll insert it and then shift subsequent nodes.
+                    self.linked_list_position.insert(insert_idx, new_pos_loc)
+
+                # Shift all canvas items and stored positions for nodes AFTER the inserted node to make space
+                dx = 120  # horizontal shift amount to make room for the new node
+                for i in range(insert_idx+1, len(self.linked_list_position)):
+                    try:
+                        # shift stored position
+                        self.linked_list_position[i][0] += dx
+                        self.linked_list_position[i][2] += dx
+                        self.linked_list_position[i][4] += dx
+
+                        # move canvas rectangles / shapes
+                        group = None
+                        try:
+                            group = self.linked_list_canvas_small_widget[i]
+                        except: group = None
+                        if group:
+                            for cid in group:
+                                try: self.canvas_make.move(cid, dx, 0)
+                                except: pass
+
+                        # move the arrow line and update its coords
+                        try:
+                            vset, arrow_id, nset = self.linked_list_data_next_store[i]
+                            # move arrow line
+                            try: self.canvas_make.move(arrow_id, dx, 0)
+                            except:
+                                # fallback to coords update if move fails
+                                try:
+                                    coords = self.canvas_make.coords(arrow_id)
+                                    if coords and len(coords) >= 4:
+                                        self.canvas_make.coords(arrow_id, coords[0]+dx, coords[1], coords[2]+dx, coords[3])
+                                except: pass
+                            # move placed labels
+                            try: vset.place_configure(x=(int(vset.place_info().get('x')) + dx))
+                            except: pass
+                            try: nset.place_configure(x=(int(nset.place_info().get('x')) + dx))
+                            except: pass
+                        except: pass
+                    except Exception:
+                        # ignore shifting errors per-node to avoid crashing the UI
+                        pass
+
+                # Now update arrows and label texts for affected nodes (previous and inserted and next)
+                try:
+                    # update text of all value labels to match model
+                    for i in range(len(self.node_value_store)):
+                        try:
+                            self.linked_list_data_next_store[i][0].config(text=self.node_value_store[i])
+                        except: pass
+
+                    # recalc arrow coords for each node where possible
+                    for i in range(len(self.linked_list_data_next_store)):
+                        try:
+                            data_x = self.linked_list_position[i][0]
+                            data_y = self.linked_list_position[i][1]
+                            arrow_id = self.linked_list_data_next_store[i][1]
+                            try: self.canvas_make.coords(arrow_id, data_x+75, data_y+15, data_x+115, data_y+15)
+                            except: pass
+                            # place value and next labels at sensible computed positions
+                            try: self.linked_list_data_next_store[i][0].place_configure(x=data_x+8, y=data_y+3)
+                            except: pass
+                            try: self.linked_list_data_next_store[i][2].place_configure(x=data_x+102, y=data_y+3)
+                            except: pass
+                        except: pass
+                except: pass
+
+            except Exception as e:
+                print("insert-at-position error:", e)
+
+        # default cleanup
         self.reset_coords()
         self.toggle_action_buttons(NORMAL)
+
+    def delete_at_position(self, pos):
+        """删除指定位置的节点，使用正确的链表删除逻辑"""
+        if pos < 1 or pos > len(self.node_value_store):
+            messagebox.showerror("错误", f"位置越界：当前链表长度 {len(self.node_value_store)}")
+            return
         
-    def delete_last_node(self, locator):
-        print(self.linked_list_data_next_store, self.linked_list_canvas_small_widget, self.linked_list_position, self.linked_list_canvas_small_widget_label, self.node_value_store)
-        if len(self.linked_list_data_next_store) == 0:
-            messagebox.showerror("Underflow", "Link list is empty"); return
         self.toggle_action_buttons(DISABLED)
-
-        if (locator == 0 or locator==3) and len(self.linked_list_data_next_store)>1:
-            self.temp_pointer = self.make_rect(self.temp_pointer_left, self.temp_pointer_up, self.temp_pointer_left + 30, self.temp_pointer_up + 30, fill="blue", outline="black", width=3)
-            self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
-            self.pointing_line_temp = self.canvas_make.create_line(self.pointing_line_temp_left, self.pointing_line_temp_up, self.pointing_line_temp_left, self.pointing_line_temp_up + 65, width=2)
-            if len(self.linked_list_data_next_store) > 2:
-                goto = (int(self.delete_entry.get())-3) if locator == 3 else (len(self.linked_list_position) - 3)
-                while self.temp_label_x < self.linked_list_position[goto][4] + 120:
-                    if locator == 3:
-                        if int(self.delete_entry.get()) == 2: break
-                        self.information.config(text="Traversing until found the penultimate node of the targeting node")
-                    else:
-                        self.information.config(text="Traversing until found the penultimate node of the last node")
-                    self.temp_label.place_forget()
-                    self.canvas_make.delete(self.pointing_line_temp, self.temp_pointer)
-                    self.temp_label_x += 10; self.pointing_line_temp_left += 10; self.temp_pointer_left += 10
-                    self.temp_pointer = self.make_rect(self.temp_pointer_left, self.temp_pointer_up, self.temp_pointer_left + 30, self.temp_pointer_up + 30, fill="blue", outline="black", width=3)
-                    self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
-                    self.pointing_line_temp = self.canvas_make.create_line(self.pointing_line_temp_left, self.pointing_line_temp_up, self.pointing_line_temp_left, self.pointing_line_temp_up + 65, width=2)
-                    time.sleep(0.04); self.window.update()
-
-            for _ in range(3): time.sleep(0.125); self.window.update()
-            if locator == 0:
-                self.information.config(text="Temp 指针指向的节点包含了最后一个节点的下一个地址，\n最后一个节点已被删除")
+        
+        try:
+            # 逻辑删除
+            if hasattr(self.model, 'delete_at_position'):
+                self.model.delete_at_position(pos)
             else:
-                self.information.config(text="目标节点已删除")
-
-        if locator == 3:
-            self.temp1_pointer = self.make_rect(self.temp_pointer_left+120, self.temp_pointer_up, self.temp_pointer_left + 150, self.temp_pointer_up + 30, fill="blue", outline="black", width=3)
-            self.temp1_label.place(x=self.temp_label_x+120, y=self.temp_label_y)
-            self.pointing_line_temp1 = self.canvas_make.create_line(self.pointing_line_temp_left+120, self.pointing_line_temp_up, self.pointing_line_temp_left+120, self.pointing_line_temp_up + 65, width=2)
-            self.information.config(text="Temp 指针指向的节点包含了目标节点的前一个节点的地址，\n而 Temp1 指针指向的节点包含了目标节点的下一个节点的地址")
-            for _ in range(3): time.sleep(2.5); self.window.update()
-            for i in range(int(self.delete_entry.get()), len(self.node_value_store)):
-                self.linked_list_data_next_store[i-1][0].config(text=self.node_value_store[i])
-            for i in range(int(self.delete_entry.get()), len(self.node_value_store)):
-                self.node_value_store[i-1] = self.node_value_store[i]
-        if len(self.linked_list_data_next_store) > 0:
-            temp1 = self.linked_list_data_next_store.pop()
-            try: temp1[0].place_forget()
-            except: pass
-            try: self.canvas_make.delete(temp1[1])
-            except: pass
-            try: temp1[2].place_forget()
-            except: pass
-            temp2 = self.linked_list_canvas_small_widget.pop()
-            for i in temp2: 
-                try: self.canvas_make.delete(i)
-                except: pass
-            self.linked_list_position.pop()
-            if len(self.linked_list_data_next_store) > 0:
-                temp3 = self.linked_list_position[-1]
-                self.next_set = Label(self.canvas_make, text="NULL", font=("Arial", 15, "bold"), fg="green", bg="chocolate")
-                self.next_set.place(x=temp3[2]+52, y=temp3[3])
-                self.linked_list_data_next_store[-1].append(self.next_set)
-
-            temp4 = self.linked_list_canvas_small_widget_label.pop()
-            for widget_label in temp4:
-                try: widget_label.place_forget()
-                except: pass
-
-            try: self.node_value_store.pop()
-            except: pass
-
-            if len(self.linked_list_data_next_store) == 0:
-               self.start_initial_point_null.place(x=40, y=300)
-
-            if locator == 3:
-                try:
-                    self.temp1_label.place_forget()
-                    self.canvas_make.delete(self.pointing_line_temp1, self.temp1_pointer)
-                except: pass
-                self.information.config(text="Temp 指针指向的节点包含了 Temp1 指针指向的节点的下一个地址，\n而 Temp1 指针指向的节点已被删除")
-
-            for _ in range(3): time.sleep(1); self.window.update()
-
-            try:
-                self.temp_label.place_forget()
-                self.canvas_make.delete(self.pointing_line_temp,self.temp_pointer)
-            except: pass
-            self.temp_label_x = 40; self.pointing_line_temp_left = 65; self.temp_pointer_left = 50
-
-            if len(self.node_value_store) == 0:
-               self.information.config(text="链表为空，且头指针指向 NULL")
-            elif locator == 0:
-                self.information.config(text="最后一个节点已被删除")
-            elif locator == 3:
-                self.information.config(text="目标节点已被删除")
-
+                # 备用逻辑删除
+                self.node_value_store.pop(pos-1)
+            
+            # 可视化删除
+            idx = pos - 1  # 转换为0-based索引
+            
+            if pos == 1:  # 删除头节点
+                self._delete_head_node(idx)
+            elif pos == len(self.node_value_store) + 1:  # 删除尾节点
+                self._delete_tail_node(idx)
+            else:  # 删除中间节点
+                self._delete_middle_node(idx)
+                
+        except Exception as e:
+            messagebox.showerror("错误", f"删除失败：{e}")
+        finally:
             self.toggle_action_buttons(NORMAL)
 
-    def delete_first_node(self):
+    def _delete_head_node(self, idx):
+        """删除头节点"""
+        # 先显示start指针移动到第二个节点的动画
+        if len(self.linked_list_position) > 1:
+            second_node_x = self.linked_list_position[1][4] + 50
+            second_node_y = self.linked_list_position[1][5] + 32
+            
+            # 动画：start指针移动到第二个节点
+            current_x = 65
+            while current_x < second_node_x:
+                self.canvas_make.coords(self.pointing_line_start, 65, 327, current_x, second_node_y)
+                current_x += 10
+                time.sleep(0.05)
+                self.window.update()
+        
+        # 删除可视化元素
+        self._remove_visual_elements(idx)
+        
+        # 左移所有后续节点
+        if len(self.linked_list_position) > 0:
+            self._shift_nodes_left(0)
+        
+        # 更新start指针
+        if len(self.linked_list_position) > 0:
+            first_node_x = self.linked_list_position[0][4] + 50
+            first_node_y = self.linked_list_position[0][5] + 32
+            self.canvas_make.coords(self.pointing_line_start, 65, 327, first_node_x, first_node_y)
+        else:
+            # 如果链表为空，start指向NULL
+            self.canvas_make.coords(self.pointing_line_start, 65, 327, 65, 395)
+            self.start_initial_point_null.place(x=40, y=300)
+        
+        self.information.config(text="头节点已被删除，后续节点已左移")
+
+    def _delete_tail_node(self, idx):
+        """删除尾节点"""
+        if idx > 0:  # 确保不是第一个节点
+            # 显示temp指针移动到倒数第二个节点的动画
+            self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
+            self.pointing_line_temp = self.canvas_make.create_line(
+                self.pointing_line_temp_left, self.pointing_line_temp_up,
+                self.pointing_line_temp_left, self.pointing_line_temp_up + 65, width=2
+            )
+            
+            # 移动到倒数第二个节点
+            target_x = self.linked_list_position[idx-1][4] + 60
+            while self.temp_label_x < target_x:
+                self.temp_label.place_forget()
+                self.canvas_make.delete(self.pointing_line_temp)
+                self.temp_label_x += 10
+                self.pointing_line_temp_left += 10
+                self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
+                self.pointing_line_temp = self.canvas_make.create_line(
+                    self.pointing_line_temp_left, self.pointing_line_temp_up,
+                    self.pointing_line_temp_left, self.pointing_line_temp_up + 65, width=2
+                )
+                time.sleep(0.05)
+                self.window.update()
+            
+            # 将倒数第二个节点的next指针设为NULL
+            prev_arrow_id = self.linked_list_data_next_store[idx-1][1]
+            data_x = self.linked_list_position[idx-1][0]
+            data_y = self.linked_list_position[idx-1][1]
+            self.canvas_make.coords(prev_arrow_id, data_x+75, data_y+15, data_x+90, data_y+15)
+            
+            # 更新NULL标签
+            old_null = self.linked_list_data_next_store[idx-1][2]
+            if old_null:
+                old_null.place_forget()
+            new_null = Label(self.canvas_make, text="NULL", font=("Arial", 15, "bold"), fg="green", bg="chocolate")
+            new_null.place(x=data_x+77, y=data_y+3)
+            self.linked_list_data_next_store[idx-1][2] = new_null
+            
+            # 移除temp指针
+            self.temp_label.place_forget()
+            self.canvas_make.delete(self.pointing_line_temp)
+            self.temp_label_x = 40
+            self.pointing_line_temp_left = 65
+        
+        # 删除可视化元素
+        self._remove_visual_elements(idx)
+        
+        self.information.config(text="尾节点已被删除")
+
+    def _delete_middle_node(self, idx):
+        """删除中间节点"""
+        # 显示temp指针找到要删除节点的前一个节点
+        self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
+        self.pointing_line_temp = self.canvas_make.create_line(
+            self.pointing_line_temp_left, self.pointing_line_temp_up,
+            self.pointing_line_temp_left, self.pointing_line_temp_up + 65, width=2
+        )
+        
+        # 动画：移动temp指针到前一个节点
+        prev_node_x = self.linked_list_position[idx-1][4] + 60
+        while self.temp_label_x < prev_node_x:
+            self.temp_label.place_forget()
+            self.canvas_make.delete(self.pointing_line_temp)
+            self.temp_label_x += 10
+            self.pointing_line_temp_left += 10
+            self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
+            self.pointing_line_temp = self.canvas_make.create_line(
+                self.pointing_line_temp_left, self.pointing_line_temp_up,
+                self.pointing_line_temp_left, self.pointing_line_temp_up + 65, width=2
+            )
+            time.sleep(0.05)
+            self.window.update()
+        
+        self.information.config(text="temp指针已找到要删除节点的前一个节点")
+        time.sleep(0.5)
+        
+        # 创建曲线连接前一个节点和下一个节点
+        prev_node_center_x = self.linked_list_position[idx-1][4] + 50
+        prev_node_center_y = self.linked_list_position[idx-1][5] + 32
+        next_node_center_x = self.linked_list_position[idx+1][4] + 25
+        next_node_center_y = self.linked_list_position[idx+1][5] + 32
+        
+        # 创建曲线 - 使用更简单的方法确保曲线可见
+        # 计算控制点，使曲线向下弯曲
+        control_x = (prev_node_center_x + next_node_center_x) / 2
+        control_y = max(prev_node_center_y, next_node_center_y) + 80  # 向下弯曲
+        
+        # 生成曲线点
+        curve_points = []
+        for t in range(0, 11):
+            t_normalized = t / 10.0
+            # 二次贝塞尔曲线公式
+            x = (1-t_normalized)**2 * prev_node_center_x + 2*(1-t_normalized)*t_normalized * control_x + t_normalized**2 * next_node_center_x
+            y = (1-t_normalized)**2 * prev_node_center_y + 2*(1-t_normalized)*t_normalized * control_y + t_normalized**2 * next_node_center_y
+            curve_points.extend([x, y])
+        
+        # 创建曲线，使用更醒目的颜色和更粗的线条
+        curve_arrow = self.canvas_make.create_line(
+            curve_points, arrow=LAST, width=5, fill="red", smooth=1
+        )
+        
+        self.information.config(text="创建临时曲线连接前一个节点和下一个节点")
+        self.window.update()  # 强制更新显示
+        time.sleep(1.5)  # 延长显示时间
+        
+        # 删除可视化元素
+        self._remove_visual_elements(idx)
+        
+        # 删除曲线
+        self.canvas_make.delete(curve_arrow)
+        
+        # 左移后续节点
+        self._shift_nodes_left(idx)
+        
+        # 更新前一个节点的箭头指向下一个节点
+        prev_arrow_id = self.linked_list_data_next_store[idx-1][1]
+        prev_node_x = self.linked_list_position[idx-1][0]
+        prev_node_y = self.linked_list_position[idx-1][1]
+        
+        # 修正：计算正确的下一个节点位置
+        # 下一个节点现在是idx位置（因为删除了一个节点）
+        if idx < len(self.linked_list_position):
+            next_node_x = self.linked_list_position[idx][4] + 25  # 下一个节点的主容器左侧 + 25
+            next_node_y = self.linked_list_position[idx][5] + 32  # 下一个节点的主容器上侧 + 32
+        else:
+            # 如果删除的是最后一个节点，指向NULL
+            next_node_x = prev_node_x + 115
+            next_node_y = prev_node_y + 15
+        
+        # 创建水平直线箭头
+        self.canvas_make.coords(prev_arrow_id, 
+                               prev_node_x+75, prev_node_y+15,
+                               next_node_x, next_node_y)
+        
+        # 移除temp指针
+        self.temp_label.place_forget()
+        self.canvas_make.delete(self.pointing_line_temp)
+        self.temp_label_x = 40
+        self.pointing_line_temp_left = 65
+        
+        self.information.config(text="中间节点已被删除，后续节点已左移")
+
+    def _shift_nodes_left(self, start_idx):
+        """将start_idx开始的节点左移，保持间距"""
+        shift_distance = 120  # 节点间距
+        
+        # 从左到右移动节点，避免覆盖
+        for i in range(start_idx, len(self.linked_list_position)):
+            # 计算新位置
+            new_data_x = self.linked_list_position[i][0] - shift_distance
+            new_data_y = self.linked_list_position[i][1]
+            new_next_x = self.linked_list_position[i][2] - shift_distance
+            new_main_x = self.linked_list_position[i][4] - shift_distance
+            new_main_y = self.linked_list_position[i][5]
+            
+            # 更新位置信息
+            self.linked_list_position[i] = [
+                new_data_x, new_data_y, 
+                new_next_x, new_data_y,  # next部分的y坐标与data相同
+                new_main_x, new_main_y
+            ]
+            
+            # 移动画布元素
+            node_group = self.linked_list_canvas_small_widget[i]
+            for element in node_group:
+                self.canvas_make.move(element, -shift_distance, 0)
+            
+            # 移动标签
+            value_set, arrow_id, next_set = self.linked_list_data_next_store[i]
+            value_set.place_configure(x=new_data_x + 8)
+            
+            # 移动箭头并确保是水平直线
+            if i < len(self.linked_list_data_next_store) - 1:
+                # 不是最后一个节点，箭头指向下一个节点
+                next_node_x = self.linked_list_position[i+1][4] + 25  # 下一个节点的主容器左侧 + 25
+                next_node_y = self.linked_list_position[i+1][5] + 32  # 下一个节点的主容器上侧 + 32
+                
+                # 确保箭头是水平的
+                self.canvas_make.coords(arrow_id, 
+                                       new_data_x+75, new_data_y+15,
+                                       next_node_x, next_node_y)
+            else:
+                # 最后一个节点，指向NULL - 水平短线
+                self.canvas_make.coords(arrow_id, 
+                                       new_data_x+75, new_data_y+15,
+                                       new_data_x+115, new_data_y+15)
+                if next_set:
+                    next_set.place_configure(x=new_data_x+102)
+            
+            # 更新标签位置
+            data_label, next_label = self.linked_list_canvas_small_widget_label[i]
+            data_label.place_configure(x=new_data_x)
+            next_label.place_configure(x=new_data_x+50)
+            
+            time.sleep(0.1)
+            self.window.update()
+
+    def _remove_visual_elements(self, idx):
+        """移除指定索引的可视化元素"""
+        # 移除数据存储
+        if idx < len(self.linked_list_data_next_store):
+            temp1 = self.linked_list_data_next_store.pop(idx)
+            for element in temp1:
+                if hasattr(element, 'place_forget'):
+                    element.place_forget()
+                elif hasattr(element, 'delete'):
+                    self.canvas_make.delete(element)
+        
+        # 移除画布元素
+        if idx < len(self.linked_list_canvas_small_widget):
+            temp2 = self.linked_list_canvas_small_widget.pop(idx)
+            for element in temp2:
+                self.canvas_make.delete(element)
+        
+        # 移除位置信息
+        if idx < len(self.linked_list_position):
+            self.linked_list_position.pop(idx)
+        
+        # 移除标签
+        if idx < len(self.linked_list_canvas_small_widget_label):
+            temp4 = self.linked_list_canvas_small_widget_label.pop(idx)
+            for widget_label in temp4:
+                widget_label.place_forget()
+        
+        # 如果链表为空，显示NULL
         if len(self.linked_list_data_next_store) == 0:
-            messagebox.showerror("Underflow","链表为空")
+            self.start_initial_point_null.place(x=40, y=300)
+
+    def delete_first_node(self):
+        """删除第一个节点"""
+        if len(self.node_value_store) == 0:
+            messagebox.showerror("Underflow", "链表为空")
             return
-        if len(self.node_value_store) == 1:
-            self.delete_last_node(1)
-            self.information.config(text="现在头指针指向 NULL，且第一个节点已被删除")
+        self.delete_at_position(1)
+
+    def delete_last_node(self, locator=0):
+        """删除最后一个节点"""
+        if len(self.node_value_store) == 0:
+            messagebox.showerror("Underflow", "链表为空")
             return
-        for i in range(1,len(self.node_value_store)): self.node_value_store[i-1] = self.node_value_store[i]
-        self.delete_last_node(1)
-        for i in range(len(self.linked_list_data_next_store)):
-            self.linked_list_data_next_store[i][0].config(text=self.node_value_store[i])
-        self.information.config(text="现在头指针指向的节点包含了第一个节点的地址，\n而第一个节点已被删除")
+        self.delete_at_position(len(self.node_value_store))
 
     def delete_single_node_infrastructure(self):
         if len(self.node_value_store) == 0:
@@ -555,13 +1238,7 @@ class LinkList:
     def delete_single_node(self):
         self.position_label.place_forget(); self.position_take_entry.place_forget(); self.find_btn.place_forget()
         pos = int(self.delete_entry.get())
-        if pos > len(self.node_value_store) or pos < 1:
-           messagebox.showerror("Error","位置节点不存在")
-        elif pos == 1:
-           self.delete_first_node()
-        else:
-           self.delete_last_node(3)
-        self.toggle_action_buttons(NORMAL)
+        self.delete_at_position(pos)
 
     def create_list_from_string(self):
         txt = self.batch_entry_var.get()

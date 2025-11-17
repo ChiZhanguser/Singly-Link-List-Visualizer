@@ -153,3 +153,9 @@ class LinkedListModel:
         if len(self.node_value_store) == 0:
             raise IndexError("delete from empty list")
         self.node_value_store.pop()
+
+    def delete_at_position(self, pos):
+        """删除指定位置的节点"""
+        if pos < 1 or pos > len(self.node_value_store):
+            raise IndexError("position out of range")
+        self.node_value_store.pop(pos-1)
