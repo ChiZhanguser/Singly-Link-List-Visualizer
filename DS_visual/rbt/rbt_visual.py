@@ -72,7 +72,7 @@ class RBTVisualizer:
         title_label.pack()
         
         subtitle_label = Label(header_frame, 
-                             text="演示红黑树的插入过程：搜索路径、红节点插入、颜色调整与旋转修复",
+                             text="演示红黑树的插入过程:搜索路径、红节点插入、颜色调整与旋转修复",
                              font=("微软雅黑", 10), 
                              bg=self.colors["bg_secondary"],
                              fg="#666666")
@@ -106,16 +106,16 @@ class RBTVisualizer:
         self.canvas.pack(padx=10, pady=(0, 10), fill=BOTH, expand=True)
 
     def create_control_panel(self):
-        """创建控制面板（包含：输入行、DSL 行与操作按钮）"""
+        """创建控制面板(包含:输入行、DSL 行与操作按钮)"""
         control_frame = Frame(self.main_frame, bg=self.colors["bg_secondary"],
                             relief=SOLID, bd=1)
         control_frame.pack(fill=X)
 
-        # 输入区域（单行：输入节点值 + DSL + 执行按钮）
+        # 输入区域(单行:输入节点值 + DSL + 执行按钮)
         input_frame = Frame(control_frame, bg=self.colors["bg_secondary"])
         input_frame.pack(fill=X, padx=15, pady=12)
 
-        # 输入节点值 Label + Entry（左侧）
+        # 输入节点值 Label + Entry(左侧)
         Label(input_frame, text="输入节点值:",
             font=("微软雅黑", 10),
             bg=self.colors["bg_secondary"]).grid(row=0, column=0, sticky=W, padx=(0,6), pady=5)
@@ -126,10 +126,10 @@ class RBTVisualizer:
         self.input_entry.grid(row=0, column=1, padx=(0,12), pady=5, sticky=EW)
         # 恢复默认内容
         self.input_entry.insert(0, "1,2,3,4,5,0,6")
-        # 按回车默认触发动画插入（如需改为直接插入可改为 self.insert_direct）
+        # 按回车默认触发动画插入(如需改为直接插入可改为 self.insert_direct)
         self.input_entry.bind("<Return>", lambda e: self.start_insert_animated())
 
-        # DSL Label + Entry（右侧，与输入节点值并排）
+        # DSL Label + Entry(右侧,与输入节点值并排)
         Label(input_frame, text="DSL 命令:",
             font=("微软雅黑", 10),
             bg=self.colors["bg_secondary"]).grid(row=0, column=2, sticky=W, padx=(6,6), pady=5)
@@ -142,18 +142,18 @@ class RBTVisualizer:
         # 回车执行 DSL
         self.dsl_entry.bind("<Return>", lambda e: self.execute_dsl())
 
-        # DSL 执行按钮（在最右侧）
+        # DSL 执行按钮(在最右侧)
         self.execute_dsl_btn = Button(input_frame, text="执行 DSL", command=self.execute_dsl,
                                     bg=self.colors["btn_primary"], fg="white",
                                     font=("微软雅黑", 9), relief=FLAT, bd=0, padx=10, pady=4,
                                     cursor="hand2")
         self.execute_dsl_btn.grid(row=0, column=4, padx=(6,0), pady=5, sticky=W)
 
-        # 关键：让左右两个 Entry 能够水平扩展（列 1 和列 3）
+        # 关键:让左右两个 Entry 能够水平扩展(列 1 和列 3)
         input_frame.columnconfigure(1, weight=1)
         input_frame.columnconfigure(3, weight=1)
 
-        # 兼容旧代码：如果其他函数还引用 self.entry，保持兼容
+        # 兼容旧代码:如果其他函数还引用 self.entry,保持兼容
         self.entry = self.input_entry
 
         # 按钮区域
@@ -168,6 +168,11 @@ class RBTVisualizer:
                         self.start_insert_animated, self.colors["btn_success"]).pack(side=LEFT, padx=4)
         self.create_button(btn_row1, "插入节点 (直接)",
                         self.insert_direct, self.colors["btn_primary"]).pack(side=LEFT, padx=4)
+        
+        # 新增: 单节点插入按钮
+        self.create_button(btn_row1, "单节点插入 (动画)",
+                        self.insert_single_node_animated, "#00ACC1").pack(side=LEFT, padx=4)
+        
         self.create_button(btn_row1, "清空树",
                         self.clear_canvas, self.colors["btn_warning"]).pack(side=LEFT, padx=4)
 
@@ -222,23 +227,23 @@ class RBTVisualizer:
         self.status_label.config(text=text)
     
     def execute_dsl(self):
-        """执行 DSL 命令（由按钮或 Enter 触发）"""
+        """执行 DSL 命令(由按钮或 Enter 触发)"""
         cmd = self.dsl_var.get().strip()
         if not cmd:
-            messagebox.showinfo("提示", "请输入 DSL 命令，例如：\n  create 1,2,3\n  clear")
+            messagebox.showinfo("提示", "请输入 DSL 命令,例如:\n  create 1,2,3\n  clear")
             return
 
-        # 如果 process_command 未导入（None），提示用户并返回
+        # 如果 process_command 未导入(None),提示用户并返回
         if process_command is None:
-            messagebox.showerror("模块缺失", "未找到 DSL_utils 模块，无法执行 DSL 命令。\n"
+            messagebox.showerror("模块缺失", "未找到 DSL_utils 模块,无法执行 DSL 命令。\n"
                                  "请确认 DSL_utils 包存在并已正确导入。")
-            self.update_status("DSL 执行失败：缺少 DSL_utils")
+            self.update_status("DSL 执行失败:缺少 DSL_utils")
             return
 
         try:
-            # process_command 负责识别 visualizer 类型并调用相应的处理器（rbt_dsl）
+            # process_command 负责识别 visualizer 类型并调用相应的处理器(rbt_dsl)
             result = process_command(self, cmd)
-            # process_command 可能返回 True/False/None，统一处理显示状态
+            # process_command 可能返回 True/False/None,统一处理显示状态
             if result is False:
                 self.update_status(f"DSL 命令执行失败: {cmd}")
             else:
@@ -246,13 +251,90 @@ class RBTVisualizer:
         except Exception as e:
             import traceback
             traceback.print_exc()
-            messagebox.showerror("DSL 执行异常", f"执行 DSL 时发生异常：\n{e}")
+            messagebox.showerror("DSL 执行异常", f"执行 DSL 时发生异常:\n{e}")
             self.update_status("DSL 执行异常")
 
-# （可选）你也可以添加一个快捷清空输入的函数，但不是必须
     def clear_dsl_input(self):
+        """清空 DSL 输入"""
         self.dsl_var.set("")
         self.update_status("DSL 输入已清空")
+
+    def insert_single_node_animated(self):
+        """新增功能: 在现有树上插入单个节点(带动画)"""
+        if self.animating:
+            messagebox.showinfo("提示", "当前正在执行动画,请稍候...")
+            return
+        
+        # 获取输入值
+        val_str = self.input_var.get().strip()
+        if not val_str:
+            messagebox.showinfo("提示", "请输入要插入的单个节点值")
+            return
+        
+        # 检查是否只输入了一个值
+        values = [v.strip() for v in val_str.split(",") if v.strip()]
+        if len(values) != 1:
+            messagebox.showwarning("提示", "单节点插入模式只能输入一个节点值\n如需插入多个节点,请使用批量插入功能")
+            return
+        
+        val = values[0]
+        
+        # 验证是否为数字
+        try:
+            int(val)
+        except ValueError:
+            messagebox.showerror("错误", "请输入有效的数字")
+            return
+        
+        # 执行单节点插入动画
+        self.animating = True
+        inserted_node, path_nodes, events, snapshots = self.model.insert_with_steps(val)
+        
+        snap_pre = snapshots[0]
+        snap_after_insert = snapshots[1] if len(snapshots) > 1 else None
+        
+        pos_pre = self.compute_positions_for_root(snap_pre)
+        origid_to_key_pre, _ = self._build_key_maps_from_root(snap_pre)
+        
+        def highlight_path(i=0):
+            if i >= len(path_nodes):
+                self.update_status(f"插入 {val}: 定位插入位置")
+                self.animate_flyin_new(val, snap_after_insert, 
+                                     lambda: self._after_insert_events_single(events, snapshots, val))
+                return
+            
+            node = path_nodes[i]
+            node_id = getattr(node, 'id', None)
+            key = origid_to_key_pre.get(node_id)
+            self.draw_tree_from_root(snap_pre)
+            
+            if key:
+                try:
+                    self.canvas.itemconfig(self.node_vis[key]['rect'], 
+                                         outline=self.colors["path_highlight"], 
+                                         width=3)
+                except Exception:
+                    pass
+            
+            self.update_status(f"搜索路径: 访问节点 {node.val} (步骤 {i+1})")
+            self.window.after(450, lambda: highlight_path(i+1))
+        
+        highlight_path(0)
+
+    def _after_insert_events_single(self, events, snapshots, val):
+        """单节点插入后的事件处理"""
+        if not events:
+            self.draw_tree_from_root(clone_tree(self.model.root))
+            self.animating = False
+            self.update_status(f"完成单节点插入: {val}")
+            return
+        
+        def done_all():
+            self.draw_tree_from_root(clone_tree(self.model.root))
+            self.animating = False
+            self.update_status(f"完成单节点插入: {val}")
+        
+        self._animate_events_sequence(events, snapshots, 0, done_all)
 
     def _draw_connection(self, cx, cy, tx, ty):
         """绘制节点连接线"""
@@ -398,7 +480,7 @@ class RBTVisualizer:
         fill_color = self.colors["red_node"] if is_red else self.colors["black_node"]
         text_color = self.colors["text_light"] if not is_red else self.colors["text_dark"]
         
-        # 绘制节点主体（圆角矩形效果）
+        # 绘制节点主体(圆角矩形效果)
         rect = self.canvas.create_rectangle(left, top, right, bottom,
                                           fill=fill_color, outline="#E0E0E0",
                                           width=2, stipple="gray50")
@@ -430,7 +512,7 @@ class RBTVisualizer:
     def start_insert_animated(self):
         """开始动画插入"""
         if self.animating:
-            messagebox.showinfo("提示", "当前正在执行动画，请稍候...")
+            messagebox.showinfo("提示", "当前正在执行动画,请稍候...")
             return
             
         if not self.validate_input():
@@ -441,7 +523,7 @@ class RBTVisualizer:
         self._insert_seq(0)
 
     def insert_direct(self):
-        """直接插入（无动画）"""
+        """直接插入(无动画)"""
         if not self.validate_input():
             return
             
@@ -456,7 +538,7 @@ class RBTVisualizer:
         """验证输入"""
         s = self.input_var.get().strip()
         if not s:
-            messagebox.showinfo("提示", "请输入数字，用逗号分隔\n例如：10, 5, 20, 15, 30")
+            messagebox.showinfo("提示", "请输入数字,用逗号分隔\n例如:10, 5, 20, 15, 30")
             return False
             
         try:
@@ -464,10 +546,18 @@ class RBTVisualizer:
             for val in values:
                 int(val)  # 验证是否为数字
         except ValueError:
-            messagebox.showerror("错误", "输入包含非数字内容，请确保只输入数字")
+            messagebox.showerror("错误", "输入包含非数字内容,请确保只输入数字")
             return False
             
         return True
+    
+    def _compare_values(self, val1, val2):
+        """比较两个值的大小（按整数比较）"""
+        try:
+            return int(val1) < int(val2)
+        except (ValueError, TypeError):
+            # 如果转换失败，回退到字符串比较
+            return str(val1) < str(val2)
 
     def _insert_seq(self, idx: int):
         """插入序列"""
@@ -511,7 +601,7 @@ class RBTVisualizer:
         highlight_path(0)
 
     def animate_flyin_new(self, val_str: str, snap_after_insert: Optional[RBNode], on_complete):
-        """动画：新节点飞入"""
+        """动画:新节点飞入"""
         if not snap_after_insert:
             on_complete()
             return
@@ -532,7 +622,7 @@ class RBTVisualizer:
         target_key = candidate_keys[-1]
         tx, ty = pos_after[target_key]
 
-        # 起始位置（画布顶部中央）
+        # 起始位置(画布顶部中央)
         sx, sy = self.canvas_w/2, 20
         
         # 创建临时节点
@@ -581,7 +671,7 @@ class RBTVisualizer:
         step()
 
     def _animate_single_event(self, before_root: Optional[RBNode], after_root: Optional[RBNode], event: Dict, on_done):
-        """动画：单步操作"""
+        """动画:单步操作"""
         pos_before = self.compute_positions_for_root(before_root)
         pos_after = self.compute_positions_for_root(after_root)
 
@@ -605,7 +695,7 @@ class RBTVisualizer:
         op_type = event.get('type', '')
         
         if op_type == 'recolor':
-            label_text = "颜色调整: 父节点和叔节点变黑，祖父节点变红"
+            label_text = "颜色调整: 父节点和叔节点变黑,祖父节点变红"
             label_color = "#D32F2F"
         elif op_type in ['rotate_left', 'rotate_right']:
             direction = "左旋" if op_type == 'rotate_left' else "右旋"
@@ -671,7 +761,7 @@ class RBTVisualizer:
         frame_step(0)
 
     def _animate_events_sequence(self, events: List[Dict], snapshots: List[Optional[RBNode]], insertion_index: int, on_all_done):
-        """动画：事件序列"""
+        """动画:事件序列"""
         if not events:
             on_all_done()
             return
@@ -718,7 +808,7 @@ class RBTVisualizer:
 
     def back_to_main(self):
         """返回主界面"""
-        if messagebox.askyesno("确认", "确定要返回主界面吗？"):
+        if messagebox.askyesno("确认", "确定要返回主界面吗?"):
             self.window.destroy()
 
     def save_structure(self):
@@ -752,7 +842,7 @@ if __name__ == '__main__':
     w.title("红黑树可视化演示系统")
     w.geometry("1350x750")
     
-    # 设置窗口图标（如果有的话）
+    # 设置窗口图标(如果有的话)
     try:
         w.iconbitmap("rbt_icon.ico")  # 如果有图标文件的话
     except:

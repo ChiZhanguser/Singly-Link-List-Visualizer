@@ -52,7 +52,7 @@ class HashtableVisualizer:
         self.update_display()
 
     # ------------------------------------------------------------------ #
-    #                         UI 组件
+    #                         UI 组件（略：与原版一致）
     # ------------------------------------------------------------------ #
     def create_heading(self):
         title_frame = Frame(self.window, bg="#E8F4F9")
@@ -151,7 +151,7 @@ class HashtableVisualizer:
                command=self.load_structure).pack(pady=2)
 
     # ------------------------------------------------------------------ #
-    #                         模式切换
+    #                         模式切换（略，保持原样）
     # ------------------------------------------------------------------ #
     def switch_method(self):
         if self.animating:
@@ -182,7 +182,7 @@ class HashtableVisualizer:
         messagebox.showinfo("切换成功", f"已切换到{method_name}")
 
     # ------------------------------------------------------------------ #
-    #                         容量调整
+    #                         容量调整（略）
     # ------------------------------------------------------------------ #
     def prepare_resize(self):
         if self.animating: return
@@ -251,7 +251,7 @@ class HashtableVisualizer:
             self.resize_frame = None
 
     # ------------------------------------------------------------------ #
-    #                         DSL / 操作
+    #                         DSL / 操作（略）
     # ------------------------------------------------------------------ #
     def process_dsl(self):
         text = self.dsl_var.get().strip()
@@ -296,7 +296,7 @@ class HashtableVisualizer:
             self.dsl_var.set("")
 
     # ------------------------------------------------------------------ #
-    #                         文件 IO
+    #                         文件 IO（略）
     # ------------------------------------------------------------------ #
     def save_structure(self):
         payload = {
@@ -341,7 +341,7 @@ class HashtableVisualizer:
         messagebox.showinfo("加载成功", "已加载散列表")
 
     # ------------------------------------------------------------------ #
-    #                         输入框
+    #                         输入框（略）
     # ------------------------------------------------------------------ #
     def prepare_insert(self, default_value: str = ""):
         if self.animating: return
@@ -394,7 +394,7 @@ class HashtableVisualizer:
          "delete": self.delete_value}[action](int(val) if val.isdigit() else val)
 
     # ------------------------------------------------------------------ #
-    #                         操作实现
+    #                         操作实现（插入保持原样） 
     # ------------------------------------------------------------------ #
     def insert_value(self, value):
         """对开放寻址法增加动画演示：探测路径高亮 + 值移动动画"""
@@ -560,19 +560,272 @@ class HashtableVisualizer:
 
         move_step()
 
+    # ------------------------------------------------------------------ #
+    #                      查找动画实现（新增/修改部分）
+    # ------------------------------------------------------------------ #
     def find_value(self, value):
+        """带动画的查找：开放寻址逐步高亮探测路径；拉链法先高亮桶，再逐节点高亮"""
         if self.animating: return
-        
-        found, probe_path, chain_pos = self.model.find(value)
-        
-        if found:
-            if self.method == CollisionMethod.CHAINING:
-                messagebox.showinfo("查找", f"找到 {value}，索引 {probe_path[0]}，链表位置 {chain_pos}")
-            else:
-                messagebox.showinfo("查找", f"找到 {value}，索引 {probe_path[-1]}")
-        else:
-            messagebox.showinfo("查找", f"未找到 {value}")
 
+        # 先获取模型的查找结果（包含探测路径）
+        found, probe_path, chain_pos = self.model.find(value)
+
+        # 如果是开放寻址，probe_path 是按探测顺序的索引列表
+        if self.method == CollisionMethod.OPEN_ADDRESSING:
+            # 如果 probe_path 为空（理论上不应），直接提示
+            if not probe_path:
+                messagebox.showinfo("查找", f"未找到 {value}")
+                return
+            # 动画流程
+            self.animating = True
+            self._set_buttons_state("disabled")
+            self._anim_highlights = []
+            self.update_display()
+
+            step_delay = 420
+            highlights = []
+            current = {'i': 0}
+
+            def make_highlight(idx, outline="#2ECC71", width=4):
+                x = self.start_x + idx * (self.cell_width + self.spacing)
+                return self.canvas.create_rectangle(x, self.start_y, x + self.cell_width,
+                                                    self.start_y + self.cell_height,
+                                                    outline=outline, width=width)
+
+            def highlight_step():
+                i = current['i']
+                # 清理上一步的高亮（保留最后一个以示定位）
+                if i > 0 and i - 1 < len(highlights):
+                    try:
+                        self.canvas.delete(highlights[i - 1])
+                    except Exception:
+                        pass
+                if i >= len(probe_path):
+                    # 到末尾：根据 found 展示结果（如果 found False，则最后一次探测到空位）
+                    if found:
+                        last_idx = probe_path[-1]
+                        h = make_highlight(last_idx, outline="#27AE60", width=5)
+                        highlights.append(h)
+                        # 在目标格下方写提示
+                        try:
+                            self.canvas.delete(self._anim_temp)
+                        except Exception:
+                            pass
+                        self._anim_temp = self.canvas.create_text(
+                            self.start_x + (self.cell_width + self.spacing) * last_idx + self.cell_width / 2,
+                            self.start_y + self.cell_height + 30,
+                            text=f"找到 {value} @ {last_idx}", font=("Arial", 11, "bold"))
+                        # 结束动画（稍后清理）
+                        self.window.after(900, finish)
+                    else:
+                        # 未找到：在最后探测位置上方提示未找到
+                        last_idx = probe_path[-1]
+                        try:
+                            self.canvas.delete(self._anim_temp)
+                        except Exception:
+                            pass
+                        self._anim_temp = self.canvas.create_text(
+                            self.start_x + (self.cell_width + self.spacing) * last_idx + self.cell_width / 2,
+                            self.start_y - 40,
+                            text=f"未找到 {value}", font=("Arial", 12, "bold"))
+                        self.window.after(900, finish)
+                    return
+
+                idx = probe_path[i]
+                h = make_highlight(idx, outline="#FFD54F", width=4)
+                highlights.append(h)
+                current['i'] += 1
+
+                # 在单元顶部显示当前探测索引提示
+                try:
+                    self.canvas.delete(self._anim_temp)
+                except Exception:
+                    pass
+                top_x = self.start_x + (self.cell_width + self.spacing) * idx + self.cell_width / 2
+                self._anim_temp = self.canvas.create_text(top_x, self.start_y - 40, text=f"探测 -> {idx}",
+                                                          font=("Arial", 12, "bold"))
+                self.window.after(step_delay, highlight_step)
+
+            def finish():
+                # 清理动画状态
+                for h in highlights:
+                    try:
+                        self.canvas.delete(h)
+                    except Exception:
+                        pass
+                try:
+                    if self._anim_temp:
+                        self.canvas.delete(self._anim_temp)
+                except Exception:
+                    pass
+                self._anim_temp = None
+                self.animating = False
+                self._set_buttons_state("normal")
+                # 最后再弹窗提示（与顶部文本重复但更显眼）
+                if found:
+                    messagebox.showinfo("查找", f"找到 {value}，索引 {probe_path[-1]}")
+                else:
+                    messagebox.showinfo("查找", f"未找到 {value}")
+
+            # 启动
+            self.window.after(120, highlight_step)
+            return
+
+        # 如果是拉链法：probe_path = [idx]
+        else:
+            if not probe_path:
+                messagebox.showinfo("查找", f"未找到 {value}")
+                return
+            idx = probe_path[0]
+            chain = self.model.table[idx] if idx < len(self.model.table) else []
+            # 动画：先高亮桶格，再逐节点高亮
+            self.animating = True
+            self._set_buttons_state("disabled")
+            self._anim_highlights = []
+            self.update_display()
+
+            # 高亮桶格子
+            x = self.start_x + idx * (self.cell_width + self.spacing)
+            box = self.canvas.create_rectangle(x, self.start_y, x + self.cell_width,
+                                               self.start_y + self.cell_height,
+                                               outline="#FFD54F", width=4)
+            self._anim_highlights.append(box)
+            # 顶部提示
+            try:
+                self.canvas.delete(self._anim_temp)
+            except Exception:
+                pass
+            self._anim_temp = self.canvas.create_text(x + self.cell_width / 2, self.start_y - 40,
+                                                      text=f"桶 -> {idx}", font=("Arial", 12, "bold"))
+
+            # 如果链为空，马上提示未找到
+            if not chain:
+                self.window.after(700, lambda: self._end_find_chain_not_found(idx, value))
+                return
+
+            # 逐节点高亮
+            node_steps = len(chain)
+            current = {'i': 0}
+            node_highlights = []
+
+            def make_node_highlight(node_x, node_y):
+                return self.canvas.create_rectangle(node_x - 28, node_y - 15, node_x + 28, node_y + 15,
+                                                    outline="#FFD54F", width=4)
+
+            def node_step():
+                i = current['i']
+                # 清理上一步节点高亮
+                if i > 0 and i - 1 < len(node_highlights):
+                    try:
+                        self.canvas.delete(node_highlights[i - 1])
+                    except Exception:
+                        pass
+
+                if i >= node_steps:
+                    # 到达链末仍未找到
+                    if found:
+                        # 找到（理论上 found True 时 chain_pos 有值）
+                        pos = chain_pos if chain_pos is not None else node_steps - 1
+                        # 计算定位坐标
+                        node_x = x + self.cell_width / 2
+                        node_y = self.start_y + self.cell_height + 10 + pos * 35 + 15
+                        nh = self.canvas.create_rectangle(node_x - 28, node_y - 15, node_x + 28, node_y + 15,
+                                                          outline="#27AE60", width=5)
+                        node_highlights.append(nh)
+                        try:
+                            self.canvas.delete(self._anim_temp)
+                        except Exception:
+                            pass
+                        self._anim_temp = self.canvas.create_text(node_x, node_y + 30,
+                                                                  text=f"找到 {value} 在链上位置 {pos}", font=("Arial", 11, "bold"))
+                        self.window.after(900, finish_chain)
+                    else:
+                        # 未找到
+                        try:
+                            self.canvas.delete(self._anim_temp)
+                        except Exception:
+                            pass
+                        self._anim_temp = self.canvas.create_text(x + self.cell_width / 2, self.start_y - 40,
+                                                                  text=f"未找到 {value} 在桶 {idx}", font=("Arial", 12, "bold"))
+                        self.window.after(900, finish_chain)
+                    return
+
+                # 计算当前节点的位置（与 _draw_chaining 保持一致）
+                node_x = x + self.cell_width / 2
+                node_y = self.start_y + self.cell_height + 10 + i * 35 + 15
+                nh = make_node_highlight(node_x, node_y)
+                node_highlights.append(nh)
+                current['i'] += 1
+
+                # 顶部显示当前正在检查的链位置
+                try:
+                    self.canvas.delete(self._anim_temp)
+                except Exception:
+                    pass
+                self._anim_temp = self.canvas.create_text(node_x, node_y - 30, text=f"检查链节点 -> {i}",
+                                                          font=("Arial", 11, "bold"))
+
+                self.window.after(520, node_step)
+
+            def finish_chain():
+                # 清理动画并弹窗
+                for h in node_highlights:
+                    try:
+                        self.canvas.delete(h)
+                    except Exception:
+                        pass
+                for h in self._anim_highlights:
+                    try:
+                        self.canvas.delete(h)
+                    except Exception:
+                        pass
+                try:
+                    if self._anim_temp:
+                        self.canvas.delete(self._anim_temp)
+                except Exception:
+                    pass
+                self._anim_temp = None
+                self.animating = False
+                self._set_buttons_state("normal")
+                if found:
+                    messagebox.showinfo("查找", f"找到 {value}，索引 {idx}，链表位置 {chain_pos}")
+                else:
+                    messagebox.showinfo("查找", f"未找到 {value}，在索引 {idx} 的链表内")
+
+            # 启动节点检查动画
+            self.window.after(550, node_step)
+            return
+
+    def _end_find_chain_not_found(self, idx, value):
+        # 链为空的结束处理
+        try:
+            self.canvas.delete(self._anim_temp)
+        except Exception:
+            pass
+        self._anim_temp = self.canvas.create_text(self.start_x + idx * (self.cell_width + self.spacing) + self.cell_width / 2,
+                                                  self.start_y - 40, text=f"桶 {idx} 为空，未找到 {value}",
+                                                  font=("Arial", 12, "bold"))
+        self.window.after(900, lambda: (self._clear_find_anim_and_alert_not_found(idx, value)))
+
+    def _clear_find_anim_and_alert_not_found(self, idx, value):
+        for h in self._anim_highlights:
+            try:
+                self.canvas.delete(h)
+            except Exception:
+                pass
+        try:
+            if self._anim_temp:
+                self.canvas.delete(self._anim_temp)
+        except Exception:
+            pass
+        self._anim_temp = None
+        self.animating = False
+        self._set_buttons_state("normal")
+        messagebox.showinfo("查找", f"未找到 {value}，在索引 {idx} 的链表内")
+
+    # ------------------------------------------------------------------ #
+    #                         删除（略，保持原样）
+    # ------------------------------------------------------------------ #
     def delete_value(self, value):
         if self.animating: return
         
@@ -594,7 +847,7 @@ class HashtableVisualizer:
         messagebox.showinfo("清空", "散列表已清空")
 
     # ------------------------------------------------------------------ #
-    #                         批量处理
+    #                         批量处理（略）
     # ------------------------------------------------------------------ #
     def _batch_step(self):
         if self.batch_index >= len(self.batch_queue):
@@ -609,7 +862,7 @@ class HashtableVisualizer:
         self.insert_value(val)
 
     # ------------------------------------------------------------------ #
-    #                         显示更新
+    #                         显示更新（略）
     # ------------------------------------------------------------------ #
     def update_display(self):
         self.canvas.delete("all")

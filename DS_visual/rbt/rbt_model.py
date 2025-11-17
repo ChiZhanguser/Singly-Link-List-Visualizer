@@ -33,6 +33,14 @@ class RBModel:
     def __init__(self):
         self.root: Optional[RBNode] = None
 
+    def _compare_less(self, val1: Any, val2: Any) -> bool:
+        """比较 val1 < val2，优先使用整数比较"""
+        try:
+            return int(val1) < int(val2)
+        except (ValueError, TypeError):
+            # 如果转换失败，回退到字符串比较
+            return str(val1) < str(val2)
+
     def _rotate_left(self, x: RBNode) -> RBNode:
         y = x.right
         if y is None:
@@ -77,6 +85,91 @@ class RBModel:
 
         return y
     
+    def insert(self, val: Any):
+        """简单插入方法（无步骤记录）"""
+        if self.root is None:
+            self.root = RBNode(val, color="B")
+            return
+        
+        cur = self.root
+        parent = None
+        while cur:
+            parent = cur
+            if self._compare_less(val, cur.val):
+                cur = cur.left
+            else:
+                cur = cur.right
+        
+        new_node = RBNode(val, color="R")
+        new_node.parent = parent
+        if self._compare_less(val, parent.val):
+            parent.left = new_node
+        else:
+            parent.right = new_node
+        
+        # 修复红黑树性质
+        self._insert_fixup(new_node)
+    
+    def _insert_fixup(self, node: RBNode):
+        """插入后修复红黑树性质"""
+        while node is not self.root and node.parent and node.parent.color == "R":
+            p = node.parent
+            g = p.parent
+            if g is None:
+                break
+            
+            if g.left is p:
+                uncle = g.right
+                if uncle and uncle.color == "R":
+                    # Case 1: 叔叔是红色
+                    p.color = "B"
+                    uncle.color = "B"
+                    g.color = "R"
+                    node = g
+                    continue
+                else:
+                    # Case 2 & 3: 叔叔是黑色
+                    if p.right is node:
+                        # Case 2: node 是右孩子
+                        new_subroot = self._rotate_left(p)
+                        if new_subroot.parent is None:
+                            if g.parent is None:
+                                self.root = new_subroot
+                        p = node.parent
+                    # Case 3: node 是左孩子
+                    p.color = "B"
+                    g.color = "R"
+                    new_subroot = self._rotate_right(g)
+                    if new_subroot.parent is None:
+                        self.root = new_subroot
+                    break
+            else:
+                # 对称情况: parent 是 grand 的右孩子
+                uncle = g.left
+                if uncle and uncle.color == "R":
+                    p.color = "B"
+                    uncle.color = "B"
+                    g.color = "R"
+                    node = g
+                    continue
+                else:
+                    if p.left is node:
+                        new_subroot = self._rotate_right(p)
+                        if new_subroot.parent is None:
+                            if g.parent is None:
+                                self.root = new_subroot
+                        p = node.parent
+                    p.color = "B"
+                    g.color = "R"
+                    new_subroot = self._rotate_left(g)
+                    if new_subroot.parent is None:
+                        self.root = new_subroot
+                    break
+        
+        # 确保根节点是黑色
+        if self.root:
+            self.root.color = "B"
+    
     def insert_with_steps(self, val: Any) -> Tuple[RBNode, List[RBNode], List[Dict], List[Optional[RBNode]]]:
         events: List[Dict] = []
         path_nodes: List[RBNode] = []
@@ -96,14 +189,14 @@ class RBModel:
         while cur:
             parent = cur
             path_nodes.append(cur)
-            if str(val) < str(cur.val):
+            if self._compare_less(val, cur.val):
                 cur = cur.left
             else:
                 cur = cur.right
 
         new_node = RBNode(val, color="R")
         new_node.parent = parent
-        if str(val) < str(parent.val):
+        if self._compare_less(val, parent.val):
             parent.left = new_node
         else:
             parent.right = new_node

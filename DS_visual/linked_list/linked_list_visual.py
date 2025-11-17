@@ -186,14 +186,14 @@ class LinkList:
             self.position_label.place_forget(); self.position_take_entry.place_forget(); self.find_btn.place_forget()
             pos = int(self.position_entry.get())
             if pos < 1 or pos > len(self.node_value_store):
-                messagebox.showerror("Not found","The target node is not found")
-                self.information.config(text="start is a pointer that pointing the first node and temp pointer is used at the time of \ninsert last and delete last to reach to the targeting location")
+                messagebox.showerror("Not found","目标节点不存在")
+                self.information.config(text="start 是一个指向第一个节点的指针，而 temp 指针在进行“尾部插入（insert last）”和“尾部删除（delete last）”操作时，用来遍历到目标位置。")
             else:
                 self.insert_after_node.config(state=DISABLED)
-                self.information.config(text="Targeting node found")
+                self.information.config(text="目标节点已找到")
                 self.make_node_with_label(2)
         except Exception as e:
-            messagebox.showerror("Error", f"位置检查出错: {e}")
+            messagebox.showerror("错误", f"位置检查出错: {e}")
 
     def make_node_with_label(self, take_notation):
         self.toggle_action_buttons(DISABLED)
@@ -265,9 +265,9 @@ class LinkList:
                 while self.temp_label_x < self.linked_list_position[goto][4] + 120:
                     if take_notation == 2:
                         if int(self.position_entry.get()) == 1: break
-                        self.information.config(text="Traversing until found the targeting node")
+                        self.information.config(text="遍历直到找到目标节点")
                     else:
-                        self.information.config(text="Traversing until found the last node")
+                        self.information.config(text="遍历直到找到最后一个节点")
                     self.temp_label.place_forget()
                     self.canvas_make.delete(self.pointing_line_temp, self.temp_pointer)
                     self.temp_label_x += 10; self.pointing_line_temp_left += 10; self.temp_pointer_left += 10
@@ -293,9 +293,9 @@ class LinkList:
                     self.arrow = self.canvas_make.create_line(self.data_left+75, self.data_up+15, self.data_left+115, self.data_up+15, width=4)
                     self.next_set.place(x=self.data_left+102, y=self.data_up + 2)
                     if take_notation == 0:
-                        self.information.config(text="New node added to the last node")
+                        self.information.config(text="新节点已添加到链表的末尾")
                     elif take_notation == 2:
-                        self.information.config(text="New node added after the targeting node")
+                        self.information.config(text="新节点已添加到目标节点之后")
                     time.sleep(0.04); self.window.update()
             self.linked_list_canvas_small_widget_label.append([self.data_label, self.next_label])
             self.linked_list_canvas_small_widget.append([self.data, self.next, self.main_container_node])
@@ -379,7 +379,7 @@ class LinkList:
                     self.value_set.place(x=self.data_left + 8, y=self.data_up + 3)
                     self.arrow = self.canvas_make.create_line(self.data_left+75, self.data_up+15, self.data_left+115, self.data_up+15, width=4)
                     self.next_set.place(x=self.data_left+102, y=self.data_up + 2)
-                    self.information.config(text="New node added to the last node")
+                    self.information.config(text="新节点已添加到最后一个节点")
                     time.sleep(0.04); self.window.update()
             self.linked_list_canvas_small_widget_label.append([self.data_label, self.next_label])
             self.linked_list_canvas_small_widget.append([self.data, self.next, self.main_container_node])
@@ -458,15 +458,15 @@ class LinkList:
 
             for _ in range(3): time.sleep(0.125); self.window.update()
             if locator == 0:
-                self.information.config(text="Temp pointing node contains the address that present in the next part of last node and\nand Last node deleted")
+                self.information.config(text="Temp 指针指向的节点包含了最后一个节点的下一个地址，\n最后一个节点已被删除")
             else:
-                self.information.config(text="Targeting node deleted")
+                self.information.config(text="目标节点已删除")
 
         if locator == 3:
             self.temp1_pointer = self.make_rect(self.temp_pointer_left+120, self.temp_pointer_up, self.temp_pointer_left + 150, self.temp_pointer_up + 30, fill="blue", outline="black", width=3)
             self.temp1_label.place(x=self.temp_label_x+120, y=self.temp_label_y)
             self.pointing_line_temp1 = self.canvas_make.create_line(self.pointing_line_temp_left+120, self.pointing_line_temp_up, self.pointing_line_temp_left+120, self.pointing_line_temp_up + 65, width=2)
-            self.information.config(text="Temp is pointing the penultimate node of the targeting node and \ntemp1 is pointing the targeting node")
+            self.information.config(text="Temp 指针指向的节点包含了目标节点的前一个节点的地址，\n而 Temp1 指针指向的节点包含了目标节点的下一个节点的地址")
             for _ in range(3): time.sleep(2.5); self.window.update()
             for i in range(int(self.delete_entry.get()), len(self.node_value_store)):
                 self.linked_list_data_next_store[i-1][0].config(text=self.node_value_store[i])
@@ -507,7 +507,7 @@ class LinkList:
                     self.temp1_label.place_forget()
                     self.canvas_make.delete(self.pointing_line_temp1, self.temp1_pointer)
                 except: pass
-                self.information.config(text="The next part of the temp is now containing the address that is present in the \nnext part of temp1 and temp1 pointing node is deleted")
+                self.information.config(text="Temp 指针指向的节点包含了 Temp1 指针指向的节点的下一个地址，\n而 Temp1 指针指向的节点已被删除")
 
             for _ in range(3): time.sleep(1); self.window.update()
 
@@ -518,34 +518,34 @@ class LinkList:
             self.temp_label_x = 40; self.pointing_line_temp_left = 65; self.temp_pointer_left = 50
 
             if len(self.node_value_store) == 0:
-               self.information.config(text="List is empty and start pointing NULL")
+               self.information.config(text="链表为空，且头指针指向 NULL")
             elif locator == 0:
-                self.information.config(text="Last node deleted")
+                self.information.config(text="最后一个节点已被删除")
             elif locator == 3:
-                self.information.config(text="Targeting node deleted")
+                self.information.config(text="目标节点已被删除")
 
             self.toggle_action_buttons(NORMAL)
 
     def delete_first_node(self):
         if len(self.linked_list_data_next_store) == 0:
-            messagebox.showerror("Underflow","Link list is empty")
+            messagebox.showerror("Underflow","链表为空")
             return
         if len(self.node_value_store) == 1:
             self.delete_last_node(1)
-            self.information.config(text="Now start pointer is containing NULL and first node deleted")
+            self.information.config(text="现在头指针指向 NULL，且第一个节点已被删除")
             return
         for i in range(1,len(self.node_value_store)): self.node_value_store[i-1] = self.node_value_store[i]
         self.delete_last_node(1)
         for i in range(len(self.linked_list_data_next_store)):
             self.linked_list_data_next_store[i][0].config(text=self.node_value_store[i])
-        self.information.config(text="Now start pointer is containing the address that present in the next part of the first node\nand first node deleted")
+        self.information.config(text="现在头指针指向的节点包含了第一个节点的地址，\n而第一个节点已被删除")
 
     def delete_single_node_infrastructure(self):
         if len(self.node_value_store) == 0:
-           self.information.config(text="Link list is empty  ::  Nothing to delete"); return
-        self.information.config(text="First node position: 1")
+           self.information.config(text="链表为空  ::  没有节点可删除"); return
+        self.information.config(text="第一个节点的位置: 1")
         self.toggle_action_buttons(DISABLED)
-        self.position_label = Label(self.window, text="Enter the node position you want to delete", font=("Arial", 13, "bold"), bg="orange", fg="brown")
+        self.position_label = Label(self.window, text="输入要删除的节点的位置", font=("Arial", 13, "bold"), bg="orange", fg="brown")
         self.position_label.place(x=1000, y=620)
         self.position_take_entry = Entry(self.window, font=("Arial", 13, "bold"), bg="white", state=NORMAL, fg="blue", relief=SUNKEN, bd=5, textvar=self.delete_entry)
         self.position_take_entry.place(x=1020, y=650); self.position_take_entry.focus()
@@ -556,7 +556,7 @@ class LinkList:
         self.position_label.place_forget(); self.position_take_entry.place_forget(); self.find_btn.place_forget()
         pos = int(self.delete_entry.get())
         if pos > len(self.node_value_store) or pos < 1:
-           messagebox.showerror("Error","Positional node not found")
+           messagebox.showerror("Error","位置节点不存在")
         elif pos == 1:
            self.delete_first_node()
         else:
