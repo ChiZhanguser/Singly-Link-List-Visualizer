@@ -221,3 +221,136 @@ class AVLModel:
             node = node.parent
 
         return new_node, path_nodes, rotations, snapshots
+
+    def delete_with_steps(self, val: Any) -> Tuple[Optional[AVLNode], List[AVLNode], List[Dict], List[Optional[AVLNode]]]:
+        """
+        删除并返回丰富信息：
+          - deleted_node: 被删除的节点引用 (在 current model 中)，若未找到则为 None
+          - path_nodes: 查找过程中访问的节点（按顺序，便于可视化搜索路径）
+          - rotations: list of rotation dicts: { type:'LL'|'RR'|'LR'|'RL', 'z':z_node, 'y':y_node, 'x':x_node, 'new_root':new_subroot }
+          - snapshots: list of tree-roots 的 clone：
+                snapshots[0] = tree 在删除前的 clone (可为 None)
+                snapshots[1] = tree 在删除后但尚未旋转（clone）
+                snapshots[2..] = tree 每次旋转后对应的 clone（按 rotations 顺序）
+        注意：快照中的节点为 clone（id 不同），仅用于可视化；path_nodes/rotations 中的节点是 model 中的真实节点。
+        """
+        rotations: List[Dict] = []
+        path_nodes: List[AVLNode] = []
+        snapshots: List[Optional[AVLNode]] = []
+
+        # snapshot before any modification
+        snapshots.append(clone_tree(self.root))
+
+        # search for node
+        cur = self.root
+        while cur:
+            path_nodes.append(cur)
+            cmp = self._compare(val, cur.val)
+            if cmp == 0:
+                break
+            elif cmp < 0:
+                cur = cur.left
+            else:
+                cur = cur.right
+
+        if cur is None:
+            # not found
+            return None, path_nodes, rotations, snapshots
+
+        # cur is the node to delete (may have two children)
+        target = cur
+
+        # If two children: find successor (min in right subtree), swap values and delete successor
+        if target.left and target.right:
+            succ = target.right
+            # record path while finding successor
+            while succ.left:
+                succ = succ.left
+                path_nodes.append(succ)
+            # swap values
+            target.val, succ.val = succ.val, target.val
+            # now delete succ (which has at most one child)
+            target = succ
+
+        # Now target has at most one child
+        child = target.left if target.left else target.right
+        parent = target.parent
+
+        if child:
+            child.parent = parent
+
+        if parent is None:
+            # deleting root
+            self.root = child
+        else:
+            if parent.left is target:
+                parent.left = child
+            else:
+                parent.right = child
+
+        # snapshot immediately after deletion (before rotations)
+        snapshots.append(clone_tree(self.root))
+
+        # Rebalance upwards from parent
+        node = parent
+        while node:
+            self._update_height(node)
+            bf = self._balance_factor(node)
+
+            # LL
+            if bf > 1 and self._balance_factor(node.left) >= 0:
+                z = node
+                y = node.left
+                x = y.left if y else None
+                new_subroot = self._rotate_right(z)
+                if new_subroot.parent is None:
+                    self.root = new_subroot
+                rotations.append({'type':'LL', 'z':z, 'y':y, 'x':x, 'new_root':new_subroot})
+                snapshots.append(clone_tree(self.root))
+                node = new_subroot.parent
+                continue
+
+            # LR
+            if bf > 1 and self._balance_factor(node.left) < 0:
+                z = node
+                y = node.left
+                x = y.right if y else None
+                self._rotate_left(y)
+                new_subroot = self._rotate_right(z)
+                if new_subroot.parent is None:
+                    self.root = new_subroot
+                rotations.append({'type':'LR', 'z':z, 'y':y, 'x':x, 'new_root':new_subroot})
+                snapshots.append(clone_tree(self.root))
+                node = new_subroot.parent
+                continue
+
+            # RR
+            if bf < -1 and self._balance_factor(node.right) <= 0:
+                z = node
+                y = node.right
+                x = y.right if y else None
+                new_subroot = self._rotate_left(z)
+                if new_subroot.parent is None:
+                    self.root = new_subroot
+                rotations.append({'type':'RR', 'z':z, 'y':y, 'x':x, 'new_root':new_subroot})
+                snapshots.append(clone_tree(self.root))
+                node = new_subroot.parent
+                continue
+
+            # RL
+            if bf < -1 and self._balance_factor(node.right) > 0:
+                z = node
+                y = node.right
+                x = y.left if y else None
+                self._rotate_right(y)
+                new_subroot = self._rotate_left(z)
+                if new_subroot.parent is None:
+                    self.root = new_subroot
+                rotations.append({'type':'RL', 'z':z, 'y':y, 'x':x, 'new_root':new_subroot})
+                snapshots.append(clone_tree(self.root))
+                node = new_subroot.parent
+                continue
+
+            node = node.parent
+
+        return target, path_nodes, rotations, snapshots

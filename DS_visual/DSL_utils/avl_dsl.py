@@ -1,6 +1,6 @@
 """
-AVL树的DSL（领域特定语言）处理器 - 支持 create 命令
-支持 create 和 insert 命令
+AVL树的DSL（领域特定语言）处理器
+支持 create, insert, delete 和 clear 命令
 """
 
 import re
@@ -10,7 +10,7 @@ from tkinter import messagebox
 def process(visualizer, text: str) -> bool:
     """
     处理AVL树的DSL命令
-    支持 create, insert 和 clear 命令
+    支持 create, insert, delete 和 clear 命令
     """
     if not text or not text.strip():
         return False
@@ -28,10 +28,14 @@ def process(visualizer, text: str) -> bool:
         _show_help()
         return True
     
-    # **新增：批量创建操作 (create 命令)**
+    # **批量创建操作 (create 命令)**
     elif text.startswith(('create', '创建', '批量创建')):
         return _process_create(visualizer, text)
     
+    # **新增：删除操作 (delete 命令)**
+    elif text.startswith(('delete', 'del', 'remove', '删除', '移除', 'd ')):
+        return _process_delete(visualizer, text)
+
     # 插入操作 - 支持多种格式
     elif (text.startswith(('insert', '添加', '插入', 'add', 'i ')) or 
           _is_numeric_insert(text)):
@@ -43,23 +47,17 @@ def process(visualizer, text: str) -> bool:
             "支持的命令:\n"
             "  • create 1,2,3  (批量创建AVL树)\n"
             "  • insert 1 2 3  (插入数字)\n"
+            "  • delete 1 2 3  (删除数字)\n"  # <--- 新增
             "  • clear  (清空树)\n"
             "  • help  (显示帮助)")
         return False
 
+# ... _process_create 和 _process_insert 保持不变 ...
+
 def _process_create(visualizer, text: str) -> bool:
-    """
-    处理批量创建命令
-    支持格式:
-      - create 1,2,3,4,5
-      - create 1, 2, 3, 4, 5
-      - create 10 20 30 40 50
-      - 创建 5,15,25,35
-    """
+    # (此函数保持不变)
     try:
-        # 提取数字
         numbers = _extract_numbers(text)
-        
         if not numbers:
             messagebox.showinfo("创建错误", 
                 "请指定要创建的数字序列\n\n"
@@ -68,41 +66,21 @@ def _process_create(visualizer, text: str) -> bool:
                 "  create 10, 20, 30\n"
                 "  create 5 15 25 35")
             return False
-        
-        # 先清空现有树
         visualizer.model.root = None
-        
-        # 设置输入框并触发插入动画
-        # 使用逗号+空格格式，这是 start_insert_animated 期望的格式
         numbers_str = ", ".join(map(str, numbers))
         visualizer.input_var.set(numbers_str)
-        
         print(f"DEBUG: AVL create command - inserting: {numbers_str}")
-        
-        # 调用插入动画方法
         visualizer.start_insert_animated()
-        
         return True
-        
     except Exception as e:
         messagebox.showerror("创建错误", f"创建操作失败: {str(e)}")
         print(f"ERROR: AVL create failed: {e}")
         return False
 
 def _process_insert(visualizer, text: str) -> bool:
-    """
-    处理插入命令
-    支持格式:
-      - insert 1 2 3
-      - insert 1, 2, 3
-      - add 5 10 15
-      - i 1 2 3
-      - 1 2 3 (直接输入数字)
-    """
+    # (此函数保持不变)
     try:
-        # 提取数字
         numbers = _extract_numbers(text)
-        
         if not numbers:
             messagebox.showinfo("插入错误", 
                 "请指定要插入的数字\n\n"
@@ -111,26 +89,58 @@ def _process_insert(visualizer, text: str) -> bool:
                 "  insert 5, 10, 15\n"
                 "  1 2 3")
             return False
-        
-        # 设置输入框并触发插入动画
         numbers_str = ", ".join(map(str, numbers))
         visualizer.input_var.set(numbers_str)
         visualizer.start_insert_animated()
+        return True
+    except Exception as e:
+        messagebox.showerror("插入错误", f"插入操作失败: {str(e)}")
+        return False
+
+# --- 新增 ---
+def _process_delete(visualizer, text: str) -> bool:
+    """
+    处理删除命令
+    支持格式:
+      - delete 1 2 3
+      - delete 1, 2, 3
+      - remove 5 10
+      - d 1 2 3
+    """
+    try:
+        # 提取数字
+        numbers = _extract_numbers(text)
+        
+        if not numbers:
+            messagebox.showinfo("删除错误", 
+                "请指定要删除的数字\n\n"
+                "示例:\n"
+                "  delete 1 2 3\n"
+                "  delete 5, 10, 15\n"
+                "  d 1 2 3")
+            return False
+        
+        # 设置输入框并触发删除动画
+        numbers_str = ", ".join(map(str, numbers))
+        visualizer.input_var.set(numbers_str)
+        
+        # 调用新的删除动画方法
+        visualizer.start_delete_animated()
         
         return True
         
     except Exception as e:
-        messagebox.showerror("插入错误", f"插入操作失败: {str(e)}")
+        messagebox.showerror("删除错误", f"删除操作失败: {str(e)}")
         return False
 
 def _extract_numbers(text: str) -> List:
     """
     从文本中提取所有数字
-    支持整数和浮点数
+    (更新正则表达式以包含删除命令)
     """
     # 移除命令关键词
     cleaned_text = re.sub(
-        r'^(create|创建|批量创建|insert|添加|插入|add|i)\s*',
+        r'^(create|创建|批量创建|insert|添加|插入|add|i|delete|del|remove|删除|移除|d)\s*', # <--- 新增
         '', 
         text, 
         flags=re.IGNORECASE
@@ -153,21 +163,18 @@ def _extract_numbers(text: str) -> List:
     
     return result
 
+# ... _is_numeric_insert 保持不变 ...
 def _is_numeric_insert(text: str) -> bool:
-    """
-    检查文本是否为纯数字插入（不带命令关键词）
-    例如: "1 2 3" 或 "5, 10, 15"
-    """
-    # 检查是否以数字开头
+    # (此函数保持不变)
     if re.match(r'^[-+]?\d', text):
         numbers = _extract_numbers(text)
         return len(numbers) > 0
-    
     return False
 
 def _show_help():
     """
     显示AVL DSL命令帮助
+    (更新帮助文本)
     """
     help_text = """
 🌳 AVL树 DSL 命令帮助
@@ -185,6 +192,12 @@ def _show_help():
   add 7 8 9         插入数字7, 8, 9
   i 20 30 40        快捷插入20, 30, 40
   1 2 3             直接输入数字插入
+
+❌ 删除操作:  (新增)
+  delete 1 2 3      删除数字1, 2, 3
+  remove 5, 10      删除数字5, 10
+  del 7 8 9         删除数字7, 8, 9
+  d 20 30           快捷删除20, 30
 
 🗑️ 清空操作:
   clear             清空整棵AVL树
@@ -205,36 +218,46 @@ def _show_help():
 2. 在现有树上插入:
    insert 50 60 70
 
-3. 清空树后重新创建:
+3. 删除节点:
+   delete 4 6
+
+4. 清空树后重新创建:
    clear
    create 10,20,30,40,50
-
-4. 直接输入数字:
-   1 2 3 4 5
 
 ═══════════════════════════════════════
 
 ✨ AVL树特性:
-  • 自动平衡: 插入时自动旋转保持平衡
-  • 动画演示: 显示插入路径和旋转过程
-  • 平衡因子: 实时显示节点的平衡状态
+  • 自动平衡: 插入和删除时自动旋转
+  • 动画演示: 显示搜索路径和旋转过程
   • 支持整数和浮点数
 
 🎬 观看动画:
-  插入操作会显示:
+  插入/删除操作会显示:
   1. 搜索路径高亮
-  2. 新节点飞入动画
+  2. 新节点飞入 / 节点移除
   3. 旋转调整过程
 
 📌 注意事项:
   • create 命令会先清空现有树
-  • insert 命令会在现有树上添加节点
+  • insert/delete 在现有树上操作
   • 支持逗号或空格分隔数字
     """
     
     messagebox.showinfo("AVL树 DSL 命令帮助", help_text)
 
-# 备用处理函数，用于在__init__.py中调用
+
 def _fallback_process_command(visualizer, text: str) -> bool:
-    """备用命令处理函数，用于模块导入"""
-    return process(visualizer, text)
+    """
+    处理未识别的命令
+    (保持不变)
+    """
+    messagebox.showinfo("未识别命令", 
+        f"未识别命令: {text}\n"
+        "请输入有效命令，例如:\n"
+        "  create 1,2,3\n"
+        "  insert 5, 10, 15\n"
+        "  delete 7 8 9\n"
+        "  clear\n"
+        "  help")
+    return False
