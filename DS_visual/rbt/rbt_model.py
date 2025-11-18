@@ -309,3 +309,202 @@ class RBModel:
             snapshots.append(clone_tree(self.root))
 
         return new_node, path_nodes, events, snapshots
+
+    def delete_with_steps(self, val: Any) -> Tuple[Optional[RBNode], List[RBNode], List[Dict], List[Optional[RBNode]]]:
+        """
+        删除并返回步骤信息：
+         - deleted_node: 被删除的节点引用（真实节点，或 None 如果未找到）
+         - path_nodes: 查找路径节点列表（用于可视化搜索路径）
+         - events: 旋转/重染事件列表，事件为 dict，type 可为 'recolor'|'rotate_left'|'rotate_right' 等
+         - snapshots: 快照列表（clone_tree(root)）: snapshots[0]=删除前, snapshots[1]=删除后(旋转前), 后续为每次事件后的快照
+        """
+        events: List[Dict] = []
+        path_nodes: List[RBNode] = []
+        snapshots: List[Optional[RBNode]] = []
+
+        snapshots.append(clone_tree(self.root))
+
+        # find node
+        z = self.root
+        while z:
+            path_nodes.append(z)
+            if self._compare_less(val, z.val):
+                z = z.left
+            elif self._compare_less(z.val, val):
+                z = z.right
+            else:
+                break
+
+        if z is None:
+            return None, path_nodes, events, snapshots
+
+        # node to be deleted is z. If two children, find successor and swap values
+        y = z
+        if z.left and z.right:
+            # find min in right subtree
+            y = z.right
+            while y.left:
+                y = y.left
+                path_nodes.append(y)
+            # swap values (keep colors with nodes)
+            z.val, y.val = y.val, z.val
+            # continue to delete y (which has at most one child)
+
+        # now y has at most one child
+        x = y.left if y.left else y.right
+        x_parent = y.parent
+
+        # splice out y
+        if x:
+            x.parent = x_parent
+
+        if x_parent is None:
+            # deleting root
+            self.root = x
+        else:
+            if x_parent.left is y:
+                x_parent.left = x
+            else:
+                x_parent.right = x
+
+        # record snapshot after physical deletion (before fixups)
+        snapshots.append(clone_tree(self.root))
+
+        # if removed node was black, need fixup
+        if y.color == "B":
+            # define helper to get color
+            def node_color(n: Optional[RBNode]) -> str:
+                return n.color if n else "B"
+
+            # x may be None; use parent pointer for referencing
+            node = x
+            parent = x_parent
+
+            while (node is not self.root) and node_color(node) == "B":
+                if parent and parent.left is node:
+                    w = parent.right
+                    # Case 1: sibling is red
+                    if node_color(w) == "R":
+                        # recolor and rotate left at parent
+                        w.color = "B"
+                        parent.color = "R"
+                        events.append({'type': 'recolor', 'node_id': w.id, 'new_color': 'B'})
+                        events.append({'type': 'recolor', 'node_id': parent.id, 'new_color': 'R'})
+                        new_subroot = self._rotate_left(parent)
+                        if new_subroot.parent is None:
+                            self.root = new_subroot
+                        events.append({'type': 'rotate_left', 'x_id': parent.id, 'new_root_id': new_subroot.id})
+                        snapshots.append(clone_tree(self.root))
+                        w = parent.right
+
+                    # Case 2: sibling's both children black
+                    if node_color(w.left) == "B" and node_color(w.right) == "B":
+                        if w:
+                            w.color = "R"
+                            events.append({'type': 'recolor', 'node_id': w.id, 'new_color': 'R'})
+                            snapshots.append(clone_tree(self.root))
+                        node = parent
+                        parent = node.parent
+                    else:
+                        # Case 3: sibling's right child black
+                        if node_color(w.right) == "B":
+                            if w.left:
+                                w.left.color = "B"
+                                events.append({'type': 'recolor', 'node_id': w.left.id, 'new_color': 'B'})
+                                snapshots.append(clone_tree(self.root))
+                            if w:
+                                w.color = "R"
+                                events.append({'type': 'recolor', 'node_id': w.id, 'new_color': 'R'})
+                                snapshots.append(clone_tree(self.root))
+                            new_subroot = self._rotate_right(w)
+                            # rotation at w
+                            if new_subroot.parent is None:
+                                self.root = new_subroot
+                            events.append({'type': 'rotate_right', 'x_id': w.id, 'new_root_id': new_subroot.id})
+                            snapshots.append(clone_tree(self.root))
+                            w = parent.right
+
+                        # Case 4: sibling's right child is red
+                        if w:
+                            w.color = parent.color
+                            events.append({'type': 'recolor', 'node_id': w.id, 'new_color': w.color})
+                        parent.color = "B"
+                        events.append({'type': 'recolor', 'node_id': parent.id, 'new_color': 'B'})
+                        if w and w.right:
+                            w.right.color = "B"
+                            events.append({'type': 'recolor', 'node_id': w.right.id, 'new_color': 'B'})
+                        new_subroot = self._rotate_left(parent)
+                        if new_subroot.parent is None:
+                            self.root = new_subroot
+                        events.append({'type': 'rotate_left', 'x_id': parent.id, 'new_root_id': new_subroot.id})
+                        snapshots.append(clone_tree(self.root))
+                        node = self.root
+                        parent = None
+                else:
+                    # symmetric: node is right child
+                    w = parent.left if parent else None
+                    if node_color(w) == "R":
+                        w.color = "B"
+                        parent.color = "R"
+                        events.append({'type': 'recolor', 'node_id': w.id, 'new_color': 'B'})
+                        events.append({'type': 'recolor', 'node_id': parent.id, 'new_color': 'R'})
+                        new_subroot = self._rotate_right(parent)
+                        if new_subroot.parent is None:
+                            self.root = new_subroot
+                        events.append({'type': 'rotate_right', 'x_id': parent.id, 'new_root_id': new_subroot.id})
+                        snapshots.append(clone_tree(self.root))
+                        w = parent.left
+
+                    if node_color(w.left) == "B" and node_color(w.right) == "B":
+                        if w:
+                            w.color = "R"
+                            events.append({'type': 'recolor', 'node_id': w.id, 'new_color': 'R'})
+                            snapshots.append(clone_tree(self.root))
+                        node = parent
+                        parent = node.parent
+                    else:
+                        if node_color(w.left) == "B":
+                            if w.right:
+                                w.right.color = "B"
+                                events.append({'type': 'recolor', 'node_id': w.right.id, 'new_color': 'B'})
+                                snapshots.append(clone_tree(self.root))
+                            if w:
+                                w.color = "R"
+                                events.append({'type': 'recolor', 'node_id': w.id, 'new_color': 'R'})
+                                snapshots.append(clone_tree(self.root))
+                            new_subroot = self._rotate_left(w)
+                            if new_subroot.parent is None:
+                                self.root = new_subroot
+                            events.append({'type': 'rotate_left', 'x_id': w.id, 'new_root_id': new_subroot.id})
+                            snapshots.append(clone_tree(self.root))
+                            w = parent.left
+
+                        if w:
+                            w.color = parent.color
+                            events.append({'type': 'recolor', 'node_id': w.id, 'new_color': w.color})
+                        parent.color = "B"
+                        events.append({'type': 'recolor', 'node_id': parent.id, 'new_color': 'B'})
+                        if w and w.left:
+                            w.left.color = "B"
+                            events.append({'type': 'recolor', 'node_id': w.left.id, 'new_color': 'B'})
+                        new_subroot = self._rotate_right(parent)
+                        if new_subroot.parent is None:
+                            self.root = new_subroot
+                        events.append({'type': 'rotate_right', 'x_id': parent.id, 'new_root_id': new_subroot.id})
+                        snapshots.append(clone_tree(self.root))
+                        node = self.root
+                        parent = None
+
+            # finally, color node black
+            if node:
+                node.color = "B"
+                events.append({'type': 'recolor', 'node_id': node.id, 'new_color': 'B'})
+                snapshots.append(clone_tree(self.root))
+
+        # ensure root is black
+        if self.root and self.root.color != "B":
+            self.root.color = "B"
+            events.append({'type': 'recolor', 'node_id': self.root.id, 'new_color': 'B'})
+            snapshots.append(clone_tree(self.root))
+
+        return y, path_nodes, events, snapshots

@@ -24,6 +24,7 @@ class RBTVisualizer:
             "black_node": "#37474F",
             "highlight": "#FF9800",
             "path_highlight": "#4CAF50",
+            "delete_mark": "#2196F3",
             "text_light": "#FFFFFF",
             "text_dark": "#212121",
             "btn_primary": "#2196F3",
@@ -72,7 +73,7 @@ class RBTVisualizer:
         title_label.pack()
         
         subtitle_label = Label(header_frame, 
-                             text="演示红黑树的插入过程:搜索路径、红节点插入、颜色调整与旋转修复",
+                             text="演示红黑树的插入/删除过程:搜索路径、节点操作、颜色调整与旋转修复",
                              font=("微软雅黑", 10), 
                              bg=self.colors["bg_secondary"],
                              fg="#666666")
@@ -106,16 +107,16 @@ class RBTVisualizer:
         self.canvas.pack(padx=10, pady=(0, 10), fill=BOTH, expand=True)
 
     def create_control_panel(self):
-        """创建控制面板(包含:输入行、DSL 行与操作按钮)"""
+        """创建控制面板"""
         control_frame = Frame(self.main_frame, bg=self.colors["bg_secondary"],
                             relief=SOLID, bd=1)
         control_frame.pack(fill=X)
 
-        # 输入区域(单行:输入节点值 + DSL + 执行按钮)
+        # 输入区域
         input_frame = Frame(control_frame, bg=self.colors["bg_secondary"])
         input_frame.pack(fill=X, padx=15, pady=12)
 
-        # 输入节点值 Label + Entry(左侧)
+        # 输入节点值
         Label(input_frame, text="输入节点值:",
             font=("微软雅黑", 10),
             bg=self.colors["bg_secondary"]).grid(row=0, column=0, sticky=W, padx=(0,6), pady=5)
@@ -124,13 +125,11 @@ class RBTVisualizer:
         self.input_entry = Entry(input_frame, textvariable=self.input_var,
                                 font=("微软雅黑", 10), relief=SOLID, bd=1)
         self.input_entry.grid(row=0, column=1, padx=(0,12), pady=5, sticky=EW)
-        # 恢复默认内容
         self.input_entry.insert(0, "1,2,3,4,5,0,6")
-        # 按回车默认触发动画插入(如需改为直接插入可改为 self.insert_direct)
         self.input_entry.bind("<Return>", lambda e: self.start_insert_animated())
 
-        # DSL Label + Entry(右侧,与输入节点值并排)
-        Label(input_frame, text="DSL 命令:",
+        # DSL输入
+        Label(input_frame, text="DSL命令:",
             font=("微软雅黑", 10),
             bg=self.colors["bg_secondary"]).grid(row=0, column=2, sticky=W, padx=(6,6), pady=5)
 
@@ -139,21 +138,17 @@ class RBTVisualizer:
                             font=("微软雅黑", 10), relief=SOLID, bd=1)
         self.dsl_entry.grid(row=0, column=3, padx=(0,6), pady=5, sticky=EW)
         self.dsl_entry.insert(0, "create 1 2 3 4 5 0 6")
-        # 回车执行 DSL
         self.dsl_entry.bind("<Return>", lambda e: self.execute_dsl())
 
-        # DSL 执行按钮(在最右侧)
-        self.execute_dsl_btn = Button(input_frame, text="执行 DSL", command=self.execute_dsl,
+        # DSL执行按钮
+        self.execute_dsl_btn = Button(input_frame, text="执行DSL", command=self.execute_dsl,
                                     bg=self.colors["btn_primary"], fg="white",
                                     font=("微软雅黑", 9), relief=FLAT, bd=0, padx=10, pady=4,
                                     cursor="hand2")
         self.execute_dsl_btn.grid(row=0, column=4, padx=(6,0), pady=5, sticky=W)
 
-        # 关键:让左右两个 Entry 能够水平扩展(列 1 和列 3)
         input_frame.columnconfigure(1, weight=1)
         input_frame.columnconfigure(3, weight=1)
-
-        # 兼容旧代码:如果其他函数还引用 self.entry,保持兼容
         self.entry = self.input_entry
 
         # 按钮区域
@@ -168,11 +163,10 @@ class RBTVisualizer:
                         self.start_insert_animated, self.colors["btn_success"]).pack(side=LEFT, padx=4)
         self.create_button(btn_row1, "插入节点 (直接)",
                         self.insert_direct, self.colors["btn_primary"]).pack(side=LEFT, padx=4)
-        
-        # 新增: 单节点插入按钮
         self.create_button(btn_row1, "单节点插入 (动画)",
                         self.insert_single_node_animated, "#00ACC1").pack(side=LEFT, padx=4)
-        
+        self.create_button(btn_row1, "删除节点 (动画)",
+                        self.start_delete_animated, self.colors["btn_danger"]).pack(side=LEFT, padx=4)
         self.create_button(btn_row1, "清空树",
                         self.clear_canvas, self.colors["btn_warning"]).pack(side=LEFT, padx=4)
 
@@ -186,7 +180,6 @@ class RBTVisualizer:
                         self.load_structure, "#9C27B0").pack(side=LEFT, padx=4)
         self.create_button(btn_row2, "返回主界面",
                         self.back_to_main, self.colors["btn_danger"]).pack(side=LEFT, padx=4)
-
 
     def create_button(self, parent, text, command, color):
         """创建样式化按钮"""
@@ -209,15 +202,14 @@ class RBTVisualizer:
             ("红节点", self.colors["red_node"]),
             ("黑节点", self.colors["black_node"]),
             ("搜索路径", self.colors["path_highlight"]),
-            ("当前操作", self.colors["highlight"])
+            ("当前操作", self.colors["highlight"]),
+            ("删除标记", self.colors["delete_mark"])
         ]
         
         x_pos = 20
         for text, color in legend_items:
-            # 颜色方块
             self.canvas.create_rectangle(x_pos, y_pos-8, x_pos+16, y_pos+8,
                                        fill=color, outline="#CCCCCC")
-            # 文本
             self.canvas.create_text(x_pos+25, y_pos, text=text, 
                                   font=("微软雅黑", 9), anchor=W, fill="#666666")
             x_pos += 90
@@ -227,23 +219,19 @@ class RBTVisualizer:
         self.status_label.config(text=text)
     
     def execute_dsl(self):
-        """执行 DSL 命令(由按钮或 Enter 触发)"""
+        """执行DSL命令"""
         cmd = self.dsl_var.get().strip()
         if not cmd:
-            messagebox.showinfo("提示", "请输入 DSL 命令,例如:\n  create 1,2,3\n  clear")
+            messagebox.showinfo("提示", "请输入DSL命令,例如:\n  create 1,2,3\n  delete 5\n  clear")
             return
 
-        # 如果 process_command 未导入(None),提示用户并返回
         if process_command is None:
-            messagebox.showerror("模块缺失", "未找到 DSL_utils 模块,无法执行 DSL 命令。\n"
-                                 "请确认 DSL_utils 包存在并已正确导入。")
+            messagebox.showerror("模块缺失", "未找到 DSL_utils 模块,无法执行 DSL 命令。")
             self.update_status("DSL 执行失败:缺少 DSL_utils")
             return
 
         try:
-            # process_command 负责识别 visualizer 类型并调用相应的处理器(rbt_dsl)
             result = process_command(self, cmd)
-            # process_command 可能返回 True/False/None,统一处理显示状态
             if result is False:
                 self.update_status(f"DSL 命令执行失败: {cmd}")
             else:
@@ -254,24 +242,215 @@ class RBTVisualizer:
             messagebox.showerror("DSL 执行异常", f"执行 DSL 时发生异常:\n{e}")
             self.update_status("DSL 执行异常")
 
-    def clear_dsl_input(self):
-        """清空 DSL 输入"""
-        self.dsl_var.set("")
-        self.update_status("DSL 输入已清空")
-
-    def insert_single_node_animated(self):
-        """新增功能: 在现有树上插入单个节点(带动画)"""
+    def start_delete_animated(self):
+        """开始删除节点动画"""
         if self.animating:
             messagebox.showinfo("提示", "当前正在执行动画,请稍候...")
             return
         
-        # 获取输入值
+        if self.model.root is None:
+            messagebox.showinfo("提示", "树为空,无法删除节点")
+            return
+        
+        val_str = self.input_var.get().strip()
+        if not val_str:
+            messagebox.showinfo("提示", "请输入要删除的节点值")
+            return
+        
+        # 只取第一个值
+        values = [v.strip() for v in val_str.split(",") if v.strip()]
+        if not values:
+            messagebox.showinfo("提示", "请输入有效的节点值")
+            return
+        
+        val = values[0]
+        
+        try:
+            int(val)
+        except ValueError:
+            messagebox.showerror("错误", "请输入有效的数字")
+            return
+        
+        self.animating = True
+        self.update_status(f"开始删除节点: {val}")
+        
+        # 调用删除方法
+        deleted_node, path_nodes, events, snapshots = self.model.delete_with_steps(val)
+        
+        if deleted_node is None:
+            self.animating = False
+            messagebox.showinfo("提示", f"节点 {val} 不存在")
+            self.update_status(f"删除失败: 节点 {val} 不存在")
+            return
+        
+        snap_pre = snapshots[0]
+        snap_after_delete = snapshots[1] if len(snapshots) > 1 else None
+        
+        # 高亮搜索路径
+        def highlight_path(i=0):
+            if i >= len(path_nodes):
+                self.update_status(f"找到节点 {val}, 准备删除")
+                self.animate_delete_node(val, deleted_node, snap_after_delete,
+                                       lambda: self._after_delete_events(events, snapshots, val))
+                return
+            
+            node = path_nodes[i]
+            self.draw_tree_from_root(snap_pre)
+            
+            # 高亮当前访问的节点
+            origid_to_key, _ = self._build_key_maps_from_root(snap_pre)
+            node_id = getattr(node, 'id', None)
+            key = origid_to_key.get(node_id)
+            
+            if key and key in self.node_vis:
+                try:
+                    # 如果是目标节点,用删除标记颜色
+                    if str(node.val) == str(val):
+                        self.canvas.itemconfig(self.node_vis[key]['rect'],
+                                             outline=self.colors["delete_mark"],
+                                             width=4)
+                    else:
+                        self.canvas.itemconfig(self.node_vis[key]['rect'],
+                                             outline=self.colors["path_highlight"],
+                                             width=3)
+                except Exception:
+                    pass
+            
+            self.update_status(f"搜索路径: 访问节点 {node.val} (步骤 {i+1})")
+            self.window.after(450, lambda: highlight_path(i+1))
+        
+        highlight_path(0)
+
+    def animate_delete_node(self, val_str: str, deleted_node, snap_after_delete, on_complete):
+        """删除节点的淡出动画"""
+        if not snap_after_delete:
+            # 如果删除后树为空
+            self.canvas.delete("all")
+            self.draw_instructions()
+            self.update_status(f"已删除节点 {val_str}, 树已为空")
+            self.window.after(400, on_complete)
+            return
+        
+        # 找到被删除节点的可视化键
+        snap_before = clone_tree(self.model.root) if self.model.root else None
+        if not snap_before:
+            on_complete()
+            return
+        
+        origid_to_key, _ = self._build_key_maps_from_root(snap_before)
+        deleted_id = getattr(deleted_node, 'id', None)
+        deleted_key = origid_to_key.get(deleted_id)
+        
+        if not deleted_key or deleted_key not in self.node_vis:
+            # 无法找到节点,直接完成
+            self.draw_tree_from_root(snap_after_delete)
+            on_complete()
+            return
+        
+        # 淡出动画
+        node_item = self.node_vis[deleted_key]
+        rect_id = node_item['rect']
+        text_id = node_item['text']
+        
+        steps = 20
+        delay = 30
+        
+        def fade_step(i=0):
+            if i >= steps:
+                # 删除完成,重绘树
+                self.draw_tree_from_root(snap_after_delete)
+                self.update_status(f"节点 {val_str} 已删除")
+                self.window.after(400, on_complete)
+                return
+            
+            # 计算透明度 (通过颜色变淡模拟)
+            alpha = 1 - (i / steps)
+            
+            try:
+                # 获取当前颜色并调整亮度
+                if hasattr(deleted_node, 'color') and deleted_node.color == "R":
+                    base_color = self.colors["red_node"]
+                else:
+                    base_color = self.colors["black_node"]
+                
+                # 简单的淡出效果:逐渐变成背景色
+                bg_color = self.colors["canvas_bg"]
+                
+                # 逐渐缩小
+                scale = alpha
+                cx = node_item['cx']
+                cy = node_item['cy']
+                new_w = self.node_w * scale
+                new_h = self.node_h * scale
+                
+                left = cx - new_w/2
+                right = cx + new_w/2
+                top = cy - new_h/2
+                bottom = cy + new_h/2
+                
+                self.canvas.coords(rect_id, left, top, right, bottom)
+                
+            except Exception:
+                pass
+            
+            self.window.after(delay, lambda: fade_step(i+1))
+        
+        fade_step(0)
+
+    def _after_delete_events(self, events, snapshots, val):
+        """删除后的修复事件处理"""
+        if not events or len(snapshots) <= 2:
+            # 没有修复事件,直接完成
+            self.draw_tree_from_root(clone_tree(self.model.root))
+            self.animating = False
+            self.update_status(f"完成删除: {val}")
+            return
+        
+        def done_all():
+            self.draw_tree_from_root(clone_tree(self.model.root))
+            self.animating = False
+            self.update_status(f"完成删除并修复平衡: {val}")
+        
+        # 从索引2开始(0是删除前,1是删除后删除修复前)
+        self._animate_delete_events_sequence(events, snapshots, 2, done_all)
+
+    def _animate_delete_events_sequence(self, events, snapshots, start_idx, on_done):
+        """删除修复事件序列动画"""
+        if not events:
+            on_done()
+            return
+        
+        def step(event_idx=0, snap_idx=start_idx):
+            if event_idx >= len(events):
+                on_done()
+                return
+            
+            # 确保有足够的快照
+            if snap_idx >= len(snapshots) or snap_idx + 1 >= len(snapshots):
+                on_done()
+                return
+            
+            before_root = snapshots[snap_idx]
+            after_root = snapshots[snap_idx + 1]
+            ev = events[event_idx]
+            
+            self.update_status(f"删除修复 {event_idx+1}/{len(events)}: {ev.get('type', 'unknown')}")
+            self._animate_single_event(before_root, after_root, ev,
+                                     lambda: step(event_idx+1, snap_idx+1))
+        
+        step(0, start_idx)
+
+    def insert_single_node_animated(self):
+        """单节点插入(带动画)"""
+        if self.animating:
+            messagebox.showinfo("提示", "当前正在执行动画,请稍候...")
+            return
+        
         val_str = self.input_var.get().strip()
         if not val_str:
             messagebox.showinfo("提示", "请输入要插入的单个节点值")
             return
         
-        # 检查是否只输入了一个值
         values = [v.strip() for v in val_str.split(",") if v.strip()]
         if len(values) != 1:
             messagebox.showwarning("提示", "单节点插入模式只能输入一个节点值\n如需插入多个节点,请使用批量插入功能")
@@ -279,14 +458,12 @@ class RBTVisualizer:
         
         val = values[0]
         
-        # 验证是否为数字
         try:
             int(val)
         except ValueError:
             messagebox.showerror("错误", "请输入有效的数字")
             return
         
-        # 执行单节点插入动画
         self.animating = True
         inserted_node, path_nodes, events, snapshots = self.model.insert_with_steps(val)
         
@@ -342,7 +519,6 @@ class RBTVisualizer:
         bot = ty - self.node_h/2
         midy = (top + bot) / 2
         
-        # 绘制带箭头的连接线
         line = self.canvas.create_line(cx, top, cx, midy, tx, bot, 
                                      width=2, fill="#78909C", arrow=LAST,
                                      smooth=True)
@@ -475,12 +651,10 @@ class RBTVisualizer:
         right = cx + self.node_w/2
         bottom = cy + self.node_h/2
         
-        # 节点颜色
         is_red = node.color == "R"
         fill_color = self.colors["red_node"] if is_red else self.colors["black_node"]
         text_color = self.colors["text_light"] if not is_red else self.colors["text_dark"]
         
-        # 绘制节点主体(圆角矩形效果)
         rect = self.canvas.create_rectangle(left, top, right, bottom,
                                           fill=fill_color, outline="#E0E0E0",
                                           width=2, stipple="gray50")
@@ -544,7 +718,7 @@ class RBTVisualizer:
         try:
             values = [p.strip() for p in s.split(",") if p.strip()]
             for val in values:
-                int(val)  # 验证是否为数字
+                int(val)
         except ValueError:
             messagebox.showerror("错误", "输入包含非数字内容,请确保只输入数字")
             return False
@@ -552,11 +726,10 @@ class RBTVisualizer:
         return True
     
     def _compare_values(self, val1, val2):
-        """比较两个值的大小（按整数比较）"""
+        """比较两个值的大小(按整数比较)"""
         try:
             return int(val1) < int(val2)
         except (ValueError, TypeError):
-            # 如果转换失败，回退到字符串比较
             return str(val1) < str(val2)
 
     def _insert_seq(self, idx: int):
@@ -622,7 +795,7 @@ class RBTVisualizer:
         target_key = candidate_keys[-1]
         tx, ty = pos_after[target_key]
 
-        # 起始位置(画布顶部中央)
+        # 起始位置
         sx, sy = self.canvas_w/2, 20
         
         # 创建临时节点
@@ -660,7 +833,6 @@ class RBTVisualizer:
                     
                 self.draw_tree_from_root(snap_after_insert)
                 try:
-                    # 高亮新插入的节点
                     self.canvas.itemconfig(self.node_vis[target_key]['rect'], 
                                          outline=self.colors["highlight"], 
                                          width=3)
@@ -695,7 +867,7 @@ class RBTVisualizer:
         op_type = event.get('type', '')
         
         if op_type == 'recolor':
-            label_text = "颜色调整: 父节点和叔节点变黑,祖父节点变红"
+            label_text = "颜色调整: 重新着色"
             label_color = "#D32F2F"
         elif op_type in ['rotate_left', 'rotate_right']:
             direction = "左旋" if op_type == 'rotate_left' else "右旋"
@@ -705,19 +877,10 @@ class RBTVisualizer:
             label_text = "执行平衡操作"
             label_color = "#388E3C"
 
-        # 在相关节点上方显示说明
-        z_id = event.get('z_id') or event.get('z')
-        if z_id:
-            zk = origid_to_key_before.get(z_id) or origid_to_key_after.get(z_id)
-            if zk and zk in pos_before:
-                zx, zy = pos_before[zk]
-                label_id = self.canvas.create_text(zx, zy-50, text=label_text,
-                                                 font=("微软雅黑", 10, "bold"),
-                                                 fill=label_color)
-        else:
-            label_id = self.canvas.create_text(self.canvas_w/2, 30, text=label_text,
-                                             font=("微软雅黑", 10, "bold"),
-                                             fill=label_color)
+        # 在画布顶部显示说明
+        label_id = self.canvas.create_text(self.canvas_w/2, 30, text=label_text,
+                                         font=("微软雅黑", 10, "bold"),
+                                         fill=label_color)
 
         # 执行动画
         frames = 24
@@ -740,7 +903,6 @@ class RBTVisualizer:
                 cur_cy = sy + (ty - sy) * t
                 
                 try:
-                    # 计算当前位置
                     coords = self.canvas.coords(rect_id)
                     if not coords or len(coords) < 4:
                         continue
@@ -748,7 +910,6 @@ class RBTVisualizer:
                     current_cx = (x1 + x2) / 2
                     current_cy = (y1 + y2) / 2
                     
-                    # 移动节点
                     dx = cur_cx - current_cx
                     dy = cur_cy - current_cy
                     self.canvas.move(rect_id, dx, dy)
@@ -842,9 +1003,8 @@ if __name__ == '__main__':
     w.title("红黑树可视化演示系统")
     w.geometry("1350x750")
     
-    # 设置窗口图标(如果有的话)
     try:
-        w.iconbitmap("rbt_icon.ico")  # 如果有图标文件的话
+        w.iconbitmap("rbt_icon.ico")
     except:
         pass
         
