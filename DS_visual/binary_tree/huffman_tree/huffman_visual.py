@@ -66,7 +66,7 @@ class HuffmanVisualizer:
         self.input_var = StringVar()
         self.entry = Entry(ctrl_frame, textvariable=self.input_var, width=36, font=("Arial",11))
         self.entry.pack(side=LEFT, padx=6)
-        self.entry.insert(0, "1,2,3,4,5")
+        self.entry.insert(0, "1,2,3,4")
         Button(ctrl_frame, text="逐步动画构建", command=self.start_animated_build, bg="#2E8B57", fg="white").pack(side=LEFT, padx=6)
 
         Button(ctrl_frame, text="保存 Huffman", command=self.save_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)

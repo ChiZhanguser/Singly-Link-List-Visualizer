@@ -1,4 +1,5 @@
 from tkinter import messagebox
+import time
 
 def _parse_items(args):
     items = []
@@ -45,20 +46,22 @@ def process(visualizer, text: str):
                     messagebox.showerror("错误", "位置需为正整数，例如：insert 42 at 2")
                     return
             else:
-                # 没有指定位置 -> 末尾插入（保持原有行为）
+                # 没有指定位置 -> 末尾插入
                 value = " ".join(args)
                 try:
+                    # 直接调用可视化器的尾部插入方法
                     visualizer.programmatic_insert_last(value)
                 except Exception as e:
                     messagebox.showerror("错误", f"插入失败：{e}")
                 return
+        
+        # 指定位置插入 - 先播放动画，再执行插入
         try:
-            # 获取当前长度 n
+            # 获取当前链表长度
             if hasattr(visualizer, "node_value_store"):
                 try:
                     n = len(visualizer.node_value_store)
                 except Exception:
-                    # 兜底：尝试 to_list 或 model
                     if hasattr(visualizer.node_value_store, "to_list"):
                         n = len(visualizer.node_value_store.to_list())
                     else:
@@ -68,80 +71,34 @@ def process(visualizer, text: str):
             else:
                 n = 0
 
+            # 验证位置范围
             if pos < 1 or pos > n + 1:
                 messagebox.showerror("错误", f"位置越界：当前链表长度 {n}，合法位置范围 1..{n+1}")
                 return
 
-            # 构造新的列表（python list of values）
-            if hasattr(visualizer, "node_value_store"):
-                # 先尝试把 node_value_store 转为普通 list（兼容自定义容器）
-                try:
-                    new_list = list(visualizer.node_value_store)
-                except Exception:
-                    if hasattr(visualizer.node_value_store, "to_list"):
-                        new_list = visualizer.node_value_store.to_list()
-                    else:
-                        # 兜底按索引读取
-                        new_list = []
-                        try:
-                            for i in range(len(visualizer.node_value_store)):
-                                new_list.append(visualizer.node_value_store[i])
-                        except Exception:
-                            pass
-            elif hasattr(visualizer, "model") and hasattr(visualizer.model, "to_list"):
-                new_list = visualizer.model.to_list()
+            # 根据位置选择不同的插入方法
+            if pos == 1:
+                # 头部插入 - 直接调用内部方法
+                visualizer._direct_insert_first(value)
+            elif pos == n + 1:
+                # 尾部插入
+                visualizer.programmatic_insert_last(value)
             else:
-                new_list = []
-
-            new_list.insert(pos - 1, str(value))
-
-            # 1) 更新底层 model（如果存在并支持 clear/append 或 insert）
-            try:
-                if hasattr(visualizer, "model"):
-                    m = visualizer.model
-                    if hasattr(m, "insert"):
-                        # model.insert 期待 0-based idx
-                        try:
-                            m.insert(pos - 1, value)
-                        except Exception:
-                            # 如果 insert 失败，退回到 clear+append 重建
-                            if hasattr(m, "clear"):
-                                m.clear()
-                                if hasattr(m, "append"):
-                                    for v in new_list:
-                                        m.append(v)
-                    elif hasattr(m, "clear") and hasattr(m, "append"):
-                        m.clear()
-                        for v in new_list:
-                            m.append(v)
-            except Exception:
-                # 不影响可视化，继续重建可视化
-                pass
-
-            # 2) 重建可视化：先清空，再用 programmatic_insert_last 逐一插入
-            if hasattr(visualizer, "clear_visualization") and hasattr(visualizer, "programmatic_insert_last"):
+                # 中间位置插入 - 先播放动画，再执行插入
+                prev_node_idx = pos - 2  # 前一个节点的索引（0-based）
+                next_node_idx = pos - 1  # 后一个节点的索引（0-based）
+                
+                # 播放插入动画
                 try:
-                    visualizer.clear_visualization()
-                    for v in new_list:
-                        visualizer.programmatic_insert_last(v)
-                except Exception as e:
-                    messagebox.showerror("错误", f"重建可视化失败：{e}")
-                    return
-            else:
-                # 如果没有可视化函数，则只尝试更新 node_value_store（如果存在）
-                if hasattr(visualizer, "node_value_store"):
-                    try:
-                        if hasattr(visualizer.node_value_store, "clear"):
-                            visualizer.node_value_store.clear()
-                            if hasattr(visualizer.node_value_store, "append"):
-                                for v in new_list:
-                                    visualizer.node_value_store.append(v)
-                        else:
-                            # 兜底：尝试重新赋值（注意：可能不兼容）
-                            visualizer.node_value_store = type(visualizer.node_value_store)(new_list)
-                    except Exception:
-                        pass
-                messagebox.showinfo("提示", "已在底层数据结构插入元素，但未能重建可视化（缺少对应方法）")
+                    visualizer.animate_insert_between_nodes(prev_node_idx, next_node_idx, value)
+                except Exception as anim_e:
+                    print(f"动画播放失败: {anim_e}")
+                    # 如果动画播放失败，直接执行插入
+                    visualizer.insert_at_no_animation(pos, value)
+                else:
+                    # 动画播放成功后，执行实际的插入操作
+                    visualizer.insert_at_no_animation(pos, value)
+                    
             return
 
         except Exception as e:
@@ -174,81 +131,14 @@ def process(visualizer, text: str):
             messagebox.showerror("错误", "delete 参数需为 'first'/'last' 或 正整数位置，例如：delete 3")
             return
 
-        # 优先使用 visualizer 提供的 delete_at_position（如果有）
+        # 使用可视化器的删除方法
         if hasattr(visualizer, "delete_at_position"):
             try:
                 visualizer.delete_at_position(pos)
                 return
             except Exception as e:
-                # 如果 visualizer 的方法抛出异常，回退到通用实现
-                print("visualizer.delete_at_position raised:", e)
-
-        # 回退：导出为普通 list，删除指定索引，重建 model + 可视化
-        try:
-            # 导出为普通 list（兼容自定义容器）
-            cur = []
-            if hasattr(visualizer, "node_value_store"):
-                try:
-                    cur = list(visualizer.node_value_store)
-                except Exception:
-                    if hasattr(visualizer.node_value_store, "to_list"):
-                        cur = visualizer.node_value_store.to_list()
-                    else:
-                        try:
-                            for i in range(len(visualizer.node_value_store)):
-                                cur.append(visualizer.node_value_store[i])
-                        except Exception:
-                            pass
-            elif hasattr(visualizer, "model") and hasattr(visualizer.model, "to_list"):
-                cur = visualizer.model.to_list()
-            else:
-                cur = []
-
-            # 安全校验
-            if pos < 1 or pos > len(cur):
-                messagebox.showerror("错误", f"位置越界：当前链表长度 {len(cur)}")
+                messagebox.showerror("错误", f"删除失败：{e}")
                 return
-
-            remaining = cur[:pos-1] + cur[pos:]
-
-            # 1) 更新底层 model（若存在）
-            try:
-                if hasattr(visualizer, "model"):
-                    m = visualizer.model
-                    if hasattr(m, "clear") and hasattr(m, "append"):
-                        m.clear()
-                        for v in remaining:
-                            m.append(v)
-            except Exception:
-                pass
-
-            # 2) 重建可视化
-            if hasattr(visualizer, "clear_visualization") and hasattr(visualizer, "programmatic_insert_last"):
-                try:
-                    visualizer.clear_visualization()
-                    for v in remaining:
-                        visualizer.programmatic_insert_last(v)
-                except Exception as e:
-                    messagebox.showerror("错误", f"重建可视化失败：{e}")
-                    return
-            else:
-                # 仅更新 node_value_store（如果支持）
-                if hasattr(visualizer, "node_value_store"):
-                    try:
-                        if hasattr(visualizer.node_value_store, "clear") and hasattr(visualizer.node_value_store, "append"):
-                            visualizer.node_value_store.clear()
-                            for v in remaining:
-                                visualizer.node_value_store.append(v)
-                        else:
-                            visualizer.node_value_store = type(visualizer.node_value_store)(remaining)
-                    except Exception:
-                        pass
-                messagebox.showinfo("提示", "已在底层数据结构删除元素，但未能重建可视化（缺少对应方法）")
-            return
-
-        except Exception as e:
-            messagebox.showerror("错误", f"删除失败：{e}")
-            return
 
     # ---------- CLEAR ----------
     if cmd == "clear":
@@ -269,5 +159,31 @@ def process(visualizer, text: str):
             messagebox.showerror("错误", f"创建失败：{e}")
         return
 
-    messagebox.showinfo("未识别命令", "支持：insert x / insert VALUE at POS / insert_at POS VALUE / delete x (first/last/pos) / clear / create 1 2 3（或 create 1,2,3）")
+    # ---------- APPEND (尾部插入) ----------
+    if cmd == "append":
+        value = " ".join(args)
+        try:
+            visualizer.programmatic_insert_last(value)
+        except Exception as e:
+            messagebox.showerror("错误", f"尾部插入失败：{e}")
+        return
+
+    # ---------- PREPEND (头部插入) ----------
+    if cmd == "prepend":
+        value = " ".join(args)
+        try:
+            if hasattr(visualizer, "_direct_insert_first"):
+                visualizer._direct_insert_first(value)
+        except Exception as e:
+            messagebox.showerror("错误", f"头部插入失败：{e}")
+        return
+
+    messagebox.showinfo("未识别命令", 
+        "支持命令：\n"
+        "- insert VALUE [at POSITION] / insert_at POSITION VALUE\n" 
+        "- append VALUE (尾部插入)\n"
+        "- prepend VALUE (头部插入)\n"
+        "- delete first/last/POSITION\n"
+        "- clear\n"
+        "- create VALUE1,VALUE2,...")
     return
