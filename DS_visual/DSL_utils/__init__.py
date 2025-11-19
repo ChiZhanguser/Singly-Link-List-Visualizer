@@ -6,6 +6,7 @@ from . import trie_dsl
 from . import huffman_dsl
 from . import avl_dsl  
 from . import rbt_dsl
+from . import binary_tree_dsl  # 新增: 链式二叉树 DSL
 
 def process_command(visualizer, text):
     if not visualizer or not text or not text.strip():
@@ -14,6 +15,20 @@ def process_command(visualizer, text):
     print(f"DEBUG: Processing command for visualizer: {type(visualizer).__name__}")
     print(f"DEBUG: Command text: {text}")
     visualizer_type = type(visualizer).__name__.lower()
+
+    try:
+        # Binary Tree Visualizer (链式二叉树,放在最前面优先匹配)
+        if ("binarytree" in visualizer_type.replace("_", "") or
+            type(visualizer).__name__ == "BinaryTreeVisualizer" or
+            (hasattr(visualizer, "start_animated_build") and 
+             hasattr(visualizer, "node_to_rect") and
+             hasattr(visualizer, "batch_queue") and
+             not hasattr(visualizer, "model"))):  # 排除其他有 model 的可视化器
+            print(f"DEBUG: Processing as Binary Tree visualizer")
+            return binary_tree_dsl.process(visualizer, text)
+    except Exception as e:
+        print(f"DEBUG: Binary Tree processing error: {e}")
+        pass
 
     try:
         # Huffman visualizer
@@ -112,7 +127,7 @@ def process_command(visualizer, text):
              hasattr(visualizer.model, "root") and
              hasattr(visualizer, "start_insert_animated") and
              # 检查节点是否有color属性(红黑树特征)
-             (visualizer.model.root is None and hasattr(visualizer.model.root, "color")))):
+             (visualizer.model.root is None or hasattr(visualizer.model.root, "color")))):
             print(f"DEBUG: Processing as Red-Black Tree visualizer")
             return rbt_dsl.process(visualizer, text)
     except Exception as e:
@@ -156,7 +171,7 @@ def process_command(visualizer, text):
     
     from tkinter import messagebox
     messagebox.showinfo("未识别可视化类型", 
-        "当前支持的数据结构类型：\n"
+        "当前支持的数据结构类型:\n"
         "1. 单链表 (LinkedList)\n"
         "2. 栈 (Stack)\n"
         "3. 顺序表 (Sequence List)\n"
@@ -164,5 +179,6 @@ def process_command(visualizer, text):
         "5. AVL树 (AVL)\n"
         "6. 红黑树 (RBT)\n"
         "7. 字典树 (Trie)\n"
-        "8. 哈夫曼树 (Huffman)\n\n"
+        "8. 哈夫曼树 (Huffman)\n"
+        "9. 链式二叉树 (Binary Tree)\n\n"
         f"当前类型 '{type(visualizer).__name__}' 未能匹配到对应的DSL处理器。")

@@ -716,7 +716,7 @@ class LinkList:
             messagebox.showerror("错误", f"可视化重建失败：{e}")
 
     def animate_insert_between_nodes(self, prev_node_idx, next_node_idx, value):
-        """在指定位置之间插入节点的动画"""
+        """在指定位置之间插入节点的动画 - 修复文字覆盖问题"""
         self.toggle_action_buttons(DISABLED)
         
         try:
@@ -726,78 +726,98 @@ class LinkList:
             
             # 计算新节点的临时位置（在两个节点之间的上方）
             temp_x = (prev_pos[4] + next_pos[4]) / 2
-            temp_y = prev_pos[5] - 100  # 上方位置
+            temp_y = prev_pos[5] - 100  # 更上方位置，为标签留出空间
             
             # 创建新节点的可视化元素（在临时位置）
             self._create_temp_node_at_position(temp_x, temp_y, value)
             
-            # 第一步：显示新节点的指针指向后一个节点
+            # ========== 第一步：新节点指向后一个节点 ==========
             self.information.config(text="第一步：新节点的指针指向后一个节点")
             self.window.update()
-            time.sleep(1)
+            time.sleep(0.8)
             
-            # 绘制从新节点指向后一个节点的箭头（红色粗箭头）
-            new_node_right = temp_x + 95  # 新节点右侧（next部分右侧）
-            new_node_center_y = temp_y + 45  # 新节点垂直中心
+            # 计算坐标
+            new_node_right = temp_x + 95  # 新节点右侧
+            new_node_center_y = temp_y + 45
             
-            # 计算后一个节点的连接点位置
-            next_node_connect_x = next_pos[4] + 25  # 后一个节点主容器左侧 + 25
-            next_node_connect_y = next_pos[5] + 32  # 后一个节点主容器上侧 + 32
+            next_node_left = next_pos[4] + 25  # 后一个节点左侧
+            next_node_center_y = next_pos[5] + 32
             
-            # 绘制红色粗箭头 - 从新节点右侧指向后一个节点左侧
+            # 创建红色直线箭头 - 新节点指向后一个节点
             temp_arrow = self.canvas_make.create_line(
                 new_node_right, new_node_center_y,
-                next_node_connect_x, next_node_connect_y,
-                arrow=LAST, width=5, fill="red", arrowshape=(16, 20, 6)
+                next_node_left, next_node_center_y,
+                arrow=LAST, width=4, fill="red", arrowshape=(12, 15, 5)
             )
             
-            # 添加箭头标签
-            arrow_label1 = Label(self.canvas_make, text="新节点指向后一个节点", 
-                                font=("Arial", 10, "bold"), bg="white", fg="red")
-            arrow_label1.place(x=(new_node_right + next_node_connect_x)/2 - 60, 
-                            y=(new_node_center_y + next_node_connect_y)/2 - 20)
+            # 将标签放在箭头上方，避免覆盖
+            mid_x = (new_node_right + next_node_left) / 2
+            mid_y = (new_node_center_y + next_node_center_y) / 2
+            
+            arrow_label1 = Label(self.canvas_make, text="新节点→后节点", 
+                                font=("Arial", 9, "bold"), bg="lightyellow", fg="red",
+                                relief="solid", bd=1)
+            # 放在箭头上方30像素处
+            arrow_label1.place(x=mid_x - 40, y=mid_y - 40)
+            
+            # 高亮闪烁效果
+            for _ in range(3):
+                self.canvas_make.itemconfig(temp_arrow, width=6, fill="darkred")
+                self.window.update()
+                time.sleep(0.2)
+                self.canvas_make.itemconfig(temp_arrow, width=4, fill="red")
+                self.window.update()
+                time.sleep(0.2)
             
             self.window.update()
-            time.sleep(1.5)
+            time.sleep(0.8)
             
-            # 第二步：显示前一个节点的指针指向新节点
+            # ========== 第二步：前一个节点指向新节点 ==========
             self.information.config(text="第二步：前一个节点的指针指向新节点")
             self.window.update()
-            time.sleep(1)
+            time.sleep(0.8)
             
-            # 修改前一个节点的箭头指向新节点
-            prev_node_right = prev_pos[0] + 75  # 前一个节点右侧（data部分右侧）
-            prev_node_center_y = prev_pos[1] + 15  # 前一个节点垂直中心
-            new_node_left = temp_x + 25  # 新节点左侧（主容器左侧 + 25）
-            new_node_center_y = temp_y + 32  # 新节点垂直中心
+            # 计算坐标
+            prev_node_right = prev_pos[4] + 95  # 前一个节点右侧
+            prev_node_center_y = prev_pos[5] + 32
             
-            # 创建从前一个节点指向新节点的箭头（蓝色粗箭头，曲线向下弯曲）
-            control_x = (prev_node_right + new_node_left) / 2
-            control_y = max(prev_node_center_y, new_node_center_y) + 50
+            new_node_left = temp_x + 25  # 新节点左侧
+            new_node_center_y = temp_y + 32
             
-            curve_points = []
-            for t in range(0, 11):
-                t_normalized = t / 10.0
-                x = (1-t_normalized)**2 * prev_node_right + 2*(1-t_normalized)*t_normalized * control_x + t_normalized**2 * new_node_left
-                y = (1-t_normalized)**2 * prev_node_center_y + 2*(1-t_normalized)*t_normalized * control_y + t_normalized**2 * new_node_center_y
-                curve_points.extend([x, y])
-            
+            # 创建蓝色直线箭头 - 前一个节点指向新节点
             prev_to_new_arrow = self.canvas_make.create_line(
-                curve_points, arrow=LAST, width=5, fill="blue", smooth=1, arrowshape=(16, 20, 6)
+                prev_node_right, prev_node_center_y,
+                new_node_left, new_node_center_y,
+                arrow=LAST, width=4, fill="blue", arrowshape=(12, 15, 5)
             )
             
-            # 添加箭头标签
-            arrow_label2 = Label(self.canvas_make, text="前一个节点指向新节点", 
-                                font=("Arial", 10, "bold"), bg="white", fg="blue")
-            arrow_label2.place(x=control_x - 60, y=control_y - 20)
+            # 计算第二个箭头的中间点
+            mid_x2 = (prev_node_right + new_node_left) / 2
+            mid_y2 = (prev_node_center_y + new_node_center_y) / 2
+            
+            # 将第二个标签放在箭头下方，避免覆盖
+            arrow_label2 = Label(self.canvas_make, text="前节点→新节点", 
+                                font=("Arial", 9, "bold"), bg="lightyellow", fg="blue",
+                                relief="solid", bd=1)
+            # 放在箭头下方30像素处
+            arrow_label2.place(x=mid_x2 - 40, y=mid_y2 + 20)
+            
+            # 高亮闪烁效果
+            for _ in range(3):
+                self.canvas_make.itemconfig(prev_to_new_arrow, width=6, fill="darkblue")
+                self.window.update()
+                time.sleep(0.2)
+                self.canvas_make.itemconfig(prev_to_new_arrow, width=4, fill="blue")
+                self.window.update()
+                time.sleep(0.2)
             
             self.window.update()
-            time.sleep(1.5)
+            time.sleep(1.0)
             
-            # 第三步：动画完成，准备显示最终结果
-            self.information.config(text="插入动画完成，正在更新链表...")
+            # ========== 第三步：完成插入，显示最终结果 ==========
+            self.information.config(text="插入完成！正在更新链表可视化...")
             self.window.update()
-            time.sleep(1)
+            time.sleep(0.5)
             
             # 清理临时图形
             self.canvas_make.delete(temp_arrow)
@@ -806,35 +826,44 @@ class LinkList:
             arrow_label2.destroy()
             self._remove_temp_node()
             
+            # 显示成功信息
+            self.information.config(text=f"成功在位置 {prev_node_idx + 2} 插入节点 {value}")
+            
         except Exception as e:
             print(f"animate_insert_between_nodes error: {e}")
+            self.information.config(text="插入动画出现错误")
         finally:
             self.toggle_action_buttons(NORMAL)
 
     def _create_temp_node_at_position(self, x, y, value):
-        """在指定位置创建临时节点"""
-        # 创建临时节点
-        self.temp_main = self.make_rect(x, y, x+100, y+65, outline="red", width=3)
-        self.temp_data = self.make_rect(x+5, y+30, x+45, y+60, outline="green", fill="yellow", width=3)
-        self.temp_next = self.make_rect(x+55, y+30, x+95, y+60, outline="green", fill="yellow", width=3)
+        """在指定位置创建临时节点 - 修复版本"""
+        # 创建临时节点（使用不同的颜色突出显示）
+        self.temp_main = self.make_rect(x, y, x+100, y+65, outline="red", width=3, fill="lightyellow")
+        self.temp_data = self.make_rect(x+5, y+30, x+45, y+60, outline="green", fill="lightgreen", width=3)
+        self.temp_next = self.make_rect(x+55, y+30, x+95, y+60, outline="green", fill="lightgreen", width=3)
         
-        # 显示值
+        # 显示值（突出显示）
         self.temp_value = Label(self.canvas_make, text=str(value), font=("Arial",10,"bold"), 
-                               fg="green", bg="yellow")
+                            fg="darkred", bg="lightgreen", relief="solid", bd=1)
         self.temp_value.place(x=x+13, y=y+33)
         
         # 标签
         self.temp_data_label = Label(self.canvas_make, text="data", font=("Arial",10,"bold"), 
-                                    bg="chocolate", fg="green")
+                                    bg="lightyellow", fg="darkgreen")
         self.temp_data_label.place(x=x+5, y=y+5)
         self.temp_next_label = Label(self.canvas_make, text="next", font=("Arial",10,"bold"), 
-                                    bg="chocolate", fg="green")
+                                    bg="lightyellow", fg="darkgreen")
         self.temp_next_label.place(x=x+55, y=y+5)
         
         # 在临时节点内部添加一个小箭头
         self.temp_inner_arrow = self.canvas_make.create_line(
-            x+75, y+45, x+95, y+45, width=3, fill="black"
+            x+75, y+45, x+95, y+45, width=3, fill="black", arrow=LAST
         )
+        
+        # 添加新节点标签 - 放在节点上方更远的位置
+        self.temp_node_label = Label(self.canvas_make, text="新节点", font=("Arial",11,"bold"), 
+                                    bg="orange", fg="white", relief="raised", bd=2)
+        self.temp_node_label.place(x=x+30, y=y-35)  # 从y-25改为y-35，提供更多空间
 
     def _remove_temp_node(self):
         """移除临时节点"""
@@ -846,6 +875,7 @@ class LinkList:
             self.temp_value.destroy()
             self.temp_data_label.destroy()
             self.temp_next_label.destroy()
+            self.temp_node_label.destroy()
         except Exception as e:
             print(f"移除临时节点时出错: {e}")
 
@@ -873,7 +903,7 @@ class LinkList:
             elif pos == len(self.node_value_store) + 1:  # 删除尾节点
                 self._delete_tail_node(idx)
             else:  # 删除中间节点
-                self._delete_middle_node(idx)
+                self._delete_middle_node_enhanced(idx)
                 
         except Exception as e:
             messagebox.showerror("错误", f"删除失败：{e}")
@@ -979,8 +1009,8 @@ class LinkList:
         
         self.information.config(text="尾节点已被删除")
 
-    def _delete_middle_node(self, idx):
-        """删除中间节点 - 修复版本"""
+    def _delete_middle_node_enhanced(self, idx):
+        """删除中间节点 - 增强版动画，突出展示指针变化过程"""
         # 显示temp指针找到要删除节点的前一个节点
         self.temp_label.place(x=self.temp_label_x, y=self.temp_label_y)
         self.pointing_line_temp = self.canvas_make.create_line(
@@ -1006,69 +1036,140 @@ class LinkList:
         self.information.config(text="temp指针已找到要删除节点的前一个节点")
         time.sleep(0.5)
         
-        # 创建曲线连接前一个节点和下一个节点
-        prev_node_center_x = self.linked_list_position[idx-1][4] + 50
-        prev_node_center_y = self.linked_list_position[idx-1][5] + 32
-        next_node_center_x = self.linked_list_position[idx+1][4] + 25
-        next_node_center_y = self.linked_list_position[idx+1][5] + 32
+        # ========== 第一步：高亮要删除的节点 ==========
+        self.information.config(text="第一步：标记要删除的节点")
         
-        # 创建曲线 - 使用更简单的方法确保曲线可见
-        # 计算控制点，使曲线向下弯曲
-        control_x = (prev_node_center_x + next_node_center_x) / 2
-        control_y = max(prev_node_center_y, next_node_center_y) + 80  # 向下弯曲
+        # 获取要删除节点的位置
+        delete_node_x = self.linked_list_position[idx][4]
+        delete_node_y = self.linked_list_position[idx][5]
         
-        # 生成曲线点
-        curve_points = []
-        for t in range(0, 11):
-            t_normalized = t / 10.0
-            # 二次贝塞尔曲线公式
-            x = (1-t_normalized)**2 * prev_node_center_x + 2*(1-t_normalized)*t_normalized * control_x + t_normalized**2 * next_node_center_x
-            y = (1-t_normalized)**2 * prev_node_center_y + 2*(1-t_normalized)*t_normalized * control_y + t_normalized**2 * next_node_center_y
-            curve_points.extend([x, y])
-        
-        # 创建曲线，使用更醒目的颜色和更粗的线条
-        curve_arrow = self.canvas_make.create_line(
-            curve_points, arrow=LAST, width=5, fill="red", smooth=1
+        # 创建红色高亮框
+        highlight_box = self.canvas_make.create_rectangle(
+            delete_node_x-5, delete_node_y-5, 
+            delete_node_x+105, delete_node_y+70,
+            outline="red", width=4, dash=(5, 2)
         )
         
-        self.information.config(text="创建临时曲线连接前一个节点和下一个节点")
-        self.window.update()  # 强制更新显示
-        time.sleep(1.5)  # 延长显示时间
+        # 使用画布文本来避免覆盖问题
+        delete_text = self.canvas_make.create_text(
+            delete_node_x + 50, delete_node_y - 40,
+            text="要删除的节点", 
+            font=("Arial", 12, "bold"), 
+            fill="white",
+            anchor="center"
+        )
         
-        # 删除可视化元素
-        self._remove_visual_elements(idx)
+        # 创建文本背景
+        text_bbox = self.canvas_make.bbox(delete_text)
+        text_bg = self.canvas_make.create_rectangle(
+            text_bbox[0]-5, text_bbox[1]-2,
+            text_bbox[2]+5, text_bbox[3]+2,
+            fill="red", outline="red"
+        )
+        # 将背景放在文本后面
+        self.canvas_make.tag_lower(text_bg, delete_text)
         
-        # 删除曲线
-        self.canvas_make.delete(curve_arrow)
+        # 闪烁效果
+        for _ in range(3):
+            self.canvas_make.itemconfig(highlight_box, outline="darkred", width=6)
+            self.canvas_make.itemconfig(text_bg, fill="darkred")
+            self.window.update()
+            time.sleep(0.2)
+            self.canvas_make.itemconfig(highlight_box, outline="red", width=4)
+            self.canvas_make.itemconfig(text_bg, fill="red")
+            self.window.update()
+            time.sleep(0.2)
         
-        # 左移后续节点
-        self._shift_nodes_left(idx)
+        self.window.update()
+        time.sleep(0.8)
         
-        # 修正：更新前一个节点的箭头指向下一个节点
-        entry = self.linked_list_data_next_store[idx-1]
-        prev_arrow_id = entry[1] if len(entry) > 1 else None
-        prev_node_x = self.linked_list_position[idx-1][0]
-        prev_node_y = self.linked_list_position[idx-1][1]
+        # ========== 第二步：显示前一个节点指向后一个节点 ==========
+        self.information.config(text="第二步：前一个节点的指针指向被删除节点的后一个节点")
         
-        # 修正：正确的下一个节点位置计算
-        if idx < len(self.linked_list_position):
-            # 下一个节点的data部分左侧 + 75 (箭头起点到终点的水平距离)
-            next_node_x = self.linked_list_position[idx][0] + 75
-            next_node_y = self.linked_list_position[idx][1] + 15  # 保持水平
-        else:
-            # 如果删除的是最后一个节点，指向NULL
-            next_node_x = prev_node_x + 115
-            next_node_y = prev_node_y + 15
+        # 获取前一个节点和后一个节点的位置
+        prev_node_center_x = self.linked_list_position[idx-1][4] + 95  # 前一个节点右侧
+        prev_node_center_y = self.linked_list_position[idx-1][5] + 32
         
-        # 创建水平直线箭头
-        if prev_arrow_id is not None:
-            try:
-                # 确保箭头是水平的
-                self.canvas_make.coords(prev_arrow_id, 
-                                       prev_node_x+75, prev_node_y+15,
-                                       next_node_x, next_node_y)
-            except Exception as e:
-                print(f"更新箭头坐标失败: {e}")
+        next_node_center_x = self.linked_list_position[idx+1][4] + 25  # 后一个节点左侧  
+        next_node_center_y = self.linked_list_position[idx+1][5] + 32
+        
+        # 创建醒目的红色曲线箭头（绕过被删除节点）
+        # 计算控制点，使曲线明显绕过被删除节点
+        control_x1 = (prev_node_center_x + delete_node_x) / 2
+        control_y1 = prev_node_center_y - 60  # 向上弯曲
+        control_x2 = (delete_node_x + next_node_center_x) / 2  
+        control_y2 = next_node_center_y - 60  # 向上弯曲
+        
+        # 使用三次贝塞尔曲线创建更平滑的路径
+        curve_points = []
+        for t in range(0, 21):  # 更多点使曲线更平滑
+            t_normalized = t / 20.0
+            # 三次贝塞尔曲线公式
+            x = (1-t_normalized)**3 * prev_node_center_x + \
+                3*(1-t_normalized)**2*t_normalized * control_x1 + \
+                3*(1-t_normalized)*t_normalized**2 * control_x2 + \
+                t_normalized**3 * next_node_center_x
+            y = (1-t_normalized)**3 * prev_node_center_y + \
+                3*(1-t_normalized)**2*t_normalized * control_y1 + \
+                3*(1-t_normalized)*t_normalized**2 * control_y2 + \
+                t_normalized**3 * next_node_center_y
+            curve_points.extend([x, y])
+        
+        # 创建粗的红色箭头
+        redirect_arrow = self.canvas_make.create_line(
+            curve_points, arrow=LAST, width=6, fill="red", 
+            arrowshape=(16, 20, 8), smooth=1
+        )
+        
+        # 使用画布文本创建说明标签，避免覆盖问题
+        label_x = (prev_node_center_x + next_node_center_x) / 2
+        label_y = min(prev_node_center_y, next_node_center_y) - 100
+        
+        # 创建文本
+        redirect_text = self.canvas_make.create_text(
+            label_x, label_y,
+            text="前节点→后节点", 
+            font=("Arial", 11, "bold"), 
+            fill="red",
+            anchor="center"
+        )
+        
+        # 创建文本背景
+        text_bbox2 = self.canvas_make.bbox(redirect_text)
+        text_bg2 = self.canvas_make.create_rectangle(
+            text_bbox2[0]-5, text_bbox2[1]-2,
+            text_bbox2[2]+5, text_bbox2[3]+2,
+            fill="yellow", outline="red", width=2
+        )
+        # 将背景放在文本后面
+        self.canvas_make.tag_lower(text_bg2, redirect_text)
+        
+        # 闪烁强调
+        for _ in range(4):
+            self.canvas_make.itemconfig(redirect_arrow, width=8, fill="darkred")
+            self.canvas_make.itemconfig(redirect_text, fill="darkred")
+            self.canvas_make.itemconfig(text_bg2, fill="orange", outline="darkred")
+            self.window.update()
+            time.sleep(0.2)
+            self.canvas_make.itemconfig(redirect_arrow, width=6, fill="red")
+            self.canvas_make.itemconfig(redirect_text, fill="red")
+            self.canvas_make.itemconfig(text_bg2, fill="yellow", outline="red")
+            self.window.update()
+            time.sleep(0.2)
+        
+        self.window.update()
+        time.sleep(1.0)
+        
+        # ========== 第三步：执行删除并更新可视化 ==========
+        self.information.config(text="第三步：删除节点并更新链表结构")
+        
+        # 先清理临时图形
+        self.canvas_make.delete(highlight_box)
+        self.canvas_make.delete(text_bg)
+        self.canvas_make.delete(delete_text)
+        self.canvas_make.delete(redirect_arrow)
+        self.canvas_make.delete(text_bg2)
+        self.canvas_make.delete(redirect_text)
         
         # 移除temp指针
         self.temp_label.place_forget()
@@ -1076,7 +1177,60 @@ class LinkList:
         self.temp_label_x = 40
         self.pointing_line_temp_left = 65
         
-        self.information.config(text="中间节点已被删除，后续节点已左移")
+        # 实际删除可视化元素
+        self._remove_visual_elements(idx)
+        
+        # 左移后续节点
+        self._shift_nodes_left(idx)
+        
+        # 更新前一个节点的箭头指向
+        self._update_previous_node_arrow(idx-1, idx)
+        
+        self.information.config(text=f"节点删除完成！前一个节点现在直接指向后一个节点")
+        
+        # 最终确认显示
+        time.sleep(0.5)
+        self.information.config(text=f"位置 {idx+1} 的节点已成功删除")
+
+    def _update_previous_node_arrow(self, prev_idx, deleted_idx):
+        """更新前一个节点的箭头指向"""
+        if prev_idx < 0 or prev_idx >= len(self.linked_list_data_next_store):
+            return
+            
+        entry = self.linked_list_data_next_store[prev_idx]
+        prev_arrow_id = entry[1] if len(entry) > 1 else None
+        
+        if prev_arrow_id is None:
+            return
+            
+        prev_node_x = self.linked_list_position[prev_idx][0]
+        prev_node_y = self.linked_list_position[prev_idx][1]
+        
+        # 计算新的目标位置
+        if deleted_idx < len(self.linked_list_position):
+            # 指向被删除节点的下一个节点
+            next_node_x = self.linked_list_position[deleted_idx][0] + 75
+            next_node_y = self.linked_list_position[deleted_idx][1] + 15
+        else:
+            # 如果删除的是最后一个节点，指向NULL
+            next_node_x = prev_node_x + 115
+            next_node_y = prev_node_y + 15
+        
+        # 更新箭头为直线
+        try:
+            self.canvas_make.coords(prev_arrow_id, 
+                                   prev_node_x+75, prev_node_y+15,
+                                   next_node_x, next_node_y)
+            
+            # 短暂高亮新箭头
+            original_color = self.canvas_make.itemcget(prev_arrow_id, "fill")
+            self.canvas_make.itemconfig(prev_arrow_id, width=5, fill="green")
+            self.window.update()
+            time.sleep(0.3)
+            self.canvas_make.itemconfig(prev_arrow_id, width=3, fill=original_color)
+            
+        except Exception as e:
+            print(f"更新箭头失败: {e}")
 
     def _shift_nodes_left(self, start_idx):
         """将start_idx开始的节点左移，保持间距 - 修复版本"""

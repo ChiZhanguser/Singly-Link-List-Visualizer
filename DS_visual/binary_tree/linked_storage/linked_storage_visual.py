@@ -29,12 +29,17 @@ class BinaryTreeVisualizer:
         self.right_cell_w = self.node_w - self.left_cell_w - self.center_cell_w
         self.level_gap = 100
         self.input_var = StringVar()
-        self.dsl_var = StringVar()  # 新增：DSL输入框变量
+        self.dsl_var = StringVar()
         self.batch_queue: List[str] = []
         self.animating = False
         self.status_text_id: Optional[int] = None
         self.dsl_history: List[str] = []
         self.history_index = -1
+        
+        # 遍历动画相关
+        self.traversal_animating = False
+        self.traversal_highlights: List[int] = []
+        
         self.create_controls()
         self.draw_decorations()
         self.draw_instructions()
@@ -78,20 +83,16 @@ class BinaryTreeVisualizer:
         self.canvas.tag_lower("decor")
 
     def create_controls(self):
-        # 创建主控制框架
         main_control_frame = Frame(self.window, bg="#F3F6FB")
         main_control_frame.pack(fill=X, padx=15, pady=10)
         
-        # 标题
         title_label = Label(main_control_frame, text="二叉树可视化工具", font=("Segoe UI", 16, "bold"),
                           bg="#F3F6FB", fg="#2D3748")
         title_label.pack(pady=(0, 10))
         
-        # 输入框行
         input_frame = Frame(main_control_frame, bg="#F3F6FB")
         input_frame.pack(fill=X, pady=5)
         
-        # 层序序列输入
         level_order_label = Label(input_frame, text="层序序列:", font=("Segoe UI", 11),
                                  bg="#F3F6FB", fg="#4A5568")
         level_order_label.grid(row=0, column=0, sticky=W, padx=(0, 10))
@@ -103,7 +104,6 @@ class BinaryTreeVisualizer:
         level_order_entry.insert(0, "1,2,3,#,4,#,5")
         level_order_entry.bind("<Return>", lambda e: self.build_tree_from_input())
         
-        # DSL输入
         dsl_label = Label(input_frame, text="DSL命令:", font=("Segoe UI", 11),
                          bg="#F3F6FB", fg="#4A5568")
         dsl_label.grid(row=0, column=2, sticky=W, padx=(0, 10))
@@ -117,11 +117,9 @@ class BinaryTreeVisualizer:
         dsl_entry.bind("<Up>", self.show_prev_history)
         dsl_entry.bind("<Down>", self.show_next_history)
         
-        # 配置列权重
         input_frame.columnconfigure(1, weight=1)
         input_frame.columnconfigure(3, weight=1)
         
-        # 按钮行 - 使用两行布局确保所有按钮可见
         button_frame1 = Frame(main_control_frame, bg="#F3F6FB")
         button_frame1.pack(fill=X, pady=5)
         
@@ -131,7 +129,6 @@ class BinaryTreeVisualizer:
         button_style = {"font": ("Segoe UI", 10), "width": 12, "height": 1,
                        "relief": FLAT, "bd": 0, "cursor": "hand2"}
 
-        # 第一行按钮
         build_btn = Button(button_frame1, text="一步构建", **button_style,
                           bg="#48BB78", fg="white", activebackground="#38A169",
                           command=self.build_tree_from_input)
@@ -152,7 +149,6 @@ class BinaryTreeVisualizer:
                          command=self.back_to_main)
         back_btn.pack(side=LEFT, padx=5)
 
-        # 第二行按钮
         save_btn = Button(button_frame2, text="保存树", **button_style,
                           bg="#6C9EFF", fg="white", activebackground="#4C6EF5",
                           command=self.save_tree)
@@ -163,14 +159,29 @@ class BinaryTreeVisualizer:
                           command=self.load_tree)
         load_btn.pack(side=LEFT, padx=5)
         
+        # 新增遍历动画按钮
+        preorder_btn = Button(button_frame2, text="前序遍历(动)", **button_style,
+                              bg="#9F7AEA", fg="white", activebackground="#805AD5",
+                              command=self.start_preorder_animation)
+        preorder_btn.pack(side=LEFT, padx=5)
+
+        inorder_btn = Button(button_frame2, text="中序遍历(动)", **button_style,
+                             bg="#9F7AEA", fg="white", activebackground="#805AD5",
+                             command=self.start_inorder_animation)
+        inorder_btn.pack(side=LEFT, padx=5)
+
+        postorder_btn = Button(button_frame2, text="后序遍历(动)", **button_style,
+                               bg="#9F7AEA", fg="white", activebackground="#805AD5",
+                               command=self.start_postorder_animation)
+        postorder_btn.pack(side=LEFT, padx=5)
+        
         dsl_help_btn = Button(button_frame2, text="DSL帮助", **button_style,
                          bg="#9F7AEA", fg="white", activebackground="#805AD5",
                          command=self.show_dsl_help)
         dsl_help_btn.pack(side=LEFT, padx=5)
 
-        # 提示信息
         hint_label = Label(main_control_frame, 
-                          text="提示: 使用逗号或空格分隔节点，#表示空节点。按 Enter 可执行 DSL（如：create 1 # 2 3 # 3 4 5 / clear / animate ...）",
+                          text="提示: 使用逗号或空格分隔节点,#表示空节点。按 Enter 可执行 DSL(如:preorder-anim / inorder-anim / postorder-anim ...)",
                           font=("Segoe UI", 9), bg="#F3F6FB", fg="#718096", wraplength=900, justify=LEFT)
         hint_label.pack(pady=(5, 0))
 
@@ -192,7 +203,7 @@ class BinaryTreeVisualizer:
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             title="保存树到文件"
         )
-        if not filepath:  # 用户取消了保存
+        if not filepath:
             return
             
         tree_dict = storage.tree_to_dict(self.root_node) if hasattr(storage, "tree_to_dict") else {}
@@ -203,7 +214,7 @@ class BinaryTreeVisualizer:
         payload = {"type": "tree", "tree": tree_dict, "metadata": metadata}
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
-        messagebox.showinfo("成功", f"二叉树已保存到：\n{filepath}")
+        messagebox.showinfo("成功", f"二叉树已保存到:\n{filepath}")
         self.update_status("保存成功", "#48BB78")
 
     def load_tree(self):
@@ -213,7 +224,7 @@ class BinaryTreeVisualizer:
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             title="从文件加载二叉树"
         )
-        if not filepath:  # 用户取消了加载
+        if not filepath:
             return
             
         with open(filepath, "r", encoding="utf-8") as f:
@@ -229,7 +240,7 @@ class BinaryTreeVisualizer:
         self.canvas.delete("instr")
         self.canvas.create_line(30, 42, self.canvas_width-30, 42, fill="#EEF2F7", width=1, tags=("instr",))
         self.canvas.create_text(30, 20,
-                               text="显示规则：每个节点分为3格 [left | value | right]，左右指针连接到子节点或指向NULL",
+                               text="显示规则:每个节点分为3格 [left | value | right],左右指针连接到子节点或指向NULL",
                                anchor="w", font=("Segoe UI", 10), fill="#4A5568", tags=("instr",))
         if self.status_text_id:
             self.canvas.delete(self.status_text_id)
@@ -250,9 +261,8 @@ class BinaryTreeVisualizer:
     def build_tree_from_input(self):
         text = self.input_var.get().strip()
         if not text:
-            messagebox.showinfo("提示", "请输入层序序列，例如：1,2,3,#,4,#,5")
+            messagebox.showinfo("提示", "请输入层序序列,例如:1,2,3,#,4,#,5")
             return
-        # 支持逗号或空格分隔
         parts = [p.strip() for p in re.split(r'[\s,]+', text) if p.strip() != ""]
         root, _ = BinaryTreeModel.build_from_level_order(parts)
         self.root_node = root
@@ -260,8 +270,8 @@ class BinaryTreeVisualizer:
         self.update_status("构建完成", "#48BB78")
 
     def clear_canvas(self):
-        if self.animating:
-            self.update_status("正在动画中，请稍后...", "#E53E3E")
+        if self.animating or self.traversal_animating:
+            self.update_status("正在动画中,请稍后...", "#E53E3E")
             return
         self.canvas.delete("all")
         self.node_items.clear()
@@ -285,7 +295,6 @@ class BinaryTreeVisualizer:
         start_y = 80
         self._draw_node(self.root_node, self.canvas_width/2, start_y, initial_offset)
 
-    # 坐标计算
     def compute_positions(self, root: Optional[TreeNode]) -> Dict[TreeNode, Tuple[float,float]]:
         pos: Dict[TreeNode, Tuple[float,float]] = {}
         if not root:
@@ -310,14 +319,14 @@ class BinaryTreeVisualizer:
             return
         text = self.input_var.get().strip()
         if not text:
-            messagebox.showinfo("提示", "请输入层序序列，例如：1,2,3,#,4,#,5")
+            messagebox.showinfo("提示", "请输入层序序列,例如:1,2,3,#,4,#,5")
             return
         parts = [p.strip() for p in re.split(r'[\s,]+', text) if p.strip() != ""]
         if not parts:
             return
         max_nodes = 255
         if len(parts) > max_nodes:
-            if not messagebox.askyesno("警告", f"输入节点过多（{len(parts)}），可能导致绘制重叠或卡顿，是否继续？"):
+            if not messagebox.askyesno("警告", f"输入节点过多({len(parts)}),可能导致绘制重叠或卡顿,是否继续?"):
                 return
         self.batch_queue = parts
         self.animating = True
@@ -358,7 +367,6 @@ class BinaryTreeVisualizer:
 
         temp_root, node_list = BinaryTreeModel.build_from_level_order(parts_sofar)
         target_item = node_list[-1] if node_list else None
-        # 计算目标坐标
         pos_map = self.compute_positions(temp_root)
         if target_item not in pos_map:
             self.root_node = temp_root
@@ -373,7 +381,6 @@ class BinaryTreeVisualizer:
         right = start_cx + self.node_w/2
         bottom = start_cy + self.node_h/2
 
-        # 添加阴影效果
         shadow_offset = 2
         shadow_rect = self.canvas.create_rectangle(
             left+shadow_offset, top+shadow_offset,
@@ -393,7 +400,6 @@ class BinaryTreeVisualizer:
             fill="#22543D"
         )
 
-        # 动画移动到目标位置
         steps = 30
         dx = (target_cx - start_cx) / steps
         dy = (target_cy - start_cy) / steps
@@ -414,10 +420,8 @@ class BinaryTreeVisualizer:
                     pass
                 self.root_node = temp_root
                 self.redraw_tree()
-                # 高亮父节点在新的绘制中继续显示一段时间（若存在）
                 if idx > 0:
                     parent_idx = (idx - 1) // 2
-                    # 通过 node_list 找父节点实例（注意：新的树用的是 temp_root 的节点）
                     if parent_idx < len(node_list):
                         new_parent = node_list[parent_idx]
                         if new_parent and new_parent in self.node_to_rect:
@@ -428,19 +432,16 @@ class BinaryTreeVisualizer:
                                 )
                             except Exception:
                                 pass
-                # 等短时间后继续下一步
                 self.window.after(400, lambda: self._animated_step(idx+1))
 
         step()
 
-    # 绘制单节点
     def _draw_node(self, node: TreeNode, cx: float, cy: float, offset: float):
         left = cx - self.node_w/2
         top = cy - self.node_h/2
         right = cx + self.node_w/2
         bottom = cy + self.node_h/2
 
-        # 添加阴影效果（单个节点）
         shadow_offset = 3
         shadow_rect = self.canvas.create_rectangle(
             left+shadow_offset, top+shadow_offset,
@@ -452,19 +453,16 @@ class BinaryTreeVisualizer:
             left, top, right, bottom,
             fill="#FFF", outline="#C6E4FF", width=2
         )
-        # 记录映射（TreeNode -> rect id）
         self.node_to_rect[node] = rect
         self.node_items.append(rect)
         self.node_items.append(shadow_rect)
 
-        # 分割竖线
         x1 = left + self.left_cell_w
         x2 = x1 + self.center_cell_w
         v1 = self.canvas.create_line(x1, top, x1, bottom, width=1, fill="#EDF2F7")
         v2 = self.canvas.create_line(x2, top, x2, bottom, width=1, fill="#EDF2F7")
         self.node_items += [v1, v2]
 
-        # 中间值
         self.canvas.create_text(
             (x1 + x2)/2, (top + bottom)/2,
             text=str(node.val),
@@ -478,7 +476,6 @@ class BinaryTreeVisualizer:
         child_y = cy + self.level_gap
         child_offset = max(offset/2, 20)
 
-        # 左子节点或 NULL
         if node.left:
             child_x = cx - offset
             self._draw_line_from_cell_to_child(left_center_x, bottom, child_x, child_y - self.node_h/2)
@@ -497,7 +494,6 @@ class BinaryTreeVisualizer:
             self.node_items += [rect_null, text_null]
             self._draw_line_from_cell_to_child(left_center_x, bottom, null_x, null_y - 14)
 
-        # 右子节点或 NULL
         if node.right:
             child_x = cx + offset
             self._draw_line_from_cell_to_child(right_center_x, bottom, child_x, child_y - self.node_h/2)
@@ -523,14 +519,142 @@ class BinaryTreeVisualizer:
         self.node_items += [line1, line2]
 
     def back_to_main(self):
-        if self.animating:
-            messagebox.showinfo("提示", "正在动画构建，无法返回")
+        if self.animating or self.traversal_animating:
+            messagebox.showinfo("提示", "正在动画构建,无法返回")
             return
         self.window.destroy()
 
-    # ----------------------------
+    # ===========================================
+    # 遍历动画功能
+    # ===========================================
+    
+    def start_preorder_animation(self):
+        """启动前序遍历动画"""
+        if not self.root_node:
+            messagebox.showinfo("提示", "树为空,无法遍历")
+            return
+        if self.traversal_animating or self.animating:
+            self.update_status("已有动画在进行中", "#E53E3E")
+            return
+        
+        self.traversal_animating = True
+        self.traversal_highlights = []
+        result = []
+        self._collect_preorder(self.root_node, result)
+        self.update_status("开始前序遍历动画...", "#9F7AEA")
+        self._animate_traversal(result, 0, "前序")
+    
+    def start_inorder_animation(self):
+        """启动中序遍历动画"""
+        if not self.root_node:
+            messagebox.showinfo("提示", "树为空,无法遍历")
+            return
+        if self.traversal_animating or self.animating:
+            self.update_status("已有动画在进行中", "#E53E3E")
+            return
+        
+        self.traversal_animating = True
+        self.traversal_highlights = []
+        result = []
+        self._collect_inorder(self.root_node, result)
+        self.update_status("开始中序遍历动画...", "#9F7AEA")
+        self._animate_traversal(result, 0, "中序")
+    
+    def start_postorder_animation(self):
+        """启动后序遍历动画"""
+        if not self.root_node:
+            messagebox.showinfo("提示", "树为空,无法遍历")
+            return
+        if self.traversal_animating or self.animating:
+            self.update_status("已有动画在进行中", "#E53E3E")
+            return
+        
+        self.traversal_animating = True
+        self.traversal_highlights = []
+        result = []
+        self._collect_postorder(self.root_node, result)
+        self.update_status("开始后序遍历动画...", "#9F7AEA")
+        self._animate_traversal(result, 0, "后序")
+    
+    def _collect_preorder(self, node: TreeNode, result: List[TreeNode]):
+        """收集前序遍历节点顺序"""
+        if node:
+            result.append(node)
+            self._collect_preorder(node.left, result)
+            self._collect_preorder(node.right, result)
+    
+    def _collect_inorder(self, node: TreeNode, result: List[TreeNode]):
+        """收集中序遍历节点顺序"""
+        if node:
+            self._collect_inorder(node.left, result)
+            result.append(node)
+            self._collect_inorder(node.right, result)
+    
+    def _collect_postorder(self, node: TreeNode, result: List[TreeNode]):
+        """收集后序遍历节点顺序"""
+        if node:
+            self._collect_postorder(node.left, result)
+            self._collect_postorder(node.right, result)
+            result.append(node)
+    
+    def _animate_traversal(self, nodes: List[TreeNode], idx: int, traversal_name: str):
+        """执行遍历动画的单步"""
+        if idx >= len(nodes):
+            # 动画结束
+            self.traversal_animating = False
+            # 清除所有高亮
+            for rect_id in self.traversal_highlights:
+                try:
+                    # 恢复到普通节点的颜色 (假设是白色背景, 蓝色边框)
+                    self.canvas.itemconfig(rect_id, fill="#FFF", outline="#C6E4FF", width=2)
+                except:
+                    pass
+            self.traversal_highlights.clear()
+            
+            # 显示完整结果
+            result_str = " -> ".join([str(n.val) for n in nodes])
+            self.update_status(f"{traversal_name}遍历完成", "#48BB78")
+            messagebox.showinfo(f"{traversal_name}遍历结果", f"遍历序列:\n{result_str}")
+            return
+        
+        current_node = nodes[idx]
+        
+        # 取消上一个节点的高亮
+        if idx > 0 and self.traversal_highlights:
+            # 只取消上一个节点的高亮（即倒数第二个，因为最后一个是当前节点的高亮）
+            prev_rect = self.node_to_rect.get(nodes[idx-1])
+            if prev_rect:
+                try:
+                    # 将上一个高亮过的节点改为'已访问'颜色 (例如浅蓝色)
+                    self.canvas.itemconfig(prev_rect, fill="#E6F7FF", outline="#91D5FF", width=2)
+                except:
+                    pass
+        
+        # 高亮当前节点
+        if current_node in self.node_to_rect:
+            rect_id = self.node_to_rect[current_node]
+            # 记录下当前高亮的 rect_id，但为了防止重复高亮/清除，这里仅用 rect_id 查找
+            # 每次动画步骤不追加到 self.traversal_highlights，而是在结束后统一清除。
+            # 为了实现'已访问'和'当前访问'的区别，我们直接修改颜色。
+            try:
+                # 设置当前访问节点为'当前访问'颜色 (例如黄色)
+                self.canvas.itemconfig(rect_id, fill="#FFF59D", outline="#F57C00", width=3)
+                # 将当前节点的 rect_id 记录下来，用于结束时恢复颜色
+                if rect_id not in self.traversal_highlights:
+                     self.traversal_highlights.append(rect_id)
+            except:
+                pass
+            
+            # 更新状态文本
+            visited = " -> ".join([str(nodes[i].val) for i in range(idx + 1)])
+            self.update_status(f"{traversal_name}遍历: {visited}", "#9F7AEA")
+        
+        # 继续下一步
+        self.window.after(800, lambda: self._animate_traversal(nodes, idx + 1, traversal_name))
+
+    # ===========================================
     # DSL 历史记录功能
-    # ----------------------------
+    # ===========================================
     def add_to_history(self, command: str):
         """添加命令到历史记录"""
         if command and (not self.dsl_history or self.dsl_history[-1] != command):
@@ -556,45 +680,51 @@ class BinaryTreeVisualizer:
             self.history_index = len(self.dsl_history)
             self.dsl_var.set("")
 
-    # ----------------------------
-    # 简化的 DSL 支持
-    # ----------------------------
+    # ===========================================
+    # DSL 命令处理
+    # ===========================================
     def show_dsl_help(self):
         """显示DSL帮助信息"""
         help_text = """
-DSL (Domain Specific Language) 命令帮助：
+DSL (Domain Specific Language) 命令帮助:
 
-基础命令：
-  create <序列>    - 逐步动画按层序构建树
-  build <序列>     - 一步构建树
-  animate <序列>   - 逐步动画构建树
+基础命令:
+  create <序列>       - 逐步动画按层序构建树
+  build <序列>        - 一步构建树
+  animate <序列>      - 逐步动画构建树
 
-遍历命令：
-  preorder         - 显示前序遍历结果
-  inorder          - 显示中序遍历结果  
-  postorder        - 显示后序遍历结果
-  levelorder       - 显示层序遍历结果
+遍历命令(显示结果):
+  preorder            - 显示前序遍历结果
+  inorder             - 显示中序遍历结果  
+  postorder           - 显示后序遍历结果
+  levelorder          - 显示层序遍历结果
 
-实用命令：
-  clear / reset    - 清空画布
-  height           - 计算并显示树的高度
-  count            - 计算并显示节点数量
+遍历动画命令:
+  preorder-anim       - 前序遍历动画演示
+  inorder-anim        - 中序遍历动画演示
+  postorder-anim      - 后序遍历动画演示
 
-说明：
-  - 序列支持用逗号或空格分隔节点，使用 '#' 表示空节点
+实用命令:
+  clear / reset       - 清空画布
+  height              - 计算并显示树的高度
+  count               - 计算并显示节点数量
+
+说明:
+  - 序列支持用逗号或空格分隔节点,使用 '#' 表示空节点
   - 按上下箭头键可浏览命令历史记录
+  - 遍历动画会逐个高亮访问的节点
         """
         messagebox.showinfo("DSL 命令帮助", help_text)
 
     def process_dsl(self, event=None):
-        raw = (self.dsl_var.get() or "").strip()  # 改为使用dsl_var
+        raw = (self.dsl_var.get() or "").strip()
         if not raw:
             return
         
         # 添加到历史记录
         self.add_to_history(raw)
         
-        # 将命令拆分：允许用空格或逗号分隔节点，命令与其参数也可用空格分隔
+        # 将命令拆分:允许用空格或逗号分隔节点,命令与其参数也可用空格分隔
         parts = [p for p in re.split(r'[\s,]+', raw) if p != ""]
         if not parts:
             return
@@ -605,10 +735,10 @@ DSL (Domain Specific Language) 命令帮助：
             # 🌳 树构建命令
             if cmd in ("create", "animate"):
                 if not args:
-                    messagebox.showinfo("用法", "示例: create 1 # 2 3 # 3 4 5 （用空格或逗号分隔，# 表示空）")
+                    messagebox.showinfo("用法", "示例: create 1 # 2 3 # 3 4 5 (用空格或逗号分隔,# 表示空)")
                     return
                 seq_text = " ".join(args)
-                self.input_var.set(seq_text)  # 设置到层序序列输入框
+                self.input_var.set(seq_text)
                 self.start_animated_build()
                 
             elif cmd == "build":
@@ -616,10 +746,10 @@ DSL (Domain Specific Language) 命令帮助：
                     messagebox.showinfo("用法", "示例: build 1 # 2 3 # 3 4 5")
                     return
                 seq_text = " ".join(args)
-                self.input_var.set(seq_text)  # 设置到层序序列输入框
+                self.input_var.set(seq_text)
                 self.build_tree_from_input()
 
-            # 📊 遍历命令
+            # 📊 遍历命令(静态显示)
             elif cmd == "preorder":
                 self.show_traversal("preorder")
             elif cmd == "inorder":
@@ -628,6 +758,14 @@ DSL (Domain Specific Language) 命令帮助：
                 self.show_traversal("postorder")
             elif cmd == "levelorder":
                 self.show_traversal("levelorder")
+            
+            # 🎬 遍历动画命令
+            elif cmd in ("preorder-anim", "preorder-animate"):
+                self.start_preorder_animation()
+            elif cmd in ("inorder-anim", "inorder-animate"):
+                self.start_inorder_animation()
+            elif cmd in ("postorder-anim", "postorder-animate"):
+                self.start_postorder_animation()
 
             # 🎨 显示控制命令
             elif cmd in ("clear", "reset"):
@@ -654,9 +792,9 @@ DSL (Domain Specific Language) 命令帮助：
             messagebox.showerror("DSL 执行错误", f"命令执行失败: {e}")
             self.update_status("DSL 错误", "#E53E3E")
 
-    # ----------------------------
+    # ===========================================
     # DSL 命令的具体实现
-    # ----------------------------
+    # ===========================================
     
     def show_tree_height(self):
         """显示树的高度"""
@@ -748,7 +886,7 @@ DSL (Domain Specific Language) 命令帮助：
 if __name__ == '__main__':
     window = Tk()
     window.title("二叉树可视化工具")
-    window.geometry("1350x800")  # 增加窗口高度
+    window.geometry("1350x800")
     window.configure(bg="#F3F6FA")
     BinaryTreeVisualizer(window)
     window.mainloop()

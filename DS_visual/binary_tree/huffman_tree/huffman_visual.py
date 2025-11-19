@@ -41,6 +41,15 @@ class HuffmanVisualizer:
         self.heap_tree.column("before", width=140, anchor="w")
         self.heap_tree.column("after", width=140, anchor="w")
         self.heap_tree.pack(padx=8, pady=4, fill=Y)
+        
+        # 添加步骤说明框
+        steps_frame = Frame(right_frame, bg="#F0F4F8")
+        steps_frame.pack(fill=BOTH, expand=True, pady=(10,0))
+        Label(steps_frame, text="构建步骤说明", bg="#F0F4F8", fg="#0B2545", font=("Arial", 11, "bold")).pack(anchor="nw", padx=8)
+        self.steps_text = Text(steps_frame, height=10, width=35, font=("Arial", 10), wrap=WORD, bg="#FFFFFF", fg="#0B2545")
+        self.steps_text.pack(fill=BOTH, expand=True, padx=8, pady=5)
+        self.steps_text.config(state=DISABLED)
+        
         bottom_right = Frame(right_frame, bg="#F0F4F8")
         bottom_right.pack(side=BOTTOM, fill=X, pady=8)
         Button(bottom_right, text="清空", command=self.clear_canvas, bg="#FFB74D").pack(side=LEFT, padx=6)
@@ -66,7 +75,7 @@ class HuffmanVisualizer:
         self.input_var = StringVar()
         self.entry = Entry(ctrl_frame, textvariable=self.input_var, width=36, font=("Arial",11))
         self.entry.pack(side=LEFT, padx=6)
-        self.entry.insert(0, "1,2,3,4")
+        self.entry.insert(0, "1,2,3,4,5")
         Button(ctrl_frame, text="逐步动画构建", command=self.start_animated_build, bg="#2E8B57", fg="white").pack(side=LEFT, padx=6)
 
         Button(ctrl_frame, text="保存 Huffman", command=self.save_tree, bg="#6C9EFF", fg="white").pack(side=LEFT, padx=6)
@@ -80,6 +89,11 @@ class HuffmanVisualizer:
         self.dsl_entry.bind("<Return>", lambda e: self._on_dsl_submit())
 
         self.status_id = None
+        self.selection_circles = []  # 用于存储选择圆圈
+        self.node_labels = {}  # 存储节点标签映射
+        self.current_step = 0  # 当前步骤
+        self.huffman_codes = {}  # 存储Huffman编码
+        self.initial_weights = []  # 存储初始权值
         self._draw_instructions()
 
     def _draw_instructions(self):
@@ -108,6 +122,13 @@ class HuffmanVisualizer:
             self.canvas.itemconfig(self.status_id, text=txt)
         else:
             self.status_id = self.canvas.create_text(self.canvas_w - 12, 12, anchor="ne", text=txt, font=("Arial",11,"bold"), fill="#0B2545")
+
+    def update_steps_text(self, txt: str):
+        """更新步骤说明文本"""
+        self.steps_text.config(state=NORMAL)
+        self.steps_text.delete(1.0, END)
+        self.steps_text.insert(END, txt)
+        self.steps_text.config(state=DISABLED)
 
     def _tree_clear(self):
         for iid in self.heap_tree.get_children():
@@ -159,6 +180,7 @@ class HuffmanVisualizer:
         
     def _ensure_huffman_folder(self) -> str:
         return storage.ensure_save_subdir("huffman")
+    
     def save_tree(self):
         weights = self.parse_input()
         positions = {"leaves": [], "parents": []}
@@ -246,12 +268,15 @@ class HuffmanVisualizer:
             else:
                 cx = start_x + i * (self.node_w + self.gap_x)
                 cy = self.base_y
+            # 原始叶子节点用方形
             rect = self.canvas.create_rectangle(cx - self.node_w/2, cy - self.node_h/2,
                                                 cx + self.node_w/2, cy + self.node_h/2,
                                                 fill="#E8F8F0", outline="#88C7A3", width=2)
-            txt = self.canvas.create_text(cx, cy, text=self._fmt_num(w), font=("Arial",12,"bold"), fill="#0B2545")
+            # 为叶子节点添加字母标签
+            label = chr(65 + i)  # A, B, C, D...
+            txt = self.canvas.create_text(cx, cy, text=f"{label}:{self._fmt_num(w)}", font=("Arial",12,"bold"), fill="#0B2545")
             # 存放 leaf mapping（注意：later we may map child node.id -> this visual）
-            self.node_vis[("leaf", i)] = {'cx': cx, 'cy': cy, 'rect': rect, 'text': txt, 'merged': False, 'weight': float(w)}
+            self.node_vis[("leaf", i)] = {'cx': cx, 'cy': cy, 'rect': rect, 'text': txt, 'merged': False, 'weight': float(w), 'label': label}
 
         # 绘制父节点（按 steps 顺序），优先使用 parent_pos_list 中的坐标
         for i, (a, b, p) in enumerate(steps):
@@ -276,13 +301,17 @@ class HuffmanVisualizer:
                 else:
                     tx = self.canvas_w/2
                     ty = self.base_y - (i+1) * self.level_gap
-            self._create_node_visual(p, tx, ty)
+            # 合并的父节点用圆形，只显示权值
+            self._create_node_visual(p, tx, ty, is_leaf=False)
             self._link_parent_child(p, a)
             self._link_parent_child(p, b)
             self._mark_merged(a)
             self._mark_merged(b)
             if i < len(snaps_after):
                 self._tree_set_after(i, snaps_after[i])
+        
+        # 计算并显示Huffman编码
+        self._calculate_huffman_codes()
         self.update_status("已通过权值恢复 Huffman（如有保存的视觉坐标则使用之）")
         messagebox.showinfo("成功", f"已通过权值恢复 Huffman（共 {len(weights)} 个初始权值）")
         
@@ -294,6 +323,9 @@ class HuffmanVisualizer:
             return
         self.model = HuffmanModel()
         self.node_vis.clear()
+        self.node_labels.clear()
+        self.huffman_codes.clear()
+        self.initial_weights = nums.copy()  # 保存初始权值
         self.canvas.delete("all")
         self._draw_subtle_grid()
         self._draw_instructions()
@@ -312,6 +344,7 @@ class HuffmanVisualizer:
             self.animating = False
             return
         self.animating = True
+        self.current_step = 0
         self._animate_step(0)
 
     def _animate_step(self, idx: int):
@@ -321,15 +354,83 @@ class HuffmanVisualizer:
             if self.snap_after:
                 self._tree_set_after(len(self.steps)-1, self.snap_after[-1])
                 self._tree_highlight(len(self.steps)-1)
+            
+            # 计算并显示Huffman编码
+            self._calculate_huffman_codes()
             return
 
+        # 清除之前的选择圆圈
+        for circle in self.selection_circles:
+            self.canvas.delete(circle)
+        self.selection_circles = []
+
         a, b, p = self.steps[idx]
-        self.update_status(f"步骤 {idx+1}/{len(self.steps)} ： 合并 {self._fmt_num(a.weight)} 与 {self._fmt_num(b.weight)} -> {self._fmt_num(p.weight)}")
+        self.current_step = idx
+        
+        # 更新步骤说明
+        step_text = f"步骤 {idx+1}/{len(self.steps)}：\n\n"
+        step_text += f"1. 查找当前堆中最小的两个节点：\n"
+        step_text += f"   - 最小节点: {self._get_node_label(a)} (权值: {self._fmt_num(a.weight)})\n"
+        step_text += f"   - 次小节点: {self._get_node_label(b)} (权值: {self._fmt_num(b.weight)})\n\n"
+        step_text += f"2. 合并这两个节点，生成新节点:\n"
+        step_text += f"   - 新节点权值: {self._fmt_num(a.weight)} + {self._fmt_num(b.weight)} = {self._fmt_num(p.weight)}\n\n"
+        step_text += f"3. 从堆中移除这两个节点，添加新节点\n"
+        
+        self.update_steps_text(step_text)
+        self.update_status(f"步骤 {idx+1}/{len(self.steps)}：查找堆中最小的两个节点...")
         self._tree_highlight(idx)
 
-        self._highlight_node(a, "yellow")  
-        self._highlight_node(b, "yellow")
+        # 第一步：高亮显示被选中的两个最小节点
+        self._highlight_node(a, "#FFE0B2")  # 橙色高亮 - 当前选中的最小节点
+        self._highlight_node(b, "#FFE0B2")  # 橙色高亮 - 当前选中的次小节点
+        
+        # 为选中的节点添加选择圆圈 - 用不同颜色区分
+        va = self.node_vis.get(a.id)
+        vb = self.node_vis.get(b.id)
+        if va:
+            circle_a = self.canvas.create_oval(
+                va['cx'] - self.node_w/2 - 5, va['cy'] - self.node_h/2 - 5,
+                va['cx'] + self.node_w/2 + 5, va['cy'] + self.node_h/2 + 5,
+                outline="#FF5722", width=3, dash=(5,2)  # 红色 - 当前最小节点
+            )
+            self.selection_circles.append(circle_a)
+        if vb:
+            circle_b = self.canvas.create_oval(
+                vb['cx'] - self.node_w/2 - 5, vb['cy'] - self.node_h/2 - 5,
+                vb['cx'] + self.node_w/2 + 5, vb['cy'] + self.node_h/2 + 5,
+                outline="#2196F3", width=3, dash=(5,2)  # 蓝色 - 当前次小节点
+            )
+            self.selection_circles.append(circle_b)
 
+        # 延迟显示合并信息
+        self.window.after(1500, lambda: self._show_merge_info(idx, a, b, p))
+
+    def _get_node_label(self, node: HuffmanNode) -> str:
+        """获取节点的标签显示"""
+        # 如果是叶子节点
+        for k, v in self.node_vis.items():
+            if isinstance(k, tuple) and k[0] == "leaf" and abs(v['weight'] - node.weight) < 1e-9:
+                return v.get('label', str(node.weight))
+        
+        # 如果是已创建的父节点
+        if node.id in self.node_labels:
+            return self.node_labels[node.id]
+        
+        # 默认返回权值
+        return str(node.weight)
+
+    def _show_merge_info(self, idx: int, a: HuffmanNode, b: HuffmanNode, p: HuffmanNode):
+        step_text = f"步骤 {idx+1}/{len(self.steps)}：\n\n"
+        step_text += f"1. 已找到最小两个节点：\n"
+        step_text += f"   - {self._get_node_label(a)} (权值: {self._fmt_num(a.weight)})\n"
+        step_text += f"   - {self._get_node_label(b)} (权值: {self._fmt_num(b.weight)})\n\n"
+        step_text += f"2. 正在合并这两个节点...\n"
+        step_text += f"   - 新节点权值: {self._fmt_num(a.weight)} + {self._fmt_num(b.weight)} = {self._fmt_num(p.weight)}\n\n"
+        step_text += f"3. 生成新节点并更新堆\n"
+        
+        self.update_steps_text(step_text)
+        self.update_status(f"步骤 {idx+1}/{len(self.steps)}：合并 {self._get_node_label(a)} 与 {self._get_node_label(b)} → {self._fmt_num(p.weight)}")
+        
         va = self.node_vis.get(a.id)
         vb = self.node_vis.get(b.id)
         if va and vb:
@@ -339,52 +440,92 @@ class HuffmanVisualizer:
             tx = self.canvas_w/2
             ty = self.base_y - (idx+1)*self.level_gap
 
-        # temp parent fly-in
+        # 第二步：创建并动画显示新的父节点
+        self._create_animated_parent(p, tx, ty, a, b, idx)
+
+    def _create_animated_parent(self, p: HuffmanNode, tx: float, ty: float, a: HuffmanNode, b: HuffmanNode, idx: int):
+        # 为父节点生成标签（仅用于说明，不在节点上显示）
+        label_a = self._get_node_label(a)
+        label_b = self._get_node_label(b)
+        parent_label = f"{label_a}{label_b}"
+        self.node_labels[p.id] = parent_label
+        
+        # 临时父节点从上方飞入
         temp_cx = self.canvas_w/2
         temp_cy = 20
-        temp_rect = self.canvas.create_rectangle(temp_cx - self.node_w/2, temp_cy - self.node_h/2,
-                                                 temp_cx + self.node_w/2, temp_cy + self.node_h/2,
-                                                 fill="#C6F6D5", outline="black", width=2)
-        temp_text = self.canvas.create_text(temp_cx, temp_cy, text=self._fmt_num(p.weight), font=("Arial",12,"bold"))
+        
+        # 使用圆形表示合并的节点，只显示权值
+        temp_circle = self.canvas.create_oval(temp_cx - self.node_w/2, temp_cy - self.node_h/2,
+                                             temp_cx + self.node_w/2, temp_cy + self.node_h/2,
+                                             fill="#C6F6D5", outline="#2E8B57", width=2)
+        # 只显示权值，不显示标签
+        temp_text = self.canvas.create_text(temp_cx, temp_cy, text=self._fmt_num(p.weight), 
+                                           font=("Arial",12,"bold"), fill="#0B2545")
 
-        steps_move = 28
+        steps_move = 30
         dx = (tx - temp_cx)/steps_move
         dy = (ty - temp_cy)/steps_move
-        delay = 14
+        delay = 20  # 稍微减慢动画速度
 
         def move_step(i=0):
             if i < steps_move:
                 try:
-                    self.canvas.move(temp_rect, dx, dy)
+                    self.canvas.move(temp_circle, dx, dy)
                     self.canvas.move(temp_text, dx, dy)
                 except Exception:
                     pass
                 self.window.after(delay, lambda: move_step(i+1))
             else:
                 try:
-                    self.canvas.delete(temp_rect)
+                    self.canvas.delete(temp_circle)
                     self.canvas.delete(temp_text)
                 except Exception:
                     pass
-                self._create_node_visual(p, tx, ty)
-                self._link_parent_child(p, a)
-                self._link_parent_child(p, b)
-                self._mark_merged(a)
-                self._mark_merged(b)
-                # 更新 Treeview 的 After 列
-                if idx < len(self.snap_after):
-                    self._tree_set_after(idx, self.snap_after[idx])
-                self._tree_highlight(idx)
-                # 下一步
-                self.window.after(520, lambda: self._animate_step(idx+1))
+                # 创建最终的父节点（圆形），只显示权值
+                self._create_node_visual(p, tx, ty, is_leaf=False)
+                # 延迟显示连接线
+                self.window.after(300, lambda: self._create_connections(p, a, b, idx))
 
         move_step()
+
+    def _create_connections(self, p: HuffmanNode, a: HuffmanNode, b: HuffmanNode, idx: int):
+        # 创建连接线
+        self._link_parent_child(p, a)
+        self.window.after(200, lambda: self._link_parent_child(p, b))
+        
+        # 标记节点为已合并
+        self.window.after(400, lambda: self._mark_merged(a))
+        self.window.after(500, lambda: self._mark_merged(b))
+        
+        # 更新 Treeview 的 After 列
+        if idx < len(self.snap_after):
+            self.window.after(600, lambda: self._tree_set_after(idx, self.snap_after[idx]))
+        
+        # 更新步骤说明
+        step_text = f"步骤 {idx+1}/{len(self.steps)}：完成！\n\n"
+        step_text += f"✓ 已合并节点 {self._get_node_label(a)} 和 {self._get_node_label(b)}\n"
+        step_text += f"✓ 生成新节点 (权值: {self._fmt_num(p.weight)})\n"
+        step_text += f"✓ 更新堆状态：{', '.join([self._fmt_num(x) for x in self.snap_after[idx]])}\n\n"
+        if idx + 1 < len(self.steps):
+            step_text += f"准备进行下一步合并..."
+        
+        self.update_steps_text(step_text)
+        
+        # 清除选择圆圈
+        self.window.after(700, lambda: [self.canvas.delete(circle) for circle in self.selection_circles])
+        self.selection_circles = []
+        
+        # 进行下一步
+        self.window.after(1000, lambda: self._animate_step(idx+1))
 
     def draw_initial_leaves(self, weights: List[float]):
         self.canvas.delete("all")
         self._draw_subtle_grid()
         self._draw_instructions()
         self.node_vis.clear()
+        self.node_labels.clear()
+        self.huffman_codes.clear()
+        self.initial_weights = weights.copy()  # 保存初始权值
 
         n = len(weights)
         total_w = n * self.node_w + max(0, (n-1) * self.gap_x)
@@ -392,16 +533,54 @@ class HuffmanVisualizer:
         for i, w in enumerate(weights):
             cx = start_x + i * (self.node_w + self.gap_x)
             cy = self.base_y
-            rect = self.canvas.create_rectangle(cx - self.node_w/2, cy - self.node_h/2, cx + self.node_w/2, cy + self.node_h/2,
-                                                fill="#E8F8F0", outline="#88C7A3", width=2)
-            txt = self.canvas.create_text(cx, cy, text=self._fmt_num(w), font=("Arial",12,"bold"), fill="#0B2545")
-            self.node_vis[("leaf", i)] = {'cx':cx, 'cy':cy, 'rect':rect, 'text':txt, 'merged':False, 'weight': float(w)}
+            # 原始叶子节点用方形
+            rect = self.canvas.create_rectangle(cx - self.node_w/2, cy - self.node_h/2, 
+                                               cx + self.node_w/2, cy + self.node_h/2,
+                                               fill="#E8F8F0", outline="#88C7A3", width=2)
+            # 为叶子节点添加字母标签
+            label = chr(65 + i)  # A, B, C, D...
+            txt = self.canvas.create_text(cx, cy, text=f"{label}:{self._fmt_num(w)}", 
+                                         font=("Arial",12,"bold"), fill="#0B2545")
+            self.node_vis[("leaf", i)] = {'cx':cx, 'cy':cy, 'rect':rect, 'text':txt, 
+                                         'merged':False, 'weight': float(w), 'label': label}
+        
+        # 显示初始说明
+        init_text = "Huffman树构建开始！\n\n"
+        init_text += f"初始权值: {', '.join([self._fmt_num(w) for w in weights])}\n"
+        init_text += f"为每个权值分配字母标签: {', '.join([f'{chr(65+i)}:{self._fmt_num(w)}' for i, w in enumerate(weights)])}\n\n"
+        init_text += "构建过程：\n"
+        init_text += "1. 重复选择权值最小的两个节点\n"
+        init_text += "2. 合并它们，生成父节点（权值为两者之和）\n"
+        init_text += "3. 将父节点加入堆中，重复直到只剩一个节点\n"
+        self.update_steps_text(init_text)
 
-    def _create_node_visual(self, node: HuffmanNode, cx: float, cy: float):
-        rect = self.canvas.create_rectangle(cx - self.node_w/2, cy - self.node_h/2, cx + self.node_w/2, cy + self.node_h/2,
-                                           fill="#FFFFFF", outline="#7DA7E0", width=2)
-        txt = self.canvas.create_text(cx, cy, text=self._fmt_num(node.weight), font=("Arial",12,"bold"), fill="#0B2545")
-        self.node_vis[node.id] = {'cx':cx, 'cy':cy, 'rect':rect, 'text':txt, 'merged':False, 'weight': node.weight, 'node_obj': node}
+    def _create_node_visual(self, node: HuffmanNode, cx: float, cy: float, is_leaf: bool = True):
+        if is_leaf:
+            # 叶子节点用方形，显示标签和权值
+            shape = self.canvas.create_rectangle(cx - self.node_w/2, cy - self.node_h/2,
+                                               cx + self.node_w/2, cy + self.node_h/2,
+                                               fill="#E8F8F0", outline="#88C7A3", width=2)
+            # 查找叶子节点的标签
+            label = None
+            for k, v in self.node_vis.items():
+                if isinstance(k, tuple) and k[0] == "leaf" and abs(v['weight'] - node.weight) < 1e-9:
+                    label = v.get('label')
+                    break
+            
+            # 叶子节点显示标签和权值
+            display_text = f"{label}:{self._fmt_num(node.weight)}" if label else self._fmt_num(node.weight)
+        else:
+            # 合并节点用圆形，只显示权值
+            shape = self.canvas.create_oval(cx - self.node_w/2, cy - self.node_h/2,
+                                          cx + self.node_w/2, cy + self.node_h/2,
+                                          fill="#FFFFFF", outline="#7DA7E0", width=2)
+            # 合并节点只显示权值
+            display_text = self._fmt_num(node.weight)
+        
+        txt = self.canvas.create_text(cx, cy, text=display_text, 
+                                     font=("Arial",12,"bold"), fill="#0B2545")
+        self.node_vis[node.id] = {'cx':cx, 'cy':cy, 'rect':shape, 'text':txt, 
+                                 'merged':False, 'weight': node.weight, 'node_obj': node}
         
     def _link_parent_child(self, parent: HuffmanNode, child: HuffmanNode):
         pvis = self.node_vis.get(parent.id)
@@ -416,11 +595,125 @@ class HuffmanVisualizer:
                         break
         if not pvis or not cvis:
             return
+            
         sx = pvis['cx']; sy = pvis['cy'] + self.node_h/2
         ex = cvis['cx']; ey = cvis['cy'] - self.node_h/2
         midy = (sy + ey) / 2
+        
+        # 根据坐标位置确定左右关系
+        # 如果子节点在父节点的左侧，标记为0（左分支）
+        # 如果子节点在父节点的右侧，标记为1（右分支）
+        is_left = ex < sx
+        
+        # 绘制连接线
         l1 = self.canvas.create_line(sx, sy, sx, midy, fill="#9FB9D9", width=2)
         l2 = self.canvas.create_line(sx, midy, ex, ey, arrow=LAST, fill="#9FB9D9", width=2)
+        
+        # 在连接线旁边添加编码标记 (左0右1)
+        code_mark_x = (sx + ex) / 2
+        code_mark_y = midy - 15
+        code_text = "0" if is_left else "1"
+        self.canvas.create_text(code_mark_x, code_mark_y, text=code_text, 
+                               font=("Arial", 10, "bold"), fill="#FF5722")
+
+    def _calculate_huffman_codes(self):
+        """计算Huffman编码并显示结果"""
+        if not self.model.root:
+            return
+            
+        # 使用坐标位置来确定左右关系，而不是依赖树结构
+        def traverse_by_position(node, code, codes):
+            if node is None:
+                return
+                
+            # 如果是叶子节点，记录编码
+            if node.left is None and node.right is None:
+                # 找到对应的标签
+                label = None
+                for k, v in self.node_vis.items():
+                    if isinstance(k, tuple) and k[0] == "leaf" and abs(v['weight'] - node.weight) < 1e-9:
+                        label = v.get('label')
+                        break
+                if label:
+                    codes[label] = code if code else "0"  # 处理只有一个节点的情况
+                return
+            
+            # 找到左右子节点的可视化信息
+            left_child = None
+            right_child = None
+            
+            if node.left:
+                left_child = self.node_vis.get(node.left.id)
+            if node.right:
+                right_child = self.node_vis.get(node.right.id)
+            
+            # 如果无法通过ID找到，尝试通过权值匹配
+            if not left_child and node.left:
+                for k, v in self.node_vis.items():
+                    if abs(v['weight'] - node.left.weight) < 1e-9:
+                        left_child = v
+                        break
+            if not right_child and node.right:
+                for k, v in self.node_vis.items():
+                    if abs(v['weight'] - node.right.weight) < 1e-9:
+                        right_child = v
+                        break
+            
+            # 根据坐标位置确定左右关系
+            if left_child and right_child:
+                # 比较x坐标，较小的在左边
+                if left_child['cx'] < right_child['cx']:
+                    # left_child确实是左节点
+                    traverse_by_position(node.left, code + "0", codes)
+                    traverse_by_position(node.right, code + "1", codes)
+                else:
+                    # 坐标位置与树结构不一致，按坐标位置确定编码
+                    traverse_by_position(node.right, code + "0", codes)
+                    traverse_by_position(node.left, code + "1", codes)
+            elif left_child:
+                # 只有左孩子
+                traverse_by_position(node.left, code + "0", codes)
+            elif right_child:
+                # 只有右孩子
+                traverse_by_position(node.right, code + "1", codes)
+        
+        self.huffman_codes = {}
+        traverse_by_position(self.model.root, "", self.huffman_codes)
+        
+        # 计算平均码长
+        total_weight = 0
+        weighted_code_length = 0
+        
+        # 使用初始权值计算平均码长
+        for i, w in enumerate(self.initial_weights):
+            label = chr(65 + i)  # A, B, C, D...
+            code = self.huffman_codes.get(label, "")
+            total_weight += w
+            weighted_code_length += w * len(code)
+        
+        average_length = weighted_code_length / total_weight if total_weight > 0 else 0
+        
+        # 显示结果
+        final_text = "Huffman树构建完成！\n\n"
+        final_text += "最终生成的Huffman树可以用于编码：\n"
+        final_text += "- 左分支编码为0\n"
+        final_text += "- 右分支编码为1\n"
+        final_text += "\n每个叶子节点的Huffman编码：\n"
+        
+        for i, w in enumerate(self.initial_weights):
+            label = chr(65 + i)  # A, B, C, D...
+            code = self.huffman_codes.get(label, "")
+            final_text += f"  {label} (权值: {self._fmt_num(w)}) -> {code}\n"
+        
+        final_text += f"\n平均码长: {average_length:.4f}\n"
+        final_text += f"总权值: {self._fmt_num(total_weight)}\n"
+        
+        self.update_steps_text(final_text)
+        
+        # 在画布上显示编码结果
+        self.canvas.create_text(self.canvas_w/2, 30, 
+                               text=f"Huffman编码完成 - 平均码长: {average_length:.4f}", 
+                               font=("Arial", 12, "bold"), fill="#2E8B57")
 
     def _highlight_node(self, node: HuffmanNode, color: str):
         v = self.node_vis.get(node.id)
@@ -451,6 +744,9 @@ class HuffmanVisualizer:
         if self.animating:
             return
         self.node_vis.clear()
+        self.node_labels.clear()
+        self.huffman_codes.clear()
+        self.initial_weights = []
         self.model = HuffmanModel()
         self.steps = []
         self.snap_before = []
@@ -458,7 +754,12 @@ class HuffmanVisualizer:
         self._draw_subtle_grid()
         self._draw_instructions()
         self._tree_clear()
+        # 清除选择圆圈
+        for circle in self.selection_circles:
+            self.canvas.delete(circle)
+        self.selection_circles = []
         self.update_status("已清空")
+        self.update_steps_text("")
 
     def back_to_main(self):
         if self.animating:
