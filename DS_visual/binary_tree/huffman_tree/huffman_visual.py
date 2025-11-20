@@ -621,8 +621,8 @@ class HuffmanVisualizer:
         if not self.model.root:
             return
             
-        # 使用坐标位置来确定左右关系，而不是依赖树结构
-        def traverse_by_position(node, code, codes):
+        # 使用树结构本身来确定左右关系
+        def traverse_tree(node, code, codes):
             if node is None:
                 return
                 
@@ -638,47 +638,14 @@ class HuffmanVisualizer:
                     codes[label] = code if code else "0"  # 处理只有一个节点的情况
                 return
             
-            # 找到左右子节点的可视化信息
-            left_child = None
-            right_child = None
-            
+            # 直接使用树结构的左右关系
             if node.left:
-                left_child = self.node_vis.get(node.left.id)
+                traverse_tree(node.left, code + "0", codes)
             if node.right:
-                right_child = self.node_vis.get(node.right.id)
-            
-            # 如果无法通过ID找到，尝试通过权值匹配
-            if not left_child and node.left:
-                for k, v in self.node_vis.items():
-                    if abs(v['weight'] - node.left.weight) < 1e-9:
-                        left_child = v
-                        break
-            if not right_child and node.right:
-                for k, v in self.node_vis.items():
-                    if abs(v['weight'] - node.right.weight) < 1e-9:
-                        right_child = v
-                        break
-            
-            # 根据坐标位置确定左右关系
-            if left_child and right_child:
-                # 比较x坐标，较小的在左边
-                if left_child['cx'] < right_child['cx']:
-                    # left_child确实是左节点
-                    traverse_by_position(node.left, code + "0", codes)
-                    traverse_by_position(node.right, code + "1", codes)
-                else:
-                    # 坐标位置与树结构不一致，按坐标位置确定编码
-                    traverse_by_position(node.right, code + "0", codes)
-                    traverse_by_position(node.left, code + "1", codes)
-            elif left_child:
-                # 只有左孩子
-                traverse_by_position(node.left, code + "0", codes)
-            elif right_child:
-                # 只有右孩子
-                traverse_by_position(node.right, code + "1", codes)
+                traverse_tree(node.right, code + "1", codes)
         
         self.huffman_codes = {}
-        traverse_by_position(self.model.root, "", self.huffman_codes)
+        traverse_tree(self.model.root, "", self.huffman_codes)
         
         # 计算平均码长
         total_weight = 0
