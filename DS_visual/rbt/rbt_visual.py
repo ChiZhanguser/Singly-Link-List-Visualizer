@@ -5,6 +5,7 @@ from typing import Dict, Tuple, List, Optional
 from rbt.rbt_model import RBModel, RBNode, clone_tree
 import storage as storage
 from DSL_utils import process_command 
+import time
 
 class RBTVisualizer:
     def __init__(self, root):
@@ -31,8 +32,21 @@ class RBTVisualizer:
             "btn_success": "#4CAF50",
             "btn_warning": "#FF9800",
             "btn_danger": "#F44336",
-            "canvas_bg": "#FAFAFA"
+            "canvas_bg": "#FAFAFA",
+            "search_halo": "#FFC107",
+            "rotation_guide": "#9C27B0",
+            "case1_color": "#E91E63",
+            "case2_color": "#9C27B0",
+            "case3_color": "#3F51B5",
+            "info_panel": "#FFF9C4",
+            "knowledge_panel": "#E3F2FD"
         }
+        
+        # 动画控制变量
+        self.animation_speed = 500  # 默认速度（毫秒）
+        self.paused = False
+        self.current_step = 0
+        self.total_steps = 0
         
         # 创建主框架
         self.main_frame = Frame(self.window, bg=self.colors["bg_primary"])
@@ -55,6 +69,12 @@ class RBTVisualizer:
         self.node_h = 44
         self.level_gap = 100
         self.margin_x = 40
+        
+        # 临时动画对象存储
+        self.temp_objects = []
+        
+        # 知识展示状态
+        self.showing_welcome = True
         
         # 绘制初始说明
         self.draw_instructions()
@@ -96,6 +116,19 @@ class RBTVisualizer:
                                 fg=self.colors["btn_primary"],
                                 anchor=W)
         self.status_label.pack(side=LEFT, fill=X, expand=True)
+        
+        # 动画速度控制
+        speed_frame = Frame(canvas_toolbar, bg=self.colors["bg_secondary"])
+        speed_frame.pack(side=RIGHT, padx=10)
+        
+        Label(speed_frame, text="速度:", font=("微软雅黑", 9), 
+              bg=self.colors["bg_secondary"]).pack(side=LEFT, padx=(0, 5))
+        
+        self.speed_scale = Scale(speed_frame, from_=100, to=2000, orient=HORIZONTAL,
+                                length=120, showvalue=False, command=self.update_speed,
+                                bg=self.colors["bg_secondary"], highlightthickness=0)
+        self.speed_scale.set(500)
+        self.speed_scale.pack(side=LEFT)
         
         # 画布
         self.canvas_w = 1200
@@ -180,6 +213,17 @@ class RBTVisualizer:
                         self.load_structure, "#9C27B0").pack(side=LEFT, padx=4)
         self.create_button(btn_row2, "返回主界面",
                         self.back_to_main, self.colors["btn_danger"]).pack(side=LEFT, padx=4)
+        
+        # 第三行按钮 - 动画控制
+        btn_row3 = Frame(btn_frame, bg=self.colors["bg_secondary"])
+        btn_row3.pack(fill=X, pady=5)
+        
+        self.create_button(btn_row3, "暂停动画",
+                        self.pause_animation, "#FF5722").pack(side=LEFT, padx=4)
+        self.create_button(btn_row3, "继续动画",
+                        self.resume_animation, "#4CAF50").pack(side=LEFT, padx=4)
+        self.create_button(btn_row3, "下一步",
+                        self.next_step, "#2196F3").pack(side=LEFT, padx=4)
 
     def create_button(self, parent, text, command, color):
         """创建样式化按钮"""
@@ -195,6 +239,21 @@ class RBTVisualizer:
         # 绘制图例
         legend_y = self.canvas_h - 30
         self.draw_legend(legend_y)
+        
+        # 只在未开始动画时显示欢迎信息
+        if self.showing_welcome:
+            # 绘制欢迎信息
+            welcome_text = "欢迎使用红黑树可视化演示系统\n\n" \
+                          "功能说明:\n" \
+                          "• 插入节点: 展示搜索路径和平衡过程\n" \
+                          "• 删除节点: 展示删除过程和修复操作\n" \
+                          "• 动画控制: 可暂停、继续和调整速度\n" \
+                          "• 支持DSL命令批量操作\n\n" \
+                          "请在左侧输入节点值开始演示"
+            
+            self.canvas.create_text(self.canvas_w/2, self.canvas_h/2 - 50, 
+                                  text=welcome_text, font=("微软雅黑", 12), 
+                                  fill="#666666", justify=CENTER)
 
     def draw_legend(self, y_pos):
         """绘制图例"""
@@ -203,7 +262,8 @@ class RBTVisualizer:
             ("黑节点", self.colors["black_node"]),
             ("搜索路径", self.colors["path_highlight"]),
             ("当前操作", self.colors["highlight"]),
-            ("删除标记", self.colors["delete_mark"])
+            ("删除标记", self.colors["delete_mark"]),
+            ("旋转指示", self.colors["rotation_guide"])
         ]
         
         x_pos = 20
@@ -217,6 +277,31 @@ class RBTVisualizer:
     def update_status(self, text: str):
         """更新状态栏"""
         self.status_label.config(text=text)
+    
+    def update_speed(self, value):
+        """更新动画速度"""
+        self.animation_speed = int(value)
+    
+    def pause_animation(self):
+        """暂停动画"""
+        self.paused = True
+        self.update_status("动画已暂停")
+    
+    def resume_animation(self):
+        """继续动画"""
+        self.paused = False
+        self.update_status("动画继续")
+    
+    def next_step(self):
+        """执行下一步"""
+        # 这里需要与具体的动画步骤配合使用
+        pass
+    
+    def wait_if_paused(self):
+        """如果暂停则等待"""
+        while self.paused:
+            self.window.update()
+            time.sleep(0.1)
     
     def execute_dsl(self):
         """执行DSL命令"""
@@ -271,8 +356,13 @@ class RBTVisualizer:
             messagebox.showerror("错误", "请输入有效的数字")
             return
         
+        # 开始动画，移除欢迎文字
+        self.showing_welcome = False
         self.animating = True
         self.update_status(f"开始删除节点: {val}")
+        
+        # 显示操作说明
+        self.show_operation_explanation("delete", f"开始删除节点 {val}")
         
         # 调用删除方法
         deleted_node, path_nodes, events, snapshots = self.model.delete_with_steps(val)
@@ -286,13 +376,19 @@ class RBTVisualizer:
         snap_pre = snapshots[0]
         snap_after_delete = snapshots[1] if len(snapshots) > 1 else None
         
+        # 显示红黑树删除知识
+        self.show_rb_delete_knowledge()
+        
         # 高亮搜索路径
         def highlight_path(i=0):
             if i >= len(path_nodes):
                 self.update_status(f"找到节点 {val}, 准备删除")
+                self.show_operation_explanation("delete", f"已定位到节点 {val}, 开始删除操作")
                 self.animate_delete_node(val, deleted_node, snap_after_delete,
                                        lambda: self._after_delete_events(events, snapshots, val))
                 return
+            
+            self.wait_if_paused()
             
             node = path_nodes[i]
             self.draw_tree_from_root(snap_pre)
@@ -309,15 +405,19 @@ class RBTVisualizer:
                         self.canvas.itemconfig(self.node_vis[key]['rect'],
                                              outline=self.colors["delete_mark"],
                                              width=4)
+                        # 添加闪烁效果
+                        self.flash_node(key, self.colors["delete_mark"])
                     else:
                         self.canvas.itemconfig(self.node_vis[key]['rect'],
                                              outline=self.colors["path_highlight"],
                                              width=3)
+                        # 添加搜索光晕
+                        self.create_search_halo(key)
                 except Exception:
                     pass
             
             self.update_status(f"搜索路径: 访问节点 {node.val} (步骤 {i+1})")
-            self.window.after(450, lambda: highlight_path(i+1))
+            self.window.after(max(100, self.animation_speed), lambda: highlight_path(i+1))
         
         highlight_path(0)
 
@@ -347,21 +447,27 @@ class RBTVisualizer:
             on_complete()
             return
         
+        # 显示删除动画说明
+        self.show_operation_explanation("delete", f"正在删除节点 {val_str}")
+        
         # 淡出动画
         node_item = self.node_vis[deleted_key]
         rect_id = node_item['rect']
         text_id = node_item['text']
+        color_label = node_item['color_label']
         
         steps = 20
-        delay = 30
+        delay = max(10, self.animation_speed // 30)
         
         def fade_step(i=0):
             if i >= steps:
                 # 删除完成,重绘树
                 self.draw_tree_from_root(snap_after_delete)
                 self.update_status(f"节点 {val_str} 已删除")
-                self.window.after(400, on_complete)
+                self.window.after(max(100, self.animation_speed), on_complete)
                 return
+            
+            self.wait_if_paused()
             
             # 计算透明度 (通过颜色变淡模拟)
             alpha = 1 - (i / steps)
@@ -390,6 +496,11 @@ class RBTVisualizer:
                 
                 self.canvas.coords(rect_id, left, top, right, bottom)
                 
+                # 逐渐变透明
+                if i > steps/2:
+                    self.canvas.itemconfig(text_id, state=HIDDEN)
+                    self.canvas.itemconfig(color_label, state=HIDDEN)
+                
             except Exception:
                 pass
             
@@ -404,12 +515,14 @@ class RBTVisualizer:
             self.draw_tree_from_root(clone_tree(self.model.root))
             self.animating = False
             self.update_status(f"完成删除: {val}")
+            self.show_operation_explanation("delete", f"节点 {val} 删除完成")
             return
         
         def done_all():
             self.draw_tree_from_root(clone_tree(self.model.root))
             self.animating = False
             self.update_status(f"完成删除并修复平衡: {val}")
+            self.show_operation_explanation("delete", f"节点 {val} 删除完成, 树已重新平衡")
         
         # 从索引2开始(0是删除前,1是删除后删除修复前)
         self._animate_delete_events_sequence(events, snapshots, 2, done_all)
@@ -425,6 +538,8 @@ class RBTVisualizer:
                 on_done()
                 return
             
+            self.wait_if_paused()
+            
             # 确保有足够的快照
             if snap_idx >= len(snapshots) or snap_idx + 1 >= len(snapshots):
                 on_done()
@@ -434,7 +549,16 @@ class RBTVisualizer:
             after_root = snapshots[snap_idx + 1]
             ev = events[event_idx]
             
-            self.update_status(f"删除修复 {event_idx+1}/{len(events)}: {ev.get('type', 'unknown')}")
+            # 显示修复操作说明
+            op_type = ev.get('type', 'unknown')
+            explanation = self.get_operation_explanation(op_type)
+            self.show_operation_explanation("fixup", explanation)
+            
+            # 显示具体的红黑树删除修复知识
+            if event_idx == 0:
+                self.show_rb_delete_fixup_knowledge()
+            
+            self.update_status(f"删除修复 {event_idx+1}/{len(events)}: {op_type}")
             self._animate_single_event(before_root, after_root, ev,
                                      lambda: step(event_idx+1, snap_idx+1))
         
@@ -464,7 +588,14 @@ class RBTVisualizer:
             messagebox.showerror("错误", "请输入有效的数字")
             return
         
+        # 开始动画，移除欢迎文字
+        self.showing_welcome = False
         self.animating = True
+        self.show_operation_explanation("insert", f"开始插入节点 {val}")
+        
+        # 显示红黑树插入知识
+        self.show_rb_insert_knowledge()
+        
         inserted_node, path_nodes, events, snapshots = self.model.insert_with_steps(val)
         
         snap_pre = snapshots[0]
@@ -476,9 +607,12 @@ class RBTVisualizer:
         def highlight_path(i=0):
             if i >= len(path_nodes):
                 self.update_status(f"插入 {val}: 定位插入位置")
+                self.show_operation_explanation("insert", f"已找到插入位置, 准备插入节点 {val}")
                 self.animate_flyin_new(val, snap_after_insert, 
                                      lambda: self._after_insert_events_single(events, snapshots, val))
                 return
+            
+            self.wait_if_paused()
             
             node = path_nodes[i]
             node_id = getattr(node, 'id', None)
@@ -490,11 +624,13 @@ class RBTVisualizer:
                     self.canvas.itemconfig(self.node_vis[key]['rect'], 
                                          outline=self.colors["path_highlight"], 
                                          width=3)
+                    # 添加搜索光晕
+                    self.create_search_halo(key)
                 except Exception:
                     pass
             
             self.update_status(f"搜索路径: 访问节点 {node.val} (步骤 {i+1})")
-            self.window.after(450, lambda: highlight_path(i+1))
+            self.window.after(max(100, self.animation_speed), lambda: highlight_path(i+1))
         
         highlight_path(0)
 
@@ -504,12 +640,14 @@ class RBTVisualizer:
             self.draw_tree_from_root(clone_tree(self.model.root))
             self.animating = False
             self.update_status(f"完成单节点插入: {val}")
+            self.show_operation_explanation("insert", f"节点 {val} 插入完成")
             return
         
         def done_all():
             self.draw_tree_from_root(clone_tree(self.model.root))
             self.animating = False
             self.update_status(f"完成单节点插入: {val}")
+            self.show_operation_explanation("insert", f"节点 {val} 插入完成, 树已重新平衡")
         
         self._animate_events_sequence(events, snapshots, 0, done_all)
 
@@ -594,7 +732,12 @@ class RBTVisualizer:
     def draw_tree_from_root(self, root: Optional[RBNode]):
         """绘制树"""
         self.canvas.delete("all")
-        self.draw_instructions()
+        # 不再绘制欢迎文字
+        self.showing_welcome = False
+        
+        # 绘制图例
+        legend_y = self.canvas_h - 30
+        self.draw_legend(legend_y)
         
         if root is None:
             self.canvas.create_text(self.canvas_w/2, self.canvas_h/2, 
@@ -692,8 +835,15 @@ class RBTVisualizer:
         if not self.validate_input():
             return
             
+        # 开始动画，移除欢迎文字
+        self.showing_welcome = False
         self.animating = True
         self.batch = [p.strip() for p in self.input_var.get().split(",") if p.strip()]
+        self.show_operation_explanation("insert", f"开始批量插入 {len(self.batch)} 个节点")
+        
+        # 显示红黑树插入知识
+        self.show_rb_insert_knowledge()
+        
         self._insert_seq(0)
 
     def insert_direct(self):
@@ -737,6 +887,7 @@ class RBTVisualizer:
         if idx >= len(self.batch):
             self.animating = False
             self.update_status("所有插入操作已完成")
+            self.show_operation_explanation("insert", "所有节点插入完成")
             return
 
         val = self.batch[idx]
@@ -751,10 +902,13 @@ class RBTVisualizer:
         def highlight_path(i=0):
             if i >= len(path_nodes):
                 self.update_status(f"插入 {val}: 定位插入位置")
+                self.show_operation_explanation("insert", f"准备插入节点 {val}")
                 self.animate_flyin_new(val, snap_after_insert, 
                                      lambda: self._after_insert_events(events, snapshots, idx))
                 return
                 
+            self.wait_if_paused()
+            
             node = path_nodes[i]
             node_id = getattr(node, 'id', None)
             key = origid_to_key_pre.get(node_id)
@@ -765,11 +919,13 @@ class RBTVisualizer:
                     self.canvas.itemconfig(self.node_vis[key]['rect'], 
                                          outline=self.colors["path_highlight"], 
                                          width=3)
+                    # 添加搜索光晕
+                    self.create_search_halo(key)
                 except Exception:
                     pass
                     
             self.update_status(f"搜索路径: 访问节点 {node.val} (步骤 {i+1})")
-            self.window.after(450, lambda: highlight_path(i+1))
+            self.window.after(max(100, self.animation_speed), lambda: highlight_path(i+1))
 
         highlight_path(0)
 
@@ -809,15 +965,20 @@ class RBTVisualizer:
                                                width=2)
         temp_text = self.canvas.create_text(sx, sy, text=str(val_str),
                                           font=("微软雅黑", 11, "bold"))
+        
+        # 添加到临时对象列表
+        self.temp_objects.extend([temp_rect, temp_text])
 
         # 动画参数
         steps = 30
         dx = (tx - sx)/steps
         dy = (ty - sy)/steps
-        delay = 15
+        delay = max(10, self.animation_speed // 30)
         
         def step(i=0):
             if i < steps:
+                self.wait_if_paused()
+                
                 try:
                     self.canvas.move(temp_rect, dx, dy)
                     self.canvas.move(temp_text, dx, dy)
@@ -828,6 +989,9 @@ class RBTVisualizer:
                 try:
                     self.canvas.delete(temp_rect)
                     self.canvas.delete(temp_text)
+                    # 从临时对象列表中移除
+                    self.temp_objects = [obj for obj in self.temp_objects 
+                                       if obj not in [temp_rect, temp_text]]
                 except Exception:
                     pass
                     
@@ -836,10 +1000,12 @@ class RBTVisualizer:
                     self.canvas.itemconfig(self.node_vis[target_key]['rect'], 
                                          outline=self.colors["highlight"], 
                                          width=3)
+                    # 添加插入完成闪烁
+                    self.flash_node(target_key, self.colors["highlight"])
                 except Exception:
                     pass
                     
-                self.window.after(400, on_complete)
+                self.window.after(max(100, self.animation_speed), on_complete)
         step()
 
     def _animate_single_event(self, before_root: Optional[RBNode], after_root: Optional[RBNode], event: Dict, on_done):
@@ -869,10 +1035,18 @@ class RBTVisualizer:
         if op_type == 'recolor':
             label_text = "颜色调整: 重新着色"
             label_color = "#D32F2F"
+            # 显示颜色变化动画
+            self.animate_color_change(event, before_root, after_root)
+            # 显示红黑树颜色知识
+            self.show_rb_color_knowledge()
         elif op_type in ['rotate_left', 'rotate_right']:
             direction = "左旋" if op_type == 'rotate_left' else "右旋"
             label_text = f"执行{direction}操作"
             label_color = "#1976D2"
+            # 显示旋转指示
+            self.show_rotation_guide(event, before_root)
+            # 显示红黑树旋转知识
+            self.show_rb_rotation_knowledge(direction)
         else:
             label_text = "执行平衡操作"
             label_color = "#388E3C"
@@ -881,22 +1055,27 @@ class RBTVisualizer:
         label_id = self.canvas.create_text(self.canvas_w/2, 30, text=label_text,
                                          font=("微软雅黑", 10, "bold"),
                                          fill=label_color)
+        self.temp_objects.append(label_id)
 
         # 执行动画
         frames = 24
-        delay = 25
+        delay = max(10, self.animation_speed // 20)
 
         def frame_step(f=0):
             if f >= frames:
                 self.draw_tree_from_root(after_root)
-                if label_id:
+                # 清理临时对象
+                for obj in self.temp_objects:
                     try: 
-                        self.canvas.delete(label_id)
+                        self.canvas.delete(obj)
                     except: 
                         pass
-                self.window.after(350, on_done)
+                self.temp_objects.clear()
+                self.window.after(max(100, self.animation_speed), on_done)
                 return
                 
+            self.wait_if_paused()
+            
             t = (f+1)/frames
             for (k, rect_id, text_id, sx, sy, tx, ty) in moves:
                 cur_cx = sx + (tx - sx) * t
@@ -932,6 +1111,8 @@ class RBTVisualizer:
                 on_all_done()
                 return
                 
+            self.wait_if_paused()
+            
             before_root = snapshots[1 + i]
             after_root = snapshots[2 + i]
             ev = events[i]
@@ -945,13 +1126,13 @@ class RBTVisualizer:
         """插入后的事件处理"""
         if not events:
             self.draw_tree_from_root(clone_tree(self.model.root))
-            self.window.after(400, lambda: self._insert_seq(insertion_idx+1))
+            self.window.after(max(100, self.animation_speed), lambda: self._insert_seq(insertion_idx+1))
             return
 
         def done_all():
             self.draw_tree_from_root(clone_tree(self.model.root))
             self.update_status(f"完成插入: {self.batch[insertion_idx]}")
-            self.window.after(500, lambda: self._insert_seq(insertion_idx+1))
+            self.window.after(max(100, self.animation_speed), lambda: self._insert_seq(insertion_idx+1))
             
         self._animate_events_sequence(events, snapshots, insertion_idx, done_all)
 
@@ -964,6 +1145,7 @@ class RBTVisualizer:
         self.model = RBModel()
         self.node_vis.clear()
         self.canvas.delete("all")
+        self.showing_welcome = True  # 重置欢迎文字显示状态
         self.draw_instructions()
         self.update_status("已清空红黑树")
 
@@ -994,8 +1176,272 @@ class RBTVisualizer:
         from rbt.rbt_model import RBNode as RBNodeClass
         newroot = storage.tree_dict_to_nodes(tree_dict, RBNodeClass)
         self.model.root = newroot
+        self.showing_welcome = False  # 加载结构后不显示欢迎文字
         self.draw_tree_from_root(clone_tree(self.model.root))
         self.update_status("已从文件加载红黑树结构")
+
+    # ===== 新增的动画效果方法 =====
+    
+    def create_search_halo(self, node_key):
+        """创建搜索光晕效果"""
+        if node_key not in self.node_vis:
+            return
+            
+        node = self.node_vis[node_key]
+        cx, cy = node['cx'], node['cy']
+        
+        # 创建光晕圆圈
+        halo = self.canvas.create_oval(cx-25, cy-25, cx+25, cy+25,
+                                     outline=self.colors["search_halo"],
+                                     width=2, dash=(5, 2))
+        self.temp_objects.append(halo)
+        
+        # 光晕动画
+        def animate_halo(step=0):
+            if step < 3:  # 闪烁3次
+                if step % 2 == 0:
+                    self.canvas.itemconfig(halo, state=HIDDEN)
+                else:
+                    self.canvas.itemconfig(halo, state=NORMAL)
+                self.window.after(200, lambda: animate_halo(step+1))
+            else:
+                try:
+                    self.canvas.delete(halo)
+                    self.temp_objects.remove(halo)
+                except:
+                    pass
+                    
+        animate_halo()
+
+    def flash_node(self, node_key, color):
+        """节点闪烁效果"""
+        if node_key not in self.node_vis:
+            return
+            
+        node = self.node_vis[node_key]
+        rect = node['rect']
+        original_width = 2
+        
+        def flash(step=0):
+            if step < 6:  # 闪烁3次
+                if step % 2 == 0:
+                    self.canvas.itemconfig(rect, outline=color, width=4)
+                else:
+                    self.canvas.itemconfig(rect, outline="#E0E0E0", width=original_width)
+                self.window.after(150, lambda: flash(step+1))
+            else:
+                self.canvas.itemconfig(rect, outline="#E0E0E0", width=original_width)
+                
+        flash()
+
+    def show_operation_explanation(self, operation_type, text):
+        """显示操作说明"""
+        # 清除之前的说明
+        for obj in self.temp_objects:
+            if "explanation" in str(obj):
+                try:
+                    self.canvas.delete(obj)
+                except:
+                    pass
+        
+        # 创建说明面板
+        panel = self.canvas.create_rectangle(20, 20, 400, 80,
+                                           fill=self.colors["info_panel"],
+                                           outline="#FFC107", width=2)
+        text_id = self.canvas.create_text(30, 30, text=text, 
+                                        font=("微软雅黑", 10), anchor=NW, width=360,
+                                        fill="#333333")
+        
+        # 标记为说明对象
+        self.canvas.addtag_withtag("explanation", panel)
+        self.canvas.addtag_withtag("explanation", text_id)
+        
+        self.temp_objects.extend([panel, text_id])
+
+    def get_operation_explanation(self, operation_type):
+        """获取操作说明文本"""
+        explanations = {
+            'recolor': '颜色调整: 重新着色节点以保持红黑树性质',
+            'rotate_left': '左旋操作: 调整树结构保持平衡',
+            'rotate_right': '右旋操作: 调整树结构保持平衡',
+            'root_recolor': '根节点重着色: 确保根节点为黑色'
+        }
+        return explanations.get(operation_type, '执行平衡操作')
+
+    def show_rotation_guide(self, event, before_root):
+        """显示旋转指示"""
+        pivot_id = event.get('x_id')
+        if not pivot_id:
+            return
+            
+        origid_to_key, _ = self._build_key_maps_from_root(before_root)
+        pivot_key = origid_to_key.get(pivot_id)
+        
+        if pivot_key and pivot_key in self.node_vis:
+            node = self.node_vis[pivot_key]
+            cx, cy = node['cx'], node['cy']
+            
+            # 根据旋转类型显示方向指示
+            if event.get('type') == 'rotate_left':
+                # 左旋指示 - 逆时针箭头
+                arrow = self.canvas.create_line(cx, cy-30, cx-20, cy-10, cx-10, cy-10,
+                                              arrow=LAST, fill=self.colors["rotation_guide"],
+                                              width=3)
+                text = self.canvas.create_text(cx-30, cy-15, text="左旋", 
+                                             font=("微软雅黑", 9, "bold"),
+                                             fill=self.colors["rotation_guide"])
+            else:
+                # 右旋指示 - 顺时针箭头  
+                arrow = self.canvas.create_line(cx, cy-30, cx+20, cy-10, cx+10, cy-10,
+                                              arrow=LAST, fill=self.colors["rotation_guide"],
+                                              width=3)
+                text = self.canvas.create_text(cx+30, cy-15, text="右旋", 
+                                             font=("微软雅黑", 9, "bold"),
+                                             fill=self.colors["rotation_guide"])
+            
+            self.temp_objects.extend([arrow, text])
+
+    def animate_color_change(self, event, before_root, after_root):
+        """颜色变化动画"""
+        node_id = event.get('node_id')
+        if not node_id:
+            return
+            
+        origid_to_key, _ = self._build_key_maps_from_root(before_root)
+        node_key = origid_to_key.get(node_id)
+        
+        if node_key and node_key in self.node_vis:
+            node = self.node_vis[node_key]
+            rect = node['rect']
+            
+            # 获取新旧颜色
+            old_color = self.canvas.itemcget(rect, "fill")
+            new_color = self.colors["red_node"] if event.get('new_color') == 'R' else self.colors["black_node"]
+            
+            # 颜色过渡动画
+            steps = 10
+            delay = max(10, self.animation_speed // 30)
+            
+            def color_transition(step=0):
+                if step <= steps:
+                    # 计算过渡颜色
+                    ratio = step / steps
+                    if old_color == self.colors["red_node"] and new_color == self.colors["black_node"]:
+                        # 红变黑
+                        r = int(255 * (1 - ratio))
+                        g = int(82 * (1 - ratio))
+                        b = int(82 * (1 - ratio))
+                    else:
+                        # 黑变红
+                        r = int(55 + 200 * ratio)
+                        g = int(71 + 184 * ratio)
+                        b = int(79 + 173 * ratio)
+                    
+                    transition_color = f"#{r:02x}{g:02x}{b:02x}"
+                    self.canvas.itemconfig(rect, fill=transition_color)
+                    self.window.after(delay, lambda: color_transition(step + 1))
+                else:
+                    # 确保最终颜色正确
+                    self.canvas.itemconfig(rect, fill=new_color)
+            
+            color_transition()
+
+    # ===== 红黑树知识展示方法 =====
+    
+    def show_rb_insert_knowledge(self):
+        """显示红黑树插入知识"""
+        knowledge_text = (
+            "红黑树插入知识:\n"
+            "• 新插入的节点默认为红色\n"
+            "• 如果父节点是黑色，插入完成\n"
+            "• 如果父节点是红色，需要修复:\n"
+            "  - Case 1: 叔叔节点是红色\n"
+            "  - Case 2: 叔叔节点是黑色，当前节点是右孩子\n" 
+            "  - Case 3: 叔叔节点是黑色，当前节点是左孩子"
+        )
+        self.show_knowledge_panel(knowledge_text)
+    
+    def show_rb_delete_knowledge(self):
+        """显示红黑树删除知识"""
+        knowledge_text = (
+            "红黑树删除知识:\n"
+            "• 删除红色节点通常不会破坏性质\n"
+            "• 删除黑色节点需要修复平衡\n"
+            "• 修复过程涉及兄弟节点的颜色判断\n"
+            "• 可能需要重新着色和旋转操作"
+        )
+        self.show_knowledge_panel(knowledge_text)
+    
+    def show_rb_delete_fixup_knowledge(self):
+        """显示红黑树删除修复知识"""
+        knowledge_text = (
+            "删除修复的四种情况:\n"
+            "• Case 1: 兄弟节点是红色\n"
+            "• Case 2: 兄弟节点是黑色，兄弟的两个子节点都是黑色\n"
+            "• Case 3: 兄弟节点是黑色，兄弟的左孩子红色，右孩子黑色\n"
+            "• Case 4: 兄弟节点是黑色，兄弟的右孩子红色"
+        )
+        self.show_knowledge_panel(knowledge_text)
+    
+    def show_rb_color_knowledge(self):
+        """显示红黑树颜色知识"""
+        knowledge_text = (
+            "红黑树颜色性质:\n"
+            "1. 每个节点是红色或黑色\n"
+            "2. 根节点是黑色的\n"
+            "3. 所有叶子节点(NIL)是黑色的\n"
+            "4. 红色节点的两个子节点都是黑色的\n"
+            "5. 从任一节点到其每个叶子的所有路径都包含相同数目的黑色节点"
+        )
+        self.show_knowledge_panel(knowledge_text)
+    
+    def show_rb_rotation_knowledge(self, direction):
+        """显示红黑树旋转知识"""
+        if direction == "左旋":
+            knowledge_text = (
+                "左旋操作:\n"
+                "• 以某个节点为支点进行旋转\n"
+                "• 右子节点成为新的父节点\n"
+                "• 原父节点成为新父节点的左子节点\n"
+                "• 新父节点的左子树成为原父节点的右子树"
+            )
+        else:
+            knowledge_text = (
+                "右旋操作:\n"
+                "• 以某个节点为支点进行旋转\n"
+                "• 左子节点成为新的父节点\n"
+                "• 原父节点成为新父节点的右子节点\n"
+                "• 新父节点的右子树成为原父节点的左子树"
+            )
+        self.show_knowledge_panel(knowledge_text)
+    
+    def show_knowledge_panel(self, text):
+        """显示知识面板"""
+        # 清除之前的知识面板
+        for obj in self.temp_objects:
+            if "knowledge" in str(obj):
+                try:
+                    self.canvas.delete(obj)
+                except:
+                    pass
+        
+        # 创建知识面板
+        panel = self.canvas.create_rectangle(
+            self.canvas_w - 350, 20, self.canvas_w - 20, 180,
+            fill=self.colors["knowledge_panel"],
+            outline="#2196F3", width=2
+        )
+        text_id = self.canvas.create_text(
+            self.canvas_w - 340, 30, text=text,
+            font=("微软雅黑", 9), anchor=NW, width=320,
+            fill="#333333", justify=LEFT
+        )
+        
+        # 标记为知识对象
+        self.canvas.addtag_withtag("knowledge", panel)
+        self.canvas.addtag_withtag("knowledge", text_id)
+        
+        self.temp_objects.extend([panel, text_id])
 
 
 if __name__ == '__main__':

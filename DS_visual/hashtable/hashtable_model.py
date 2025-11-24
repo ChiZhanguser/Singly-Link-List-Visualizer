@@ -1,4 +1,4 @@
-from typing import List, Optional, Any, Tuple, Union
+from typing import List, Optional, Any, Tuple, Union, Callable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -19,7 +19,8 @@ class ProbeResult:
     chain_position: Optional[int] = None  # 在链表中的位置（仅拉链法）
 
 class HashTableModel:
-    def __init__(self, capacity: int = 11, method: CollisionMethod = CollisionMethod.OPEN_ADDRESSING):
+    def __init__(self, capacity: int = 11, method: CollisionMethod = CollisionMethod.OPEN_ADDRESSING, 
+                 hash_func: Optional[Callable[[Any], int]] = None):
         if capacity <= 0:
             raise ValueError("capacity must be positive")
         self.capacity = capacity
@@ -27,19 +28,28 @@ class HashTableModel:
         self.tombstone = TOMBSTONE
         self.size = 0  # 有效元素计数
         
+        # 设置哈希函数
+        if hash_func is None:
+            self.hash_func = self._default_hash
+        else:
+            self.hash_func = hash_func
+        
         if method == CollisionMethod.OPEN_ADDRESSING:
             self.table: List[Optional[Any]] = [None] * capacity
         else:  # CHAINING
             self.table: List[List[Any]] = [[] for _ in range(capacity)]
 
-    def _hash(self, x: Any) -> int:
-        """计算元素的哈希值"""
+    def _default_hash(self, x: Any) -> int:
+        """默认哈希函数"""
         try:
             xi = int(x)
         except (ValueError, TypeError):
             xi = hash(str(x))
         return abs(xi) % self.capacity
 
+    def _hash(self, x: Any) -> int:
+        """计算元素的哈希值"""
+        return self.hash_func(x)
 
     # ==================== 开放寻址法 ====================
     def _probe_find_open(self, x: Any) -> ProbeResult:

@@ -56,7 +56,7 @@ class TrieVisualizer:
         # layout params (visual)
         self.node_w = 80
         self.node_h = 48
-        self.level_gap = 100
+        self.level_gap = 120  # 增加层级间距
         self.margin_x = 80
         self.top_margin = 80
         self.min_canvas_width = 800
@@ -332,16 +332,17 @@ class TrieVisualizer:
                 color = highlight[node]
             self._draw_node(node, cx, cy, fill_color=color)
 
-        # 绘制 root 标记
+        # 绘制 root 标记 - 使用更明显的样式
         self.canvas.create_oval(
-            root_x-16, root_y-10, 
-            root_x+16, root_y+10, 
-            fill="#EAF2FF", outline="#0f172a"
+            root_x-20, root_y-12, 
+            root_x+20, root_y+12, 
+            fill="#4A90E2", outline="#1e40af", width=2
         )
         self.canvas.create_text(
             root_x, root_y, 
-            text="root", 
-            font=("Arial", 10, "bold")
+            text="ROOT", 
+            font=("Arial", 10, "bold"),
+            fill="white"
         )
         bbox = self.canvas.bbox("all")
         
@@ -404,38 +405,50 @@ class TrieVisualizer:
             # 10. 移动视图
             self.canvas.xview('moveto', x_fraction)
             self.canvas.yview('moveto', y_fraction)
-        
-        # ==========================================================
-        # ==                    [ 修改结束 ]                    ==
-        # ==========================================================
 
     def _draw_node(self, node: TrieNode, cx: float, cy: float, fill_color: Optional[str] = None):
-        """绘制单个节点"""
+        """绘制单个节点 - 使用更生动的样式"""
         left = cx - self.node_w/2
         top = cy - self.node_h/2
         right = cx + self.node_w/2
         bottom = cy + self.node_h/2
-        fill = fill_color if fill_color else "#F8FAFF"
         
+        # 根据节点状态设置颜色
+        if fill_color:
+            fill = fill_color
+        elif node.is_end:
+            fill = "#E8F5E8"  # 结束节点使用浅绿色背景
+        else:
+            fill = "#F8FAFF"
+        
+        # 绘制节点主体 - 使用圆角矩形效果
         rect = self.canvas.create_rectangle(
             left, top, right, bottom, 
             fill=fill, outline="#1f2937", width=1.8
         )
         self.node_items[node] = rect
         
-        # 显示字符
+        # 显示字符 - 更醒目的样式
         self.canvas.create_text(
-            cx - 12, cy, 
+            cx, cy, 
             text=node.char, 
-            font=("Arial", 12, "bold"), 
+            font=("Arial", 14, "bold"), 
             fill="#0b1220"
         )
         
-        # 如果是结束节点，显示标记
+        # 如果是结束节点，显示更明显的标记
         if node.is_end:
-            self.canvas.create_oval(
-                right-16, top+8, right-6, top+18, 
-                fill="#ef4444", outline=""
+            # 在节点右下角添加绿色结束标记
+            end_marker = self.canvas.create_oval(
+                right-18, top+8, right-4, top+22, 
+                fill="#10B981", outline="#059669", width=1.5
+            )
+            # 添加白色对勾
+            self.canvas.create_text(
+                right-11, top+15,
+                text="✓",
+                font=("Arial", 8, "bold"),
+                fill="white"
             )
 
     def parse_input_words(self) -> List[str]:
@@ -463,9 +476,6 @@ class TrieVisualizer:
         if not words:
             messagebox.showinfo("提示", "请输入单词（或逗号/空格分隔多个）")
             return
-        
-        # 先清空输入框，防止误操作
-        # self.input_var.set("") 
         
         # 更新列表框
         current_words = set(self.word_listbox.get(0, END))
@@ -502,12 +512,12 @@ class TrieVisualizer:
         def on_word_done(created_count: int):
             nonlocal total_inserted
             total_inserted += 1
-            self.window.after(300, process_next_word)
+            self.window.after(400, process_next_word)  # 增加单词间延迟
 
         process_next_word()
 
     def _animate_insert_word(self, word: str, callback):
-        """逐字符动画插入单词"""
+        """逐字符动画插入单词 - 更生动的动画效果"""
         cur = self.model.root
         pos_nodes: List[TrieNode] = []
         i = 0
@@ -520,11 +530,13 @@ class TrieVisualizer:
                     cur.is_end = True
                 if pos_nodes:
                     last = pos_nodes[-1]
-                    highlight = {n: "gold" for n in pos_nodes[:-1]}
-                    highlight[last] = "#9AE6B4" # 绿色表示结束
+                    highlight = {n: "#FFD700" for n in pos_nodes[:-1]}  # 金色
+                    highlight[last] = "#10B981"  # 绿色表示结束
                     self.redraw(highlight=highlight)
-                    self.update_status(f"单词 '{word}' 插入完成")
-                    self.window.after(480, lambda: (self.redraw(), callback(len(created_nodes))))
+                    self.update_status(f"✓ 单词 '{word}' 插入完成")
+                    # 结束节点闪烁效果
+                    self._animate_node_pulse(last, "#10B981", 3, 600)
+                    self.window.after(800, lambda: (self.redraw(), callback(len(created_nodes))))
                 else:
                     self.redraw()
                     callback(len(created_nodes))
@@ -534,10 +546,13 @@ class TrieVisualizer:
             if ch in cur.children:
                 cur = cur.children[ch]
                 pos_nodes.append(cur)
-                self.redraw(highlight={n: "gold" for n in pos_nodes})
-                self.update_status(f"遍历到已有字母 '{ch}' (step {i+1}/{len(word)})")
+                highlight = {n: "#FFD700" for n in pos_nodes}
+                self.redraw(highlight=highlight)
+                self.update_status(f"→ 遍历到已有字母 '{ch}' (步骤 {i+1}/{len(word)})")
+                # 当前节点闪烁效果
+                self._animate_node_pulse(cur, "#FFD700", 1, 350)
                 i += 1
-                self.window.after(380, step)
+                self.window.after(500, step)  # 增加延迟
             else:
                 node = TrieNode(ch)
                 node.parent = cur
@@ -546,17 +561,74 @@ class TrieVisualizer:
                 pos_nodes.append(cur)
                 created_nodes.append(cur)
                 
-                hl = {n: "gold" for n in pos_nodes[:-1]}
-                hl[cur] = "#BEE3DB" # 淡蓝色表示新创建
+                hl = {n: "#FFD700" for n in pos_nodes[:-1]}
+                hl[cur] = "#60A5FA"  # 蓝色表示新创建
                 self.redraw(highlight=hl)
-                self.update_status(f"创建新节点 '{ch}' (step {i+1}/{len(word)})")
+                self.update_status(f"✨ 创建新节点 '{ch}' (步骤 {i+1}/{len(word)})")
+                # 新节点创建动画
+                self._animate_node_creation(cur)
                 i += 1
-                self.window.after(520, step)
+                self.window.after(650, step)  # 增加延迟
 
         step()
 
+    def _animate_node_pulse(self, node: TrieNode, color: str, pulses: int, duration: int):
+        """节点脉动动画效果"""
+        if node not in self.node_items:
+            return
+            
+        def pulse(remaining_pulses):
+            if remaining_pulses <= 0:
+                return
+                
+            item = self.node_items[node]
+            original_fill = self.canvas.itemcget(item, "fill")
+            
+            # 闪烁到指定颜色
+            self.canvas.itemconfig(item, fill=color)
+            self.window.after(duration // (pulses * 2), 
+                            lambda: self.canvas.itemconfig(item, fill=original_fill))
+            
+            # 下一次闪烁
+            self.window.after(duration // pulses, lambda: pulse(remaining_pulses - 1))
+        
+        pulse(pulses)
+
+    def _animate_node_creation(self, node: TrieNode):
+        """新节点创建动画效果"""
+        if node not in self.node_items:
+            return
+            
+        item = self.node_items[node]
+        
+        # 缩放动画
+        def scale_up(scale_factor):
+            if scale_factor > 1.0:
+                self.canvas.itemconfig(item, width=2.5)  # 临时加粗边框
+                return
+                
+            # 获取原始位置
+            coords = self.canvas.coords(item)
+            if len(coords) >= 4:
+                left, top, right, bottom = coords[:4]
+                cx = (left + right) / 2
+                cy = (top + bottom) / 2
+                
+                # 计算缩放后的尺寸
+                new_w = self.node_w * scale_factor
+                new_h = self.node_h * scale_factor
+                new_left = cx - new_w/2
+                new_top = cy - new_h/2
+                new_right = cx + new_w/2
+                new_bottom = cy + new_h/2
+                
+                self.canvas.coords(item, new_left, new_top, new_right, new_bottom)
+                self.window.after(20, lambda: scale_up(scale_factor + 0.1))
+        
+        scale_up(0.3)
+
     def start_search_animated(self):
-        """开始查找动画"""
+        """开始查找动画 - 更生动的效果"""
         if self.animating:
             return
         word = self.input_var.get().strip()
@@ -571,13 +643,16 @@ class TrieVisualizer:
         found, path = self.model.search(word)
         if not path:
             self.redraw()
-            self.update_status(f"查找：未找到 '{word}' (路径不存在)")
+            self.update_status(f"❌ 查找：未找到 '{word}' (路径不存在)")
             # 闪烁输入框提示
             try:
-                entry = self.window.nametowidget(self.input_var.get())
-                original_bg = entry.cget("bg")
-                entry.config(bg="#FEE2E2")
-                self.window.after(600, lambda: entry.config(bg=original_bg))
+                entry_widgets = self.left_panel.winfo_children()[0].winfo_children()
+                for widget in entry_widgets:
+                    if isinstance(widget, Entry):
+                        original_bg = widget.cget("bg")
+                        widget.config(bg="#FEE2E2")
+                        self.window.after(800, lambda: widget.config(bg=original_bg))
+                        break
             except:
                 pass
             return
@@ -590,23 +665,30 @@ class TrieVisualizer:
             if i >= len(path):
                 self.animating = False
                 if found:
-                    self.update_status(f"查找完成：找到 '{word}'")
+                    self.update_status(f"✅ 查找完成：找到 '{word}'")
                     node = path[-1]
-                    highlight = {n: "gold" for n in path[:-1]}
-                    highlight[node] = "#9AE6B4" # 绿色
+                    highlight = {n: "#FFD700" for n in path[:-1]}
+                    highlight[node] = "#10B981"  # 绿色
                     self.redraw(highlight=highlight)
-                    self.window.after(700, lambda: self.redraw())
+                    # 成功闪烁效果
+                    self._animate_node_pulse(node, "#10B981", 3, 800)
+                    self.window.after(1000, lambda: self.redraw())
                 else:
-                    self.update_status(f"查找完成：未找到 '{word}'（前缀存在但不是完整单词）")
-                    self.redraw(highlight={n: "gold" for n in path})
-                    self.window.after(700, lambda: self.redraw())
+                    self.update_status(f"⚠️ 查找完成：未找到 '{word}'（前缀存在但不是完整单词）")
+                    self.redraw(highlight={n: "#FFD700" for n in path})
+                    # 警告闪烁效果
+                    if path:
+                        self._animate_node_pulse(path[-1], "#F59E0B", 3, 800)
+                    self.window.after(1000, lambda: self.redraw())
                 return
             
             node = path[i]
-            self.redraw(highlight={n: "gold" for n in path[:i+1]})
-            self.update_status(f"查找: 比较到 '{node.char}' (step {i+1}/{len(word)})")
+            self.redraw(highlight={n: "#FFD700" for n in path[:i+1]})
+            self.update_status(f"🔍 查找: 比较到 '{node.char}' (步骤 {i+1}/{len(word)})")
+            # 当前节点闪烁
+            self._animate_node_pulse(node, "#FFD700", 1, 400)
             i += 1
-            self.window.after(380, step)
+            self.window.after(500, step)  # 增加延迟
         
         step()
 
@@ -637,3 +719,4 @@ if __name__ == '__main__':
     root = Tk()
     app = TrieVisualizer(root)
     root.mainloop()
+    

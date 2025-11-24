@@ -1309,14 +1309,30 @@ class LinkList:
                 temp1 = self.linked_list_data_next_store.pop(idx)
                 for element in temp1:
                     if element is not None:
-                        if hasattr(element, 'place_forget'):
+                        removed = False
+                        # widget-like objects (Label widgets)
+                        try:
                             element.place_forget()
-                        elif hasattr(element, 'destroy'):
-                            element.destroy()
-                        elif hasattr(element, 'delete'):
+                            try: element.destroy()
+                            except: pass
+                            removed = True
+                        except Exception:
+                            pass
+
+                        # tkinter widget objects that only implement destroy
+                        if not removed:
+                            try:
+                                element.destroy()
+                                removed = True
+                            except Exception:
+                                pass
+
+                        # finally, if it's a canvas item id (int) or anything else, try canvas delete
+                        if not removed:
                             try:
                                 self.canvas_make.delete(element)
-                            except:
+                                removed = True
+                            except Exception:
                                 pass
             
             # 2. 移除画布元素（矩形等）

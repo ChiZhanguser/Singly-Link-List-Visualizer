@@ -9,8 +9,6 @@ from datetime import datetime
 from tkinter import TclError 
 
 class AVLVisualizer:
-    # ... __init__ ...
-    # (init, 颜色, 字体等保持不变)
     def __init__(self, root):
         self.window = root
         self.is_embedded = hasattr(root, 'title') and callable(root.title)
@@ -35,13 +33,22 @@ class AVLVisualizer:
             "accent_blue": "#2196F3",
             "accent_orange": "#FF9800",
             "accent_purple": "#9C27B0",
-            "accent_red": "#F44336", # <--- 用于删除按钮
+            "accent_red": "#F44336",
             "text_light": "#FFFFFF",
             "text_dark": "#2D2D44",
             "node_normal": "#E3F2FD",
             "node_highlight": "#FFF9C4",
             "node_new": "#C8E6C9",
-            "edge_color": "#616161"
+            "edge_color": "#616161",
+            # 新增颜色定义
+            "node_comparing": "#FFE0B2",
+            "node_balance_ok": "#E8F5E8",
+            "node_balance_warning": "#FFF3E0",
+            "node_balance_critical": "#FFEBEE",
+            "balance_text": "#2E7D32",
+            "height_text": "#1565C0",
+            "path_highlight": "#FFD54F",
+            "rotation_highlight": "#E91E63",
         }
         
         if self.is_embedded:
@@ -77,13 +84,16 @@ class AVLVisualizer:
         self.level_gap = 100
         self.margin_x = 40
 
+        # 新增动画参数
+        self.animation_speed = 1.0
+        self.show_balance_factors = True
+        self.show_height = True
+        self.highlight_comparisons = True
+
         self.input_var = StringVar()
         self.create_controls()
         self.draw_instructions()
 
-
-    # ... create_controls ...
-    # (此函数保持不变)
     def create_controls(self):
         if self.is_embedded:
             self._create_standalone_controls()
@@ -92,7 +102,6 @@ class AVLVisualizer:
 
     def _create_standalone_controls(self):
         """独立运行时的控件布局 (添加删除按钮)"""
-        # ... (main_frame, title_label, top_controls_container, dsl_frame ... 均保持不变)
         main_frame = Frame(self.window, bg=self.colors["bg_primary"])
         main_frame.pack(pady=(0, 8), fill=X, padx=15)
         
@@ -162,7 +171,7 @@ class AVLVisualizer:
         # 2. 插入/删除操作框架 (原插入框架)
         insert_frame = LabelFrame(
             top_controls_container,
-            text="📥 插入 / 删除 节点", # <--- 修改标题
+            text="📥 插入 / 删除 节点",
             bg=self.colors["bg_secondary"],
             fg=self.colors["text_light"],
             font=self.label_font,
@@ -203,7 +212,7 @@ class AVLVisualizer:
             self.start_insert_animated
         ).pack(side=LEFT, padx=4, pady=4)
         
-        # --- 新增删除按钮 ---
+        # 新增删除按钮
         self.create_button(
             input_row2, 
             "❌ Delete (动画)", 
@@ -218,7 +227,9 @@ class AVLVisualizer:
             self.clear_canvas
         ).pack(side=LEFT, padx=4, pady=4)
 
-        # ... (file_frame, status_frame ... 均保持不变)
+        # 动画控制面板
+        self._create_animation_controls_standalone(main_frame)
+
         file_frame = LabelFrame(
             main_frame,
             text="💾 文件操作",
@@ -267,11 +278,52 @@ class AVLVisualizer:
         )
         self.status_label.pack(side=LEFT, padx=12, pady=6)
 
+    def _create_animation_controls_standalone(self, parent):
+        """独立运行时的动画控制面板"""
+        anim_frame = LabelFrame(
+            parent,
+            text="🎬 动画控制",
+            bg=self.colors["bg_secondary"],
+            fg=self.colors["text_light"],
+            font=self.label_font,
+            padx=12,
+            pady=8
+        )
+        anim_frame.pack(fill=X, pady=(0, 10))
+        
+        anim_row1 = Frame(anim_frame, bg=self.colors["bg_secondary"])
+        anim_row1.pack(fill=X, pady=4)
+        
+        # 速度控制
+        Label(anim_row1, text="速度:", bg=self.colors["bg_secondary"], 
+              fg=self.colors["text_light"], font=self.label_font).pack(side=LEFT, padx=6)
+        
+        self.speed_var = DoubleVar(value=1.0)
+        speed_scale = Scale(anim_row1, from_=0.3, to=3.0, resolution=0.1, 
+                           variable=self.speed_var, orient=HORIZONTAL,
+                           length=120, showvalue=True, bg=self.colors["bg_secondary"],
+                           fg=self.colors["text_light"], highlightbackground=self.colors["bg_secondary"],
+                           command=self.update_animation_speed)
+        speed_scale.pack(side=LEFT, padx=6)
+        
+        # 显示选项
+        self.bf_var = BooleanVar(value=True)
+        bf_check = Checkbutton(anim_row1, text="显示平衡因子", variable=self.bf_var,
+                              command=self.toggle_balance_factors, bg=self.colors["bg_secondary"],
+                              fg=self.colors["text_light"], selectcolor=self.colors["bg_primary"],
+                              activebackground=self.colors["bg_secondary"])
+        bf_check.pack(side=LEFT, padx=10)
+        
+        self.height_var = BooleanVar(value=True)
+        height_check = Checkbutton(anim_row1, text="显示高度", variable=self.height_var,
+                                  command=self.toggle_height_display, bg=self.colors["bg_secondary"],
+                                  fg=self.colors["text_light"], selectcolor=self.colors["bg_primary"],
+                                  activebackground=self.colors["bg_secondary"])
+        height_check.pack(side=LEFT, padx=10)
 
     def _create_embedded_controls(self):
         """嵌入到主程序时的紧凑控件布局 (添加删除按钮)"""
         control_frame = Frame(self.window, bg=self.colors["bg_primary"])
-        # (保持4列不变)
         control_frame.grid(row=1, column=0, columnspan=4, sticky="ew", padx=10, pady=5)
         
         self.window.grid_columnconfigure(0, weight=1)
@@ -282,7 +334,7 @@ class AVLVisualizer:
         # 第一行：插入操作
         insert_label = Label(
             control_frame, 
-            text="插入/删除:", # <--- 修改
+            text="插入/删除:",
             bg=self.colors["bg_primary"], 
             fg=self.colors["text_light"],
             font=self.label_font
@@ -297,7 +349,6 @@ class AVLVisualizer:
             bd=2,
             relief=GROOVE
         )
-        # (让输入框跨越2列，为按钮腾出空间)
         entry.grid(row=0, column=1, columnspan=2, padx=5, pady=2, sticky="ew") 
         entry.insert(0, "30, 20, 40, 10, 25, 35, 50")
         
@@ -306,12 +357,12 @@ class AVLVisualizer:
             "✨ Insert", 
             self.colors["accent_green"],
             self.start_insert_animated
-        ).grid(row=0, column=3, padx=5, pady=2) # <--- 移动到第4列
+        ).grid(row=0, column=3, padx=5, pady=2)
         
         # 第二行：操作按钮
         self.create_button(
             control_frame, 
-            "❌ Delete", # <--- 新增
+            "❌ Delete",
             self.colors["accent_red"],
             self.start_delete_animated
         ).grid(row=1, column=0, padx=5, pady=2)
@@ -337,7 +388,7 @@ class AVLVisualizer:
             self.load_structure
         ).grid(row=1, column=3, padx=5, pady=2)
         
-        # 第三行：DSL命令 (保持不变)
+        # 第三行：DSL命令
         dsl_label = Label(
             control_frame, 
             text="DSL:", 
@@ -356,7 +407,7 @@ class AVLVisualizer:
             bd=2,
             relief=GROOVE
         )
-        dsl_entry.grid(row=2, column=1, columnspan=1, padx=5, pady=2, sticky="ew") # <--- 改回跨1列
+        dsl_entry.grid(row=2, column=1, columnspan=1, padx=5, pady=2, sticky="ew")
         
         self.create_button(
             control_frame, 
@@ -372,7 +423,10 @@ class AVLVisualizer:
             self.show_dsl_help
         ).grid(row=2, column=3, padx=5, pady=2)
         
-        # 状态标签 (保持不变)
+        # 动画控制
+        self._create_animation_controls_embedded(control_frame)
+        
+        # 状态标签
         self.status_label = Label(
             control_frame,
             text="就绪",
@@ -380,12 +434,40 @@ class AVLVisualizer:
             fg=self.colors["text_light"],
             font=self.status_font
         )
-        self.status_label.grid(row=3, column=0, columnspan=4, padx=5, pady=2, sticky="w")
+        self.status_label.grid(row=4, column=0, columnspan=4, padx=5, pady=2, sticky="w")
 
-    # ... create_button, execute_dsl_command, show_dsl_help, draw_instructions, update_status, _draw_connection, compute_positions_for_root, draw_tree_from_root ...
-    # (这些函数保持不变)
+    def _create_animation_controls_embedded(self, parent):
+        """嵌入模式下的动画控制"""
+        anim_frame = Frame(parent, bg=self.colors["bg_primary"])
+        anim_frame.grid(row=3, column=0, columnspan=4, sticky="ew", padx=10, pady=5)
+        
+        # 速度控制
+        Label(anim_frame, text="速度:", bg=self.colors["bg_primary"], 
+              fg=self.colors["text_light"], font=("Segoe UI", 9)).grid(row=0, column=0, padx=(0,5))
+        
+        self.speed_var = DoubleVar(value=1.0)
+        speed_scale = Scale(anim_frame, from_=0.3, to=3.0, resolution=0.1, 
+                           variable=self.speed_var, orient=HORIZONTAL,
+                           length=80, showvalue=True, bg=self.colors["bg_primary"],
+                           fg=self.colors["text_light"], highlightbackground=self.colors["bg_primary"])
+        speed_scale.grid(row=0, column=1, padx=5)
+        speed_scale.bind("<Motion>", lambda e: self.update_animation_speed(self.speed_var.get()))
+        
+        # 显示选项
+        self.bf_var = BooleanVar(value=True)
+        bf_check = Checkbutton(anim_frame, text="平衡因子", variable=self.bf_var,
+                              command=self.toggle_balance_factors, bg=self.colors["bg_primary"],
+                              fg=self.colors["text_light"], selectcolor=self.colors["bg_secondary"],
+                              activebackground=self.colors["bg_primary"], font=("Segoe UI", 9))
+        bf_check.grid(row=0, column=2, padx=10)
+        
+        self.height_var = BooleanVar(value=True)
+        height_check = Checkbutton(anim_frame, text="高度", variable=self.height_var,
+                                  command=self.toggle_height_display, bg=self.colors["bg_primary"],
+                                  fg=self.colors["text_light"], selectcolor=self.colors["bg_secondary"],
+                                  activebackground=self.colors["bg_primary"], font=("Segoe UI", 9))
+        height_check.grid(row=0, column=3, padx=10)
 
-    # (保持不变)
     def create_button(self, parent, text, color, command):
         if self.is_embedded:
             return Button(
@@ -415,7 +497,7 @@ class AVLVisualizer:
                 pady=8,
                 cursor="hand2"
             )
-    # (保持不变)
+
     def execute_dsl_command(self, event=None):
         dsl_text = self.dsl_var.get().strip()
         if not dsl_text:
@@ -428,19 +510,19 @@ class AVLVisualizer:
                 self.update_status("✅ DSL命令执行成功")
         except Exception as e:
             messagebox.showerror("❌ DSL错误", f"执行DSL命令时出错: {str(e)}")
-    # (保持不变)
+
     def show_dsl_help(self):
         try:
             from DSL_utils import avl_dsl
             avl_dsl._show_help()
         except ImportError:
              messagebox.showerror("❌ 导入错误", "无法加载 AVL DSL 帮助。\n请确保 'DSL_utils' 包已正确安装。")
-    # (保持不变)
+
     def draw_instructions(self):
         self.canvas.delete("all")
         self.node_vis.clear()
         
-        title_text = "🌳 AVL 树可视化系统 - 插入/删除演示：展示搜索路径并精确动画显示旋转" # <--- 更新标题
+        title_text = "🌳 AVL 树可视化系统 - 插入/删除演示：展示搜索路径并精确动画显示旋转"
         self.canvas.create_text(
             self.canvas_w/2, 20, 
             text=title_text, 
@@ -455,7 +537,7 @@ class AVLVisualizer:
             font=self.status_font, 
             fill=self.colors["accent_green"]
         )
-    # (保持不变)
+
     def update_status(self, txt: str):
         if hasattr(self, 'status_label'):
             self.status_label.config(text=txt)
@@ -464,7 +546,7 @@ class AVLVisualizer:
             try:
                 self.canvas.itemconfig(self.status_id, text=txt)
             except TclError:
-                self.status_id = None # 重置
+                self.status_id = None
         
         if not self.status_id:
              try:
@@ -477,7 +559,7 @@ class AVLVisualizer:
                 )
              except TclError:
                  pass
-    # (保持不变)
+
     def _draw_connection(self, cx, cy, tx, ty):
         top = cy + self.node_h/2
         bot = ty - self.node_h/2
@@ -485,7 +567,7 @@ class AVLVisualizer:
         l1 = self.canvas.create_line(cx, top, cx, midy, width=2.5, fill=self.colors["edge_color"])
         l2 = self.canvas.create_line(cx, midy, tx, bot, arrow=LAST, width=2.5, fill=self.colors["edge_color"])
         return (l1, l2)
-    # (保持不变)
+
     def compute_positions_for_root(self, root: Optional[AVLNode]) -> Dict[str, Tuple[float, float]]:
         res: Dict[str, Tuple[float,float]] = {}
         if not root:
@@ -517,7 +599,7 @@ class AVLVisualizer:
             y = 60 + depths[node] * self.level_gap
             res[key] = (x, y)
         return res
-    # (保持不变)
+
     def draw_tree_from_root(self, root: Optional[AVLNode]):
         self.canvas.delete("all")
         self.draw_instructions()
@@ -549,31 +631,7 @@ class AVLVisualizer:
         self.node_vis.clear()
         for node, key in node_to_key.items():
             cx, cy = pos[key]
-            left, top, right, bottom = cx - self.node_w/2, cy - self.node_h/2, cx + self.node_w/2, cy + self.node_h/2
-            rect = self.canvas.create_rectangle(
-                left, top, right, bottom, 
-                fill=self.colors["node_normal"], 
-                outline=self.colors["accent_blue"], 
-                width=2,
-                stipple="gray50"
-            )
-            x1, x2 = left + 28, left + 92
-            self.canvas.create_line(x1, top, x1, bottom, width=1, fill="#BBDEFB")
-            self.canvas.create_line(x2, top, x2, bottom, width=1, fill="#BBDEFB")
-            txt = self.canvas.create_text(
-                (x1+x2)/2, cy, 
-                text=str(node.val), 
-                font=("Segoe UI", 12, "bold"),
-                fill=self.colors["text_dark"]
-            )
-            self.node_vis[key] = {
-                'rect': rect, 
-                'text': txt, 
-                'cx': cx, 
-                'cy': cy, 
-                'val': str(node.val),
-                'edges': {}
-            }
+            self._draw_single_node(node, cx, cy, key)
         def setup_edges(n: Optional[AVLNode]):
             if not n:
                 return
@@ -593,7 +651,102 @@ class AVLVisualizer:
                 setup_edges(n.right)
         setup_edges(root)
 
-    # ---------- 插入动画流程 (保持不变) ----------
+    def _draw_single_node(self, node: AVLNode, cx: float, cy: float, key: str):
+        """绘制单个节点，包含平衡因子和高度信息"""
+        # 计算平衡因子
+        left_height = node.left.height if node.left else 0
+        right_height = node.right.height if node.right else 0
+        balance_factor = left_height - right_height
+        
+        # 根据平衡因子选择颜色
+        if abs(balance_factor) <= 1:
+            node_color = self.colors["node_balance_ok"]
+        elif abs(balance_factor) == 2:
+            node_color = self.colors["node_balance_warning"]
+        else:
+            node_color = self.colors["node_balance_critical"]
+            
+        # 绘制节点主体
+        left, top, right, bottom = cx - self.node_w/2, cy - self.node_h/2, cx + self.node_w/2, cy + self.node_h/2
+        rect = self.canvas.create_rectangle(
+            left, top, right, bottom, 
+            fill=node_color, 
+            outline=self.colors["accent_blue"], 
+            width=2,
+            stipple="gray50"
+        )
+        
+        # 绘制分隔线
+        x1, x2 = left + 28, left + 92
+        self.canvas.create_line(x1, top, x1, bottom, width=1, fill="#BBDEFB")
+        self.canvas.create_line(x2, top, x2, bottom, width=1, fill="#BBDEFB")
+        
+        # 主值文本
+        txt = self.canvas.create_text(
+            (x1+x2)/2, cy - 8, 
+            text=str(node.val), 
+            font=("Segoe UI", 12, "bold"),
+            fill=self.colors["text_dark"]
+        )
+        
+        # 高度文本
+        height_text = self.canvas.create_text(
+            x1 + 14, cy + 8,
+            text=f"h:{node.height}",
+            font=("Segoe UI", 8),
+            fill=self.colors["height_text"]
+        )
+        
+        # 平衡因子文本
+        bf_text = self.canvas.create_text(
+            x2 - 14, cy + 8,
+            text=f"bf:{balance_factor}",
+            font=("Segoe UI", 8, "bold"),
+            fill=self.colors["balance_text"]
+        )
+        
+        # 存储节点信息
+        self.node_vis[key] = {
+            'rect': rect, 
+            'text': txt,
+            'height_text': height_text,
+            'bf_text': bf_text,
+            'cx': cx, 
+            'cy': cy, 
+            'val': str(node.val),
+            'edges': {},
+            'balance_factor': balance_factor
+        }
+        
+        # 根据显示设置控制文本可见性
+        if not self.show_height:
+            self.canvas.itemconfig(height_text, state='hidden')
+        if not self.show_balance_factors:
+            self.canvas.itemconfig(bf_text, state='hidden')
+
+    # 动画控制方法
+    def update_animation_speed(self, value):
+        """更新动画速度"""
+        try:
+            self.animation_speed = float(value)
+        except:
+            self.animation_speed = 1.0
+
+    def toggle_balance_factors(self):
+        """切换平衡因子显示"""
+        self.show_balance_factors = self.bf_var.get()
+        self.redraw_current_tree()
+
+    def toggle_height_display(self):
+        """切换高度显示"""
+        self.show_height = self.height_var.get()
+        self.redraw_current_tree()
+
+    def redraw_current_tree(self):
+        """重绘当前树"""
+        self.draw_tree_from_root(clone_tree(self.model.root))
+
+    # 插入动画流程
     def start_insert_animated(self):
         if self.animating:
             self.update_status("⚠️ 正在执行动画，请稍候...")
@@ -614,6 +767,7 @@ class AVLVisualizer:
         if idx >= len(self.batch):
             self.animating = False
             self.update_status("✅ 所有插入完成")
+            self._show_final_balance_report()
             return
         val = self.batch[idx]
         inserted_node, path_nodes, rotations, snapshots = self.model.insert_with_steps(val)
@@ -642,12 +796,33 @@ class AVLVisualizer:
                     pass
             else:
                 self.draw_tree_from_root(snap_pre)
-            self.update_status(f"🔍 搜索路径: 访问 {v} (步骤 {i+1}/{len(path_nodes)})")
-            self.window.after(420, lambda: highlight_path(i+1))
+            
+            # 显示比较信息
+            if i < len(path_nodes) - 1:
+                next_node = path_nodes[i + 1]
+                comparison = self._get_comparison_text(val, node.val, next_node == node.left)
+                status_text = f"🔍 比较 {val} 和 {v}: {comparison}"
+            else:
+                status_text = f"🎯 找到插入位置: {val}"
+                
+            self.update_status(status_text)
+            
+            # 自适应延迟
+            delay = int(600 / self.animation_speed)
+            self.window.after(delay, lambda: highlight_path(i+1))
 
         highlight_path(0)
     
-    # (保持不变)
+    def _get_comparison_text(self, val1, val2, go_left: bool) -> str:
+        """生成比较文本"""
+        cmp_result = self.model._compare(val1, val2)
+        if cmp_result < 0:
+            return f"{val1} < {val2}，转向左子树" if go_left else f"{val1} < {val2}"
+        elif cmp_result > 0:
+            return f"{val1} > {val2}，转向右子树" if not go_left else f"{val1} > {val2}"
+        else:
+            return f"{val1} = {val2}，转向右子树"
+
     def animate_flyin_new(self, val_str: str, snap_after_insert: Optional[AVLNode], on_complete):
         if not snap_after_insert:
             on_complete(); return
@@ -666,10 +841,10 @@ class AVLVisualizer:
             width=2
         )
         temp_text = self.canvas.create_text(sx, sy, text=str(val_str), font=("Segoe UI", 12, "bold"))
-        steps = 30
+        steps = int(30 * self.animation_speed)
         dx = (tx - sx)/steps
         dy = (ty - sy)/steps
-        delay = 12
+        delay = max(8, int(12 / self.animation_speed))
         def step(i=0):
             if i < steps:
                 try:
@@ -689,24 +864,21 @@ class AVLVisualizer:
                     self.canvas.itemconfig(self.node_vis[target_key]['rect'], fill=self.colors["node_new"])
                 except Exception:
                     pass
-                self.window.after(300, on_complete)
+                self.window.after(int(300 / self.animation_speed), on_complete)
         step()
 
-    # (保持不变)
     def _after_insert_rotations(self, rotations, snapshots, insertion_idx):
         if not rotations:
             self.draw_tree_from_root(clone_tree(self.model.root))
-            self.window.after(300, lambda: self._insert_seq(insertion_idx+1))
+            self.window.after(int(300 / self.animation_speed), lambda: self._insert_seq(insertion_idx+1))
             return
         def done_all():
             self.draw_tree_from_root(clone_tree(self.model.root))
-            self.window.after(300, lambda: self._insert_seq(insertion_idx+1))
+            self.window.after(int(300 / self.animation_speed), lambda: self._insert_seq(insertion_idx+1))
         self._animate_rotations_sequence(rotations, snapshots, insertion_idx, done_all)
 
-    # ---------- 新增：删除动画流程 ----------
-    
+    # 删除动画流程
     def start_delete_animated(self):
-        """[新增] 启动删除动画"""
         if self.animating:
             self.update_status("⚠️ 正在执行动画，请稍候...")
             return
@@ -726,18 +898,16 @@ class AVLVisualizer:
         self._delete_seq(0)
 
     def _delete_seq(self, idx: int):
-        """[新增] 按顺序执行删除动画"""
         if idx >= len(self.batch):
             self.animating = False
             self.update_status("✅ 所有删除完成")
+            self._show_final_balance_report()
             return
 
         val = self.batch[idx]
-        # 调用 model 的 delete_with_steps
         deleted_node, path_nodes, rotations, snapshots = self.model.delete_with_steps(val)
 
         snap_pre = snapshots[0]
-        # snap_after_delete 是删除后、旋转前的快照
         snap_after_delete = snapshots[1] if len(snapshots) > 1 else None
 
         pos_pre = self.compute_positions_for_root(snap_pre)
@@ -747,18 +917,13 @@ class AVLVisualizer:
             val_to_keys_pre.setdefault(base, []).append(k)
 
         def highlight_path_for_delete(i=0):
-            # (与插入的 highlight_path 几乎相同)
             if i >= len(path_nodes):
-                # 路径高亮完成
                 if deleted_node is None:
-                    # --- 未找到节点 ---
                     self.update_status(f"❌ 未找到 {val}")
-                    self.draw_tree_from_root(snap_pre) # 重绘以清除高亮
-                    self.window.after(600, lambda: self._delete_seq(idx + 1)) # 继续下一个
+                    self.draw_tree_from_root(snap_pre)
+                    self.window.after(int(600 / self.animation_speed), lambda: self._delete_seq(idx + 1))
                 else:
-                    # --- 找到节点，执行删除 "动画" ---
                     self.update_status(f"❌ 找到 {val}: 正在移除...")
-                    # 调用删除动画（显示删除后的状态）
                     self.animate_show_deletion(
                         val, 
                         snap_after_delete, 
@@ -766,7 +931,6 @@ class AVLVisualizer:
                     )
                 return
                 
-            # (高亮逻辑)
             node = path_nodes[i]
             v = str(node.val)
             keylist = val_to_keys_pre.get(v, [])
@@ -780,46 +944,39 @@ class AVLVisualizer:
             else:
                 self.draw_tree_from_root(snap_pre)
                 
-            self.update_status(f"🔍 搜索 {val}: 访问 {v} (步骤 {i+1}/{len(path_nodes)})")
-            self.window.after(420, lambda: highlight_path_for_delete(i+1))
+            # 显示比较信息
+            if i < len(path_nodes) - 1:
+                next_node = path_nodes[i + 1]
+                comparison = self._get_comparison_text(val, node.val, next_node == node.left)
+                status_text = f"🔍 搜索 {val}: 比较 {val} 和 {v}: {comparison}"
+            else:
+                status_text = f"🎯 找到目标节点: {val}"
+                
+            self.update_status(status_text)
+            
+            delay = int(600 / self.animation_speed)
+            self.window.after(delay, lambda: highlight_path_for_delete(i+1))
 
         highlight_path_for_delete(0)
 
     def animate_show_deletion(self, val_str: str, snap_after_delete: Optional[AVLNode], on_complete):
-        """
-        [新增] "删除" 动画：
-        为了简化，我们不制作淡出动画（因为值可能被交换），
-        而是直接显示删除（和值交换）后、旋转前的状态。
-        """
-        # 直接绘制删除/交换后的快照
         self.draw_tree_from_root(snap_after_delete)
-        
         self.update_status(f"✅ {val_str} 已移除 (或值已交换). 准备旋转...")
-        
-        # 暂停一段时间让用户看到结果
-        self.window.after(800, on_complete)
+        self.window.after(int(800 / self.animation_speed), on_complete)
 
     def _after_delete_rotations(self, rotations, snapshots, deletion_idx):
-        """[新增] 处理删除后的旋转序列 (逻辑同插入)"""
         if not rotations:
-            # 没有旋转，直接进入下一个删除
             self.draw_tree_from_root(clone_tree(self.model.root))
-            self.window.after(300, lambda: self._delete_seq(deletion_idx+1))
+            self.window.after(int(300 / self.animation_speed), lambda: self._delete_seq(deletion_idx+1))
             return
 
         def done_all():
-            # 所有旋转完成
             self.draw_tree_from_root(clone_tree(self.model.root))
-            # 继续下一个删除
-            self.window.after(300, lambda: self._delete_seq(deletion_idx+1))
+            self.window.after(int(300 / self.animation_speed), lambda: self._delete_seq(deletion_idx+1))
             
-        # 使用通用的旋转动画序列
         self._animate_rotations_sequence(rotations, snapshots, deletion_idx, done_all)
 
-
-    # ---------- 通用动画 (保持不变) ----------
-    
-    # (保持不变)
+    # 通用动画方法
     def _redraw_all_edges_during_animation(self):
         for parent_key, parent_vis in self.node_vis.items():
             try:
@@ -843,11 +1000,19 @@ class AVLVisualizer:
             except TclError:
                 continue
 
-    # (保持不变)
     def _animate_single_rotation(self, before_root: Optional[AVLNode], after_root: Optional[AVLNode], rotation_info: Dict, on_done):
         pos_before = self.compute_positions_for_root(before_root)
         pos_after = self.compute_positions_for_root(after_root)
+        
+        # 绘制旋转前的树，并高亮参与旋转的节点
         self.draw_tree_from_root(before_root)
+        self._highlight_rotation_nodes(rotation_info, pos_before)
+        
+        # 旋转类型说明
+        rtype = rotation_info.get('type', '')
+        rotation_explanation = self._get_rotation_explanation(rtype)
+        self.update_status(f"🔄 执行 {rtype} 旋转: {rotation_explanation}")
+        
         keys_common = set(pos_before.keys()) & set(pos_after.keys())
         moves = []
         for k in keys_common:
@@ -857,44 +1022,13 @@ class AVLVisualizer:
             sx, sy = pos_before[k]
             tx, ty = pos_after[k]
             moves.append((k, item['rect'], item['text'], sx, sy, tx, ty))
-        rtype = rotation_info.get('type', '')
-        label_text = f"🔄 旋转: {rtype}"
-        z = rotation_info.get('z'); y = rotation_info.get('y')
-        zkey = None; ykey = None
-        if z:
-            zkey = next((k for k in pos_before.keys() if k.split('#')[0]==str(z.val)), None)
-        if y:
-            ykey = next((k for k in pos_before.keys() if k.split('#')[0]==str(y.val)), None)
-        arc_id = None; label_id = None
-        if zkey and ykey:
-            zx, zy = pos_before[zkey]; yx, yy = pos_before[ykey]
-            midx = (zx + yx)/2
-            topy = min(zy, yy) - 30
-            try:
-                arc_id = self.canvas.create_arc(
-                    midx-30, topy-20, midx+30, topy+20, 
-                    start=0, extent=180, style=ARC, width=3, 
-                    outline=self.colors["accent_red"]
-                )
-                label_id = self.canvas.create_text(
-                    midx, topy-28, 
-                    text=label_text, 
-                    font=("Segoe UI", 11, "bold"), 
-                    fill=self.colors["accent_red"]
-                )
-            except Exception:
-                arc_id = None; label_id = None
-        frames = 30
-        delay = 20
-        def rect_center_coords(rect_id):
-            try:
-                coords = self.canvas.coords(rect_id)
-                if not coords or len(coords) < 4:
-                    return (0,0)
-                x1,y1,x2,y2 = coords
-                return ((x1+x2)/2, (y1+y2)/2)
-            except TclError:
-                return (0,0)
+            
+        # 绘制旋转弧线和标签
+        arc_id, label_id = self._draw_rotation_arc(rotation_info, pos_before)
+        
+        frames = int(30 * self.animation_speed)
+        delay = max(10, int(20 / self.animation_speed))
+        
         def frame_step(f=0):
             if f >= frames:
                 self.draw_tree_from_root(after_root)
@@ -904,37 +1038,126 @@ class AVLVisualizer:
                 if label_id:
                     try: self.canvas.delete(label_id)
                     except: pass
-                self.window.after(300, on_done)
+                self.window.after(int(300 / self.animation_speed), on_done)
                 return
+                
             t = (f+1)/frames
             for (k, rect_id, text_id, sx, sy, tx, ty) in moves:
                 cur_cx = sx + (tx - sx) * t
                 cur_cy = sy + (ty - sy) * t
                 try:
-                    ccx, ccy = rect_center_coords(rect_id)
+                    ccx, ccy = self._get_rect_center(rect_id)
                     if (ccx, ccy) == (0,0): continue
                     dx = cur_cx - ccx
                     dy = cur_cy - ccy
                     self.canvas.move(rect_id, dx, dy)
                     self.canvas.move(text_id, dx, dy)
+                    # 移动平衡因子和高度文本
+                    if k in self.node_vis:
+                        bf_text = self.node_vis[k].get('bf_text')
+                        height_text = self.node_vis[k].get('height_text')
+                        if bf_text:
+                            self.canvas.move(bf_text, dx, dy)
+                        if height_text:
+                            self.canvas.move(height_text, dx, dy)
                 except Exception:
                     pass
+                    
             self._redraw_all_edges_during_animation()
             self.window.after(delay, lambda: frame_step(f+1))
+            
         frame_step(0)
 
-    # (保持不变)
+    def _highlight_rotation_nodes(self, rotation_info: Dict, positions: Dict):
+        """高亮参与旋转的节点"""
+        z_node = rotation_info.get('z')
+        y_node = rotation_info.get('y') 
+        x_node = rotation_info.get('x')
+        
+        # 高亮z节点（红色）
+        if z_node:
+            z_key = next((k for k in positions.keys() if k.split('#')[0] == str(z_node.val)), None)
+            if z_key and z_key in self.node_vis:
+                self.canvas.itemconfig(self.node_vis[z_key]['rect'], 
+                                     fill=self.colors["accent_red"])
+        
+        # 高亮y节点（橙色）
+        if y_node:
+            y_key = next((k for k in positions.keys() if k.split('#')[0] == str(y_node.val)), None)
+            if y_key and y_key in self.node_vis:
+                self.canvas.itemconfig(self.node_vis[y_key]['rect'],
+                                     fill=self.colors["accent_orange"])
+        
+        # 高亮x节点（绿色）
+        if x_node:
+            x_key = next((k for k in positions.keys() if k.split('#')[0] == str(x_node.val)), None)
+            if x_key and x_key in self.node_vis:
+                self.canvas.itemconfig(self.node_vis[x_key]['rect'],
+                                     fill=self.colors["accent_green"])
+
+    def _get_rotation_explanation(self, rtype: str) -> str:
+        """获取旋转类型的解释"""
+        explanations = {
+            'LL': '左子树的左子树导致不平衡 - 右旋',
+            'RR': '右子树的右子树导致不平衡 - 左旋', 
+            'LR': '左子树的右子树导致不平衡 - 先左旋后右旋',
+            'RL': '右子树的左子树导致不平衡 - 先右旋后左旋'
+        }
+        return explanations.get(rtype, '调整树结构以保持平衡')
+
+    def _draw_rotation_arc(self, rotation_info: Dict, positions: Dict):
+        """绘制旋转弧线"""
+        z = rotation_info.get('z')
+        y = rotation_info.get('y')
+        if not z or not y:
+            return None, None
+            
+        zkey = next((k for k in positions.keys() if k.split('#')[0] == str(z.val)), None)
+        ykey = next((k for k in positions.keys() if k.split('#')[0] == str(y.val)), None)
+        
+        if not zkey or not ykey:
+            return None, None
+            
+        zx, zy = positions[zkey]
+        yx, yy = positions[ykey]
+        midx = (zx + yx)/2
+        topy = min(zy, yy) - 40
+        
+        try:
+            arc_id = self.canvas.create_arc(
+                midx-40, topy-25, midx+40, topy+25, 
+                start=0, extent=180, style=ARC, width=3, 
+                outline=self.colors["rotation_highlight"],
+                dash=(5, 3)
+            )
+            label_id = self.canvas.create_text(
+                midx, topy-35, 
+                text=f"🔄 {rotation_info.get('type', '')}", 
+                font=("Segoe UI", 11, "bold"), 
+                fill=self.colors["rotation_highlight"]
+            )
+            return arc_id, label_id
+        except Exception:
+            return None, None
+
+    def _get_rect_center(self, rect_id):
+        """获取矩形中心坐标"""
+        try:
+            coords = self.canvas.coords(rect_id)
+            if not coords or len(coords) < 4:
+                return (0,0)
+            x1,y1,x2,y2 = coords
+            return ((x1+x2)/2, (y1+y2)/2)
+        except TclError:
+            return (0,0)
+
     def _animate_rotations_sequence(self, rotations: List[Dict], snapshots: List[Optional[AVLNode]], insertion_index: int, on_all_done):
-        """(此函数现在是通用的，适用于插入和删除)"""
         if not rotations:
             on_all_done(); return
         def step(i=0):
             if i >= len(rotations):
                 on_all_done()
                 return
-            # 快照索引从 1 开始 (snap[0] = 插入前, snap[1] = 插入后/删除后)
-            # snap[1] 是第一次旋转的 "before"
-            # snap[2] 是第一次旋转的 "after"
             before_root = snapshots[1 + i] 
             after_root = snapshots[2 + i]
             rot_info = rotations[i]
@@ -942,9 +1165,33 @@ class AVLVisualizer:
             self._animate_single_rotation(before_root, after_root, rot_info, lambda: step(i+1))
         step(0)
 
-    # ---------- 清空 和 文件操作 (保持不变) ----------
-    
-    # (保持不变)
+    def _show_final_balance_report(self):
+        """显示最终的平衡报告"""
+        if not self.model.root:
+            return
+            
+        def check_balance(node):
+            if not node:
+                return True, 0
+            left_balanced, left_height = check_balance(node.left)
+            right_balanced, right_height = check_balance(node.right)
+            balanced = (left_balanced and right_balanced and 
+                       abs(left_height - right_height) <= 1)
+            return balanced, 1 + max(left_height, right_height)
+        
+        is_balanced, _ = check_balance(self.model.root)
+        status = "✅ 树是平衡的" if is_balanced else "⚠️ 树不平衡"
+        self.update_status(f"{status} | 高度: {self.model.root.height}")
+        
+        # 短暂高亮显示结果
+        self.canvas.create_text(
+            self.canvas_w/2, self.canvas_h - 20,
+            text=status,
+            font=("Segoe UI", 12, "bold"),
+            fill=self.colors["accent_green"] if is_balanced else self.colors["accent_orange"]
+        )
+
+    # 清空和文件操作
     def clear_canvas(self):
         if self.animating:
             self.update_status("⚠️ 正在执行动画，无法清空")
@@ -955,18 +1202,15 @@ class AVLVisualizer:
         self.draw_instructions()
         self.update_status("🗑️ 已清空")
 
-    # (保持不变)
     def back_to_main(self):
         if self.is_embedded:
             self.window.pack_forget()
         else:
             self.window.destroy()
 
-    # (保持不变)
     def _ensure_avl_folder(self) -> str:
         return storage.ensure_save_subdir("avl")
 
-    # (保持不变)
     def save_structure(self):
         root = self.model.root
         default_dir = self._ensure_avl_folder()
@@ -984,7 +1228,6 @@ class AVLVisualizer:
             messagebox.showinfo("✅ 成功", f"AVL 已保存到：\n{filepath}")
             self.update_status("💾 保存成功")
 
-    # (保持不变)
     def load_structure(self):
         default_dir = self._ensure_avl_folder()
         filepath = filedialog.askopenfilename(
@@ -1001,7 +1244,6 @@ class AVLVisualizer:
         messagebox.showinfo("✅ 成功", f"AVL 已从文件加载并恢复结构：\n{filepath}")
         self.update_status("📂 已从文件加载结构")
 
-# (保持不变)
 if __name__ == '__main__':
     w = Tk()
     app = AVLVisualizer(w)
