@@ -1,8 +1,18 @@
 from typing import List, Optional, Any, Tuple, Union, Callable
 from dataclasses import dataclass
 from enum import Enum
+import re
 
 TOMBSTONE = object()
+
+# 预定义的散列函数模板
+HASH_PRESETS = {
+    "mod": ("x % capacity", "取模法 (x % capacity)"),
+    "multiply": ("int((x * 0.6180339887) % 1 * capacity)", "乘法散列 (黄金比例)"),
+    "square_mid": ("int(str(x*x).zfill(8)[2:6]) % capacity", "平方取中法"),
+    "fold": ("(x // 1000 + x % 1000) % capacity", "折叠法"),
+    "custom": ("x % capacity", "自定义"),
+}
 
 class CollisionMethod(Enum):
     """冲突处理方法"""
@@ -18,9 +28,64 @@ class ProbeResult:
     is_full: bool = False  # 表是否已满
     chain_position: Optional[int] = None  # 在链表中的位置（仅拉链法）
 
+
+def parse_hash_expression(expr: str, capacity: int) -> Callable[[Any], int]:
+    """
+    将字符串表达式解析为散列函数
+    支持的变量: x (输入值), capacity (表容量)
+    支持的运算: +, -, *, /, //, %, ** 以及 int(), abs(), str() 等内置函数
+    
+    示例:
+        "x % capacity"
+        "x % 7"
+        "(x * 2 + 1) % capacity"
+        "int((x * 0.618) % 1 * capacity)"
+    """
+    # 安全检查：只允许特定字符和函数
+    allowed_pattern = r'^[\d\s\+\-\*\/\%\(\)\.\,xXcapacity_intabsstrlenord]+$'
+    # 更宽松的检查，允许常见的数学运算
+    expr_clean = expr.strip()
+    
+    # 基本安全检查
+    dangerous_keywords = ['import', 'exec', 'eval', '__', 'open', 'file', 'input', 'globals', 'locals']
+    for kw in dangerous_keywords:
+        if kw in expr_clean.lower():
+            raise ValueError(f"表达式中不允许使用 '{kw}'")
+    
+    def hash_func(val: Any) -> int:
+        try:
+            x = int(val)
+        except (ValueError, TypeError):
+            x = abs(hash(str(val)))
+        
+        # 创建安全的命名空间
+        safe_namespace = {
+            'x': x,
+            'X': x,
+            'capacity': capacity,
+            'int': int,
+            'abs': abs,
+            'str': str,
+            'len': len,
+            'ord': ord,
+            'min': min,
+            'max': max,
+        }
+        
+        try:
+            result = eval(expr_clean, {"__builtins__": {}}, safe_namespace)
+            return abs(int(result)) % capacity
+        except Exception as e:
+            # 出错时回退到默认散列
+            return abs(x) % capacity
+    
+    return hash_func
+
+
 class HashTableModel:
     def __init__(self, capacity: int = 11, method: CollisionMethod = CollisionMethod.OPEN_ADDRESSING, 
-                 hash_func: Optional[Callable[[Any], int]] = None):
+                 hash_func: Optional[Callable[[Any], int]] = None,
+                 hash_expr: Optional[str] = None):
         if capacity <= 0:
             raise ValueError("capacity must be positive")
         self.capacity = capacity
@@ -28,11 +93,16 @@ class HashTableModel:
         self.tombstone = TOMBSTONE
         self.size = 0  # 有效元素计数
         
+        # 散列函数表达式（用于显示和序列化）
+        self.hash_expr = hash_expr or "x % capacity"
+        
         # 设置哈希函数
-        if hash_func is None:
-            self.hash_func = self._default_hash
-        else:
+        if hash_func is not None:
             self.hash_func = hash_func
+        elif hash_expr is not None:
+            self.hash_func = parse_hash_expression(hash_expr, capacity)
+        else:
+            self.hash_func = self._default_hash
         
         if method == CollisionMethod.OPEN_ADDRESSING:
             self.table: List[Optional[Any]] = [None] * capacity
@@ -46,6 +116,23 @@ class HashTableModel:
         except (ValueError, TypeError):
             xi = hash(str(x))
         return abs(xi) % self.capacity
+    
+    def set_hash_expression(self, expr: str):
+        """设置新的散列函数表达式"""
+        self.hash_expr = expr
+        self.hash_func = parse_hash_expression(expr, self.capacity)
+    
+    def set_hash_preset(self, preset_name: str):
+        """使用预设的散列函数"""
+        if preset_name in HASH_PRESETS:
+            expr, _ = HASH_PRESETS[preset_name]
+            self.set_hash_expression(expr)
+        else:
+            raise ValueError(f"未知的预设散列函数: {preset_name}")
+    
+    def get_hash_display(self) -> str:
+        """获取当前散列函数的显示文本"""
+        return f"h(x) = {self.hash_expr}"
 
     def _hash(self, x: Any) -> int:
         """计算元素的哈希值"""
@@ -206,6 +293,7 @@ class HashTableModel:
         # 保存当前有效元素
         old_table = self.table
         old_capacity = self.capacity
+        old_hash_expr = self.hash_expr
         
         # 创建新表
         self.capacity = new_capacity
@@ -214,6 +302,9 @@ class HashTableModel:
         else:
             self.table = [[] for _ in range(new_capacity)]
         self.size = 0
+        
+        # 更新散列函数以使用新容量
+        self.hash_func = parse_hash_expression(old_hash_expr, new_capacity)
         
         # 重新插入所有有效元素
         if self.method == CollisionMethod.OPEN_ADDRESSING:
@@ -238,4 +329,4 @@ class HashTableModel:
         return 0
 
     def __repr__(self):
-        return f"HashTableModel(capacity={self.capacity}, size={self.size}, method={self.method.value}, table={self.table})"
+        return f"HashTableModel(capacity={self.capacity}, size={self.size}, method={self.method.value}, hash={self.hash_expr}, table={self.table})"

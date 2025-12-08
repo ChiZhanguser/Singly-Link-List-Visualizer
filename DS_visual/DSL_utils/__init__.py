@@ -7,6 +7,8 @@ from . import huffman_dsl
 from . import avl_dsl  
 from . import rbt_dsl
 from . import binary_tree_dsl  # 新增: 链式二叉树 DSL
+from . import hashtable_dsl  # 新增: 散列表 DSL
+from . import bplustree_dsl  # 新增: B+ 树 DSL
 
 def process_command(visualizer, text):
     if not visualizer or not text or not text.strip():
@@ -168,6 +170,34 @@ def process_command(visualizer, text):
     except Exception as e:
         print(f"DEBUG: Trie processing error: {e}")
         pass
+
+    try:
+        # Hashtable Visualizer (散列表)
+        if ("hashtable" in visualizer_type or
+            "hash" in visualizer_type or
+            type(visualizer).__name__ == "HashtableVisualizer" or
+            (hasattr(visualizer, "model") and 
+             hasattr(visualizer.model, "hash_func") and
+             hasattr(visualizer.model, "tombstone"))):
+            print(f"DEBUG: Processing as Hashtable visualizer")
+            return hashtable_dsl.process(visualizer, text)
+    except Exception as e:
+        print(f"DEBUG: Hashtable processing error: {e}")
+        pass
+
+    try:
+        # B+ Tree Visualizer (B+ 树)
+        if ("bplus" in visualizer_type or
+            "bplustree" in visualizer_type.replace("_", "") or
+            type(visualizer).__name__ == "BPlusVisualizer" or
+            (hasattr(visualizer, "tree") and 
+             hasattr(visualizer.tree, "order") and
+             hasattr(visualizer.tree, "leaves"))):
+            print(f"DEBUG: Processing as B+ Tree visualizer")
+            return bplustree_dsl.process(visualizer, text)
+    except Exception as e:
+        print(f"DEBUG: B+ Tree processing error: {e}")
+        pass
     
     from tkinter import messagebox
     messagebox.showinfo("未识别可视化类型", 
@@ -180,5 +210,6 @@ def process_command(visualizer, text):
         "6. 红黑树 (RBT)\n"
         "7. 字典树 (Trie)\n"
         "8. 哈夫曼树 (Huffman)\n"
-        "9. 链式二叉树 (Binary Tree)\n\n"
+        "9. 链式二叉树 (Binary Tree)\n"
+        "10. 散列表 (Hashtable)\n\n"
         f"当前类型 '{type(visualizer).__name__}' 未能匹配到对应的DSL处理器。")

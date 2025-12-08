@@ -1,6 +1,6 @@
 """
 二叉树可视化工具的 DSL 命令处理器
-支持构建、遍历(静态和动画)、树属性查询等命令
+支持构建、查找、插入、删除、遍历(静态和动画)、树属性查询等命令
 """
 
 from tkinter import messagebox
@@ -48,6 +48,70 @@ def process(visualizer, text: str):
             seq_text = " ".join(args)
             visualizer.input_var.set(seq_text)
             visualizer.build_tree_from_input()
+        
+        # ============================================
+        # 查找命令
+        # ============================================
+        elif cmd in ("search", "find"):
+            if not hasattr(visualizer, "start_search_animation"):
+                messagebox.showinfo("提示", "当前版本不支持查找动画")
+                return
+            if not args:
+                visualizer.start_search_animation()
+            else:
+                visualizer.start_search_animation(args[0])
+        
+        # ============================================
+        # 插入命令
+        # ============================================
+        elif cmd == "insert":
+            if not hasattr(visualizer, "start_insert_animation"):
+                messagebox.showinfo("提示", "当前版本不支持插入动画")
+                return
+            if not args:
+                visualizer.start_insert_animation()
+            else:
+                value = args[0]
+                parent_value = None
+                direction = 'auto'
+                
+                # 解析插入参数
+                # 格式1: insert <value>
+                # 格式2: insert <value> <parent_value>
+                # 格式3: insert <value> left <parent_value>
+                # 格式4: insert <value> right <parent_value>
+                if len(args) >= 3:
+                    if args[1].lower() in ('left', 'l'):
+                        direction = 'left'
+                        parent_value = args[2]
+                    elif args[1].lower() in ('right', 'r'):
+                        direction = 'right'
+                        parent_value = args[2]
+                    elif args[2].lower() in ('left', 'l'):
+                        parent_value = args[1]
+                        direction = 'left'
+                    elif args[2].lower() in ('right', 'r'):
+                        parent_value = args[1]
+                        direction = 'right'
+                elif len(args) >= 2:
+                    if args[1].lower() in ('left', 'l', 'right', 'r'):
+                        direction = 'left' if args[1].lower() in ('left', 'l') else 'right'
+                    else:
+                        parent_value = args[1]
+                
+                visualizer.start_insert_animation(value, parent_value, direction)
+        
+        # ============================================
+        # 删除命令
+        # ============================================
+        elif cmd == "delete":
+            if not hasattr(visualizer, "start_delete_animation"):
+                messagebox.showinfo("提示", "当前版本不支持删除动画")
+                return
+            if not args:
+                visualizer.start_delete_animation()
+            else:
+                visualizer.start_delete_animation(args[0])
         
         # ============================================
         # 遍历命令 - 静态显示结果
@@ -258,6 +322,19 @@ def _show_help():
   示例: build 1 2 3 # 4 # 5
        create 1 2 3 4 5 6 7
 
+【节点操作命令】
+  search <值>          查找节点 (动画演示)
+  find <值>            查找节点 (同search)
+  insert <值>          自动插入到第一个空位
+  insert <值> left <父值>   插入为左子节点
+  insert <值> right <父值>  插入为右子节点
+  delete <值>          删除指定节点 (动画演示)
+
+  示例: search 4
+       insert 6 left 3
+       insert 7 right 3
+       delete 2
+
 【遍历命令 - 显示结果】
   preorder            前序遍历 (根-左-右)
   inorder             中序遍历 (左-根-右)
@@ -289,7 +366,7 @@ def _show_help():
   • 序列支持空格或逗号分隔
   • 使用 # 表示空节点
   • 按↑↓箭头键浏览历史命令
-  • 动画演示会逐个高亮访问的节点
+  • 所有操作都有动画演示效果
 ═══════════════════════════════════════
     """
     messagebox.showinfo("二叉树 DSL 命令帮助", help_text)

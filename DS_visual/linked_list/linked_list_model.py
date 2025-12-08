@@ -159,3 +159,66 @@ class LinkedListModel:
         if pos < 1 or pos > len(self.node_value_store):
             raise IndexError("position out of range")
         self.node_value_store.pop(pos-1)
+    
+    def find_value_index(self, value: Any) -> int:
+        """查找值在链表中的位置（0-based），找不到返回-1"""
+        cur = self.node_value_store.head
+        idx = 0
+        while cur:
+            # 尝试数值比较和字符串比较
+            if cur.value == value:
+                return idx
+            try:
+                if str(cur.value) == str(value):
+                    return idx
+            except:
+                pass
+            cur = cur.next
+            idx += 1
+        return -1
+    
+    def delete_by_value(self, value: Any) -> bool:
+        """按值删除第一个匹配的节点，返回是否删除成功"""
+        idx = self.find_value_index(value)
+        if idx < 0:
+            return False
+        self.node_value_store.pop(idx)
+        return True
+    
+    def insert_before_value(self, target_value: Any, new_value: Any) -> int:
+        """在第一个值为target_value的节点前面插入new_value
+        返回插入位置(0-based)，找不到目标值返回-1"""
+        idx = self.find_value_index(target_value)
+        if idx < 0:
+            return -1
+        self.node_value_store.insert(idx, new_value)
+        return idx
+    
+    def insert_after_value(self, target_value: Any, new_value: Any) -> int:
+        """在第一个值为target_value的节点后面插入new_value
+        返回插入位置(0-based)，找不到目标值返回-1"""
+        idx = self.find_value_index(target_value)
+        if idx < 0:
+            return -1
+        self.node_value_store.insert(idx + 1, new_value)
+        return idx + 1
+
+    def insert_between_values(self, value_a: Any, value_b: Any, new_value: Any) -> int:
+        """在第一个值为value_a的节点和第一个值为value_b的节点之间插入new_value
+        要求a在b前面且相邻，返回插入位置(0-based)，失败返回-1或-2"""
+        idx_a = self.find_value_index(value_a)
+        idx_b = self.find_value_index(value_b)
+        
+        if idx_a < 0:
+            return -1  # 找不到value_a
+        if idx_b < 0:
+            return -2  # 找不到value_b
+        
+        # 确保a在b前面
+        if idx_a >= idx_b:
+            return -3  # a不在b前面
+        
+        # 在a后面插入（即在b前面插入）
+        insert_pos = idx_a + 1
+        self.node_value_store.insert(insert_pos, new_value)
+        return insert_pos

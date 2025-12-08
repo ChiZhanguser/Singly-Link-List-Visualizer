@@ -119,18 +119,63 @@ class ChatWindow:
 
     def _worker_handle_function_call(self, user_text: str, assistant_var):
         try:
+            # 获取当前数据结构类型对应的函数schemas
+            # 默认获取栈相关的函数（可以根据上下文动态调整）
+            functions = get_function_schemas("stack")
+            
+            system_prompt = """你是一个帮助用户学习数据结构的AI助手。你可以通过调用函数来演示各种栈的应用：
+
+1. **后缀表达式求值** (stack_eval_postfix): 当用户想要演示后缀表达式（逆波兰表达式）的求值过程时调用
+   - 例如用户说"演示后缀表达式 3 4 + 2 *"，应调用 stack_eval_postfix(expression="3 4 + 2 *")
+   
+2. **括号匹配检验** (stack_bracket_match): 当用户想要检验括号是否匹配时调用
+   - 例如用户说"检验{a+(b-c)*2}的括号"，应调用 stack_bracket_match(expression="{a+(b-c)*2}")
+
+3. **DFS深度优先搜索** (stack_dfs): 当用户想要演示DFS遍历时调用
+   - 例如用户说"演示DFS"，应调用 stack_dfs()
+
+4. **栈的基本操作**: stack_push, stack_pop, stack_clear, stack_batch_create, stack_get_state
+
+请根据用户的请求，判断是否需要调用函数。如果需要，直接调用对应函数；如果只是普通问答，直接回复即可。"""
+
             messages = [
-                {"role":"system", "content":"你是一个帮助用户学习数据结构的人,你的任务是根据用户的问题,判断用户是否了解数据结构的相关知识。"},
-                {"role":"user","content": user_text}
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_text}
             ]
-            response_text = self.client.send_message(
+            
+            response = self.client.send_message(
                 text=user_text,
                 messages=messages,
-                temperature=0.0
+                temperature=0.0,
+                functions=functions,
+                function_call="auto"
             )
-            self.win.after(0, lambda: assistant_var.set(response_text))
+            
+            # 检查是否是function_call响应
+            if isinstance(response, dict) and response.get("type") == "function_call":
+                func_name = response.get("name", "")
+                func_args = response.get("arguments", {})
+                
+                print(f"LLM调用函数: {func_name}, 参数: {func_args}")
+                
+                # 执行函数调用
+                result = function_dispatcher.dispatch(func_name, func_args)
+                
+                # 根据结果构建回复
+                if result.get("ok"):
+                    response_text = f"✅ 正在执行: {result.get('message', func_name)}"
+                else:
+                    response_text = f"❌ 执行失败: {result.get('error', '未知错误')}"
+                
+                self.win.after(0, lambda t=response_text: assistant_var.set(t))
+            else:
+                # 普通文本回复
+                self.win.after(0, lambda t=response: assistant_var.set(t))
+                
         except Exception as e:
             print("worker error:", e)
+            import traceback
+            traceback.print_exc()
             self.win.after(0, lambda: assistant_var.set(assistant_var.get() + f"\n\n注: 调用失败: {str(e)}"))
         finally:
             self.win.after(0, self._finish_stream) 

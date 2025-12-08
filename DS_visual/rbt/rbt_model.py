@@ -310,6 +310,29 @@ class RBModel:
 
         return new_node, path_nodes, events, snapshots
 
+    def search_with_steps(self, val: Any) -> Tuple[Optional[RBNode], List[RBNode], bool]:
+        """
+        查找节点并返回详细信息：
+          - found_node: 找到的节点引用，若未找到则为 None
+          - path_nodes: 查找过程中访问的节点（按顺序，便于可视化搜索路径）
+          - found: 是否找到 (True/False)
+        """
+        path_nodes: List[RBNode] = []
+        
+        cur = self.root
+        while cur:
+            path_nodes.append(cur)
+            if self._compare_less(val, cur.val):
+                cur = cur.left
+            elif self._compare_less(cur.val, val):
+                cur = cur.right
+            else:
+                # 找到了 (val == cur.val)
+                return cur, path_nodes, True
+        
+        # 未找到
+        return None, path_nodes, False
+
     def delete_with_steps(self, val: Any) -> Tuple[Optional[RBNode], List[RBNode], List[Dict], List[Optional[RBNode]]]:
         """
         删除并返回步骤信息：

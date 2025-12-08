@@ -480,5 +480,159 @@ def process(vis, text):
             messagebox.showerror("错误", f"清空失败: {e}")
         return
 
+    # --------- bubble sort (冒泡排序) ----------
+    if cmd in ("bubblesort", "bubble_sort", "bubble", "冒泡排序", "冒泡"):
+        # 检查是否有冒泡排序方法
+        if hasattr(vis, "start_bubble_sort"):
+            try:
+                vis.start_bubble_sort()
+            except Exception as e:
+                messagebox.showerror("错误", f"冒泡排序失败: {e}")
+        elif hasattr(vis, "animate_bubble_sort"):
+            try:
+                vis.disable_buttons()
+                vis.animate_bubble_sort()
+                vis.enable_buttons()
+            except Exception as e:
+                messagebox.showerror("错误", f"冒泡排序失败: {e}")
+        else:
+            # 回退：执行简单的冒泡排序（无动画）
+            try:
+                data = list(vis.data_store)
+                # 尝试转换为数值排序
+                try:
+                    numeric_data = [(float(x), str(x)) for x in data]
+                    numeric_data.sort(key=lambda x: x[0])
+                    sorted_data = [x[1] for x in numeric_data]
+                except ValueError:
+                    # 如果不是数值，按字符串排序
+                    sorted_data = sorted(data)
+                
+                vis.model.data = sorted_data
+                if hasattr(vis, "update_display"):
+                    vis.update_display()
+                messagebox.showinfo("排序完成", "冒泡排序已完成（无动画模式）")
+            except Exception as e:
+                messagebox.showerror("错误", f"排序失败: {e}")
+        return
+
+    # --------- insertion sort (插入排序) ----------
+    if cmd in ("insertionsort", "insertion_sort", "insertion", "插入排序", "直接插入排序", "insertsort"):
+        # 检查是否有插入排序方法
+        if hasattr(vis, "start_insertion_sort"):
+            try:
+                vis.start_insertion_sort()
+            except Exception as e:
+                messagebox.showerror("错误", f"插入排序失败: {e}")
+        elif hasattr(vis, "animate_insertion_sort_teaching"):
+            try:
+                vis.disable_buttons()
+                vis.animate_insertion_sort_teaching()
+                vis.enable_buttons()
+            except Exception as e:
+                messagebox.showerror("错误", f"插入排序失败: {e}")
+        else:
+            # 回退：执行简单的插入排序（无动画）
+            try:
+                data = list(vis.data_store)
+                try:
+                    numeric_data = [(float(x), str(x)) for x in data]
+                    numeric_data.sort(key=lambda x: x[0])
+                    sorted_data = [x[1] for x in numeric_data]
+                except ValueError:
+                    sorted_data = sorted(data)
+                
+                vis.model.data = sorted_data
+                if hasattr(vis, "update_display"):
+                    vis.update_display()
+                messagebox.showinfo("排序完成", "插入排序已完成（无动画模式）")
+            except Exception as e:
+                messagebox.showerror("错误", f"排序失败: {e}")
+        return
+
+    # --------- quick sort (快速排序) ----------
+    if cmd in ("quicksort", "quick_sort", "quick", "快速排序", "快排"):
+        if hasattr(vis, "start_quick_sort"):
+            try:
+                vis.start_quick_sort()
+            except Exception as e:
+                messagebox.showerror("错误", f"快速排序失败: {e}")
+        elif hasattr(vis, "animate_quick_sort_teaching"):
+            try:
+                vis.disable_buttons()
+                vis.animate_quick_sort_teaching()
+                vis.enable_buttons()
+            except Exception as e:
+                messagebox.showerror("错误", f"快速排序失败: {e}")
+        else:
+            # 回退：执行简单的快速排序（无动画）
+            try:
+                data = list(vis.data_store)
+                try:
+                    numeric_data = [(float(x), str(x)) for x in data]
+                    numeric_data.sort(key=lambda x: x[0])
+                    sorted_data = [x[1] for x in numeric_data]
+                except ValueError:
+                    sorted_data = sorted(data)
+                
+                vis.model.data = sorted_data
+                if hasattr(vis, "update_display"):
+                    vis.update_display()
+                messagebox.showinfo("排序完成", "快速排序已完成（无动画模式）")
+            except Exception as e:
+                messagebox.showerror("错误", f"排序失败: {e}")
+        return
+
+    # --------- sort (通用排序命令) ----------
+    if cmd in ("sort", "排序"):
+        # 默认使用冒泡排序
+        if hasattr(vis, "start_bubble_sort"):
+            try:
+                vis.start_bubble_sort()
+            except Exception as e:
+                messagebox.showerror("错误", f"排序失败: {e}")
+        return
+
+    # --------- reverse (逆置/翻转) ----------
+    if cmd in ("reverse", "逆置", "翻转", "反转", "rev"):
+        # 检查顺序表是否有足够的元素
+        try:
+            n = len(vis.data_store)
+        except Exception:
+            try:
+                n = len(vis.model.data)
+            except Exception:
+                n = 0
+        
+        if n < 2:
+            messagebox.showinfo("提示", "顺序表元素少于2个，无需逆置")
+            return
+        
+        # 优先使用带动画的逆置方法
+        if hasattr(vis, "start_reverse"):
+            try:
+                vis.start_reverse()
+            except Exception as e:
+                messagebox.showerror("错误", f"逆置失败: {e}")
+        elif hasattr(vis, "animate_reverse_teaching"):
+            try:
+                vis.disable_buttons()
+                vis.animate_reverse_teaching()
+                vis.enable_buttons()
+            except Exception as e:
+                messagebox.showerror("错误", f"逆置失败: {e}")
+        else:
+            # 回退：执行简单的逆置（无动画）
+            try:
+                data = list(vis.data_store)
+                reversed_data = data[::-1]
+                vis.model.data = reversed_data
+                if hasattr(vis, "update_display"):
+                    vis.update_display()
+                messagebox.showinfo("逆置完成", f"顺序表已逆置（无动画模式）\n原始：{data}\n逆置后：{reversed_data}")
+            except Exception as e:
+                messagebox.showerror("错误", f"逆置失败: {e}")
+        return
+
     # 未识别命令：不处理
     return

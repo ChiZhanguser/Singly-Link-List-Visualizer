@@ -10,7 +10,7 @@ from tkinter import messagebox
 def process(visualizer, text: str) -> bool:
     """
     处理AVL树的DSL命令
-    支持 create, insert, delete 和 clear 命令
+    支持 create, insert, delete, search 和 clear 命令
     """
     if not text or not text.strip():
         return False
@@ -32,7 +32,11 @@ def process(visualizer, text: str) -> bool:
     elif text.startswith(('create', '创建', '批量创建')):
         return _process_create(visualizer, text)
     
-    # **新增：删除操作 (delete 命令)**
+    # **查找操作 (search 命令)**
+    elif text.startswith(('search', 'find', '查找', '搜索', '查询', 's ')):
+        return _process_search(visualizer, text)
+    
+    # **删除操作 (delete 命令)**
     elif text.startswith(('delete', 'del', 'remove', '删除', '移除', 'd ')):
         return _process_delete(visualizer, text)
 
@@ -47,7 +51,8 @@ def process(visualizer, text: str) -> bool:
             "支持的命令:\n"
             "  • create 1,2,3  (批量创建AVL树)\n"
             "  • insert 1 2 3  (插入数字)\n"
-            "  • delete 1 2 3  (删除数字)\n"  # <--- 新增
+            "  • delete 1 2 3  (删除数字)\n"
+            "  • search 1 2 3  (查找数字)\n"
             "  • clear  (清空树)\n"
             "  • help  (显示帮助)")
         return False
@@ -97,7 +102,7 @@ def _process_insert(visualizer, text: str) -> bool:
         messagebox.showerror("插入错误", f"插入操作失败: {str(e)}")
         return False
 
-# --- 新增 ---
+# --- 删除操作 ---
 def _process_delete(visualizer, text: str) -> bool:
     """
     处理删除命令
@@ -124,7 +129,7 @@ def _process_delete(visualizer, text: str) -> bool:
         numbers_str = ", ".join(map(str, numbers))
         visualizer.input_var.set(numbers_str)
         
-        # 调用新的删除动画方法
+        # 调用删除动画方法
         visualizer.start_delete_animated()
         
         return True
@@ -133,14 +138,51 @@ def _process_delete(visualizer, text: str) -> bool:
         messagebox.showerror("删除错误", f"删除操作失败: {str(e)}")
         return False
 
+# --- 查找操作 ---
+def _process_search(visualizer, text: str) -> bool:
+    """
+    处理查找命令
+    支持格式:
+      - search 1 2 3
+      - search 1, 2, 3
+      - find 5 10
+      - s 1 2 3
+      - 查找 1 2 3
+    """
+    try:
+        # 提取数字
+        numbers = _extract_numbers(text)
+        
+        if not numbers:
+            messagebox.showinfo("查找错误", 
+                "请指定要查找的数字\n\n"
+                "示例:\n"
+                "  search 1 2 3\n"
+                "  find 5, 10, 15\n"
+                "  s 1 2 3")
+            return False
+        
+        # 设置输入框并触发查找动画
+        numbers_str = ", ".join(map(str, numbers))
+        visualizer.input_var.set(numbers_str)
+        
+        # 调用查找动画方法
+        visualizer.start_search_animated()
+        
+        return True
+        
+    except Exception as e:
+        messagebox.showerror("查找错误", f"查找操作失败: {str(e)}")
+        return False
+
 def _extract_numbers(text: str) -> List:
     """
     从文本中提取所有数字
-    (更新正则表达式以包含删除命令)
+    (支持 create, insert, delete, search 命令)
     """
     # 移除命令关键词
     cleaned_text = re.sub(
-        r'^(create|创建|批量创建|insert|添加|插入|add|i|delete|del|remove|删除|移除|d)\s*', # <--- 新增
+        r'^(create|创建|批量创建|insert|添加|插入|add|i|delete|del|remove|删除|移除|d|search|find|查找|搜索|查询|s)\s*',
         '', 
         text, 
         flags=re.IGNORECASE
@@ -174,7 +216,6 @@ def _is_numeric_insert(text: str) -> bool:
 def _show_help():
     """
     显示AVL DSL命令帮助
-    (更新帮助文本)
     """
     help_text = """
 🌳 AVL树 DSL 命令帮助
@@ -193,7 +234,13 @@ def _show_help():
   i 20 30 40        快捷插入20, 30, 40
   1 2 3             直接输入数字插入
 
-❌ 删除操作:  (新增)
+🔍 查找操作:
+  search 1 2 3      查找数字1, 2, 3
+  find 5, 10        查找数字5, 10
+  s 7 8 9           快捷查找7, 8, 9
+  查找 20 30        中文查找
+
+❌ 删除操作:
   delete 1 2 3      删除数字1, 2, 3
   remove 5, 10      删除数字5, 10
   del 7 8 9         删除数字7, 8, 9
@@ -218,10 +265,13 @@ def _show_help():
 2. 在现有树上插入:
    insert 50 60 70
 
-3. 删除节点:
+3. 查找节点:
+   search 5 6
+
+4. 删除节点:
    delete 4 6
 
-4. 清空树后重新创建:
+5. 清空树后重新创建:
    clear
    create 10,20,30,40,50
 
@@ -233,14 +283,14 @@ def _show_help():
   • 支持整数和浮点数
 
 🎬 观看动画:
-  插入/删除操作会显示:
+  插入/删除/查找操作会显示:
   1. 搜索路径高亮
   2. 新节点飞入 / 节点移除
-  3. 旋转调整过程
+  3. 旋转调整过程 (仅插入/删除)
 
 📌 注意事项:
   • create 命令会先清空现有树
-  • insert/delete 在现有树上操作
+  • insert/delete/search 在现有树上操作
   • 支持逗号或空格分隔数字
     """
     

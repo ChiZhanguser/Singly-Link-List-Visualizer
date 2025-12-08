@@ -109,3 +109,85 @@ def get_state() -> Dict[str, Any]:
         return {"ok": True, "data": data, "top": top, "capacity": capacity}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+def eval_postfix(expression: str) -> Dict[str, Any]:
+    """
+    Schedule postfix expression evaluation animation.
+    Expression should be space-separated, e.g. "3 4 + 2 *" for (3+4)*2.
+    Supported operators: + - * / % ^ **
+    """
+    vis = _get_vis()
+    if vis is None:
+        return {"ok": False, "error": "Stack visualizer not registered."}
+    if not expression or not isinstance(expression, str):
+        return {"ok": False, "error": "expression must be a non-empty string"}
+    
+    def _start_eval():
+        try:
+            if hasattr(vis, 'start_postfix_eval'):
+                vis.start_postfix_eval(expression)
+            else:
+                from tkinter import messagebox
+                messagebox.showerror("错误", "当前可视化器不支持后缀表达式求值")
+        except Exception as e:
+            pass
+    
+    return _schedule_call(lambda: _start_eval())
+
+
+def bracket_match(expression: str) -> Dict[str, Any]:
+    """
+    Schedule bracket matching validation animation.
+    Expression can contain any characters, brackets supported: ()[]{}
+    Example: "{a+(b-c)*2}" or "[(a+b)*(c-d)]"
+    """
+    vis = _get_vis()
+    if vis is None:
+        return {"ok": False, "error": "Stack visualizer not registered."}
+    if not expression or not isinstance(expression, str):
+        return {"ok": False, "error": "expression must be a non-empty string"}
+    
+    def _start_match():
+        try:
+            if hasattr(vis, 'start_bracket_match'):
+                vis.start_bracket_match(expression)
+            else:
+                from tkinter import messagebox
+                messagebox.showerror("错误", "当前可视化器不支持括号匹配检验")
+        except Exception as e:
+            pass
+    
+    return _schedule_call(lambda: _start_match())
+
+
+def open_dfs(vertex_count: int = 7, branch_factor: int = 2, start_vertex: str = "A") -> Dict[str, Any]:
+    """
+    Open DFS (Depth-First Search) visualization window.
+    Uses stack to demonstrate graph traversal with DFS algorithm.
+    
+    Args:
+        vertex_count: Number of vertices in the graph (5-10, default 7)
+        branch_factor: Branch factor for each node (1-3, default 2)
+        start_vertex: Starting vertex for DFS (default "A")
+    """
+    vis = _get_vis()
+    if vis is None:
+        return {"ok": False, "error": "Stack visualizer not registered."}
+    
+    # Validate parameters
+    vertex_count = max(5, min(10, int(vertex_count)))
+    branch_factor = max(1, min(3, int(branch_factor)))
+    start_vertex = str(start_vertex).strip().upper()
+    
+    def _open_dfs():
+        try:
+            if hasattr(vis, '_open_dfs_visualizer'):
+                vis._open_dfs_visualizer()
+            else:
+                from tkinter import messagebox
+                messagebox.showerror("错误", "当前可视化器不支持DFS可视化")
+        except Exception as e:
+            pass
+    
+    return _schedule_call(lambda: _open_dfs())

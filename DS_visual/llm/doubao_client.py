@@ -43,7 +43,25 @@ class DoubaoClient:
             raise RuntimeError(f"请求失败: {e}")
 
 
-    def send_message(self, text: str, messages: Optional[List[Dict[str, Any]]] = None, temperature: Optional[float] = None) -> str:
+    def send_message(self, text: str, messages: Optional[List[Dict[str, Any]]] = None, 
+                     temperature: Optional[float] = None,
+                     functions: Optional[List[Dict[str, Any]]] = None,
+                     function_call: Optional[Union[str, Dict]] = None) -> Union[str, Dict]:
+        """
+        发送消息到LLM
+        
+        Args:
+            text: 用户输入文本
+            messages: 完整的消息列表
+            temperature: 温度参数
+            functions: 函数定义列表（用于function calling）
+            function_call: 函数调用控制 ("auto", "none", 或指定函数名)
+            
+        Returns:
+            如果启用了functions且LLM返回function_call，返回dict格式：
+                {"type": "function_call", "name": "...", "arguments": {...}}
+            否则返回字符串（LLM的文本回复）
+        """
         if messages and isinstance(messages, list):
             msgs = messages
         else:
@@ -57,9 +75,53 @@ class DoubaoClient:
         }
         if temperature is not None:
             payload["temperature"] = float(temperature)
+        
+        # 添加function calling支持
+        if functions:
+            payload["functions"] = functions
+            if function_call:
+                payload["function_call"] = function_call
+            else:
+                payload["function_call"] = "auto"
 
         resp_json = self._post(payload, timeout_read=None)
+        
+        # 如果启用了functions，检查是否返回了function_call
+        if functions:
+            fc_result = self._extract_function_call(resp_json)
+            if fc_result:
+                return fc_result
+        
         return self._extract_text(resp_json)
+    
+    def _extract_function_call(self, resp_json: Any) -> Optional[Dict]:
+        """从响应中提取function_call信息"""
+        try:
+            if isinstance(resp_json, dict) and "choices" in resp_json:
+                choices = resp_json["choices"]
+                if choices and isinstance(choices, list):
+                    first = choices[0]
+                    if isinstance(first, dict):
+                        message = first.get("message", {})
+                        if isinstance(message, dict):
+                            fc = message.get("function_call")
+                            if fc and isinstance(fc, dict):
+                                name = fc.get("name", "")
+                                arguments = fc.get("arguments", "{}")
+                                # 尝试解析arguments为dict
+                                if isinstance(arguments, str):
+                                    try:
+                                        arguments = json.loads(arguments)
+                                    except:
+                                        pass
+                                return {
+                                    "type": "function_call",
+                                    "name": name,
+                                    "arguments": arguments
+                                }
+        except Exception as e:
+            print(f"解析function_call出错: {e}")
+        return None
 
     def _extract_text(self, resp_json: Any) -> str:
         try:

@@ -10,7 +10,7 @@ from tkinter import messagebox
 def process(visualizer, text: str) -> bool:
     """
     处理红黑树的DSL命令
-    支持 create、clear 和 delete 命令
+    支持 create、clear、delete 和 search 命令
     
     Args:
         visualizer: RBTVisualizer实例
@@ -33,8 +33,12 @@ def process(visualizer, text: str) -> bool:
     elif text.startswith(('create', '创建', '批量创建')):
         return _process_create(visualizer, text)
     
+    # 查找操作
+    elif text.startswith(('search', 'find', '查找', '搜索', '查询', 's ')):
+        return _process_search(visualizer, text)
+    
     # 删除操作
-    elif text.startswith(('delete', '删除', 'remove', 'del', 'd')):
+    elif text.startswith(('delete', '删除', 'remove', 'del', 'd ')):
         return _process_delete(visualizer, text)
     
     # 显示帮助
@@ -47,6 +51,7 @@ def process(visualizer, text: str) -> bool:
             f"无法识别的命令: {text}\n\n"
             "支持的命令:\n"
             "  • create 1,2,3,4,5  (批量创建红黑树)\n"
+            "  • search 3  (查找节点)\n"
             "  • delete 3  (删除节点)\n"
             "  • clear  (清空树)\n"
             "  • help  (显示帮助)")
@@ -101,6 +106,67 @@ def _process_create(visualizer, text: str) -> bool:
     except Exception as e:
         messagebox.showerror("创建错误", f"创建操作失败: {str(e)}")
         print(f"ERROR: RBT create failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def _process_search(visualizer, text: str) -> bool:
+    """
+    处理查找命令
+    
+    支持格式:
+      - search 5
+      - search 5, 10, 15
+      - find 10
+      - 查找 20
+      - s 15
+    
+    Args:
+        visualizer: RBTVisualizer实例
+        text: 包含search命令的文本
+        
+    Returns:
+        bool: 是否成功
+    """
+    try:
+        # 检查是否正在执行动画
+        if getattr(visualizer, 'animating', False):
+            messagebox.showinfo("提示", "请等待当前动画完成")
+            return False
+        
+        # 检查树是否为空
+        if visualizer.model.root is None:
+            messagebox.showinfo("提示", "树为空,无法查找节点")
+            return False
+        
+        # 提取要查找的数字
+        numbers = _extract_numbers(text)
+        
+        if not numbers:
+            messagebox.showinfo("查找错误", 
+                "请指定要查找的节点值\n\n"
+                "示例:\n"
+                "  search 5\n"
+                "  search 5, 10, 15\n"
+                "  find 20\n"
+                "  查找 30")
+            return False
+        
+        # 设置输入框并调用查找方法
+        numbers_str = ",".join(map(str, numbers))
+        visualizer.input_var.set(numbers_str)
+        
+        print(f"DEBUG: RBT search command - searching: {numbers_str}")
+        
+        # 调用查找动画方法
+        visualizer.start_search_animated()
+        
+        return True
+        
+    except Exception as e:
+        messagebox.showerror("查找错误", f"查找操作失败: {str(e)}")
+        print(f"ERROR: RBT search failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -211,7 +277,7 @@ def _extract_numbers(text: str) -> List[int]:
     """
     # 移除命令关键词
     cleaned_text = re.sub(
-        r'^(create|创建|批量创建|delete|删除|remove|del|d)\s*',
+        r'^(create|创建|批量创建|delete|删除|remove|del|d|search|find|查找|搜索|查询|s)\s*',
         '', 
         text, 
         flags=re.IGNORECASE
@@ -247,6 +313,13 @@ def _show_help():
   create 5 15 25 35   创建包含5,15,25,35的红黑树
   创建 7,8,9          使用中文命令创建
 
+🔍 查找节点:
+  search 5            查找值为5的节点
+  search 5, 10, 15    批量查找多个值
+  find 10             查找值为10的节点
+  查找 20             使用中文命令查找
+  s 15                快捷查找命令
+
 ❌ 删除节点:
   delete 5            删除值为5的节点
   delete 10           删除值为10的节点
@@ -270,16 +343,21 @@ def _show_help():
 1. 批量创建红黑树:
    create 1,2,3,4,5,0,6
 
-2. 删除节点:
+2. 查找节点:
+   search 3
+   search 1, 5, 10
+
+3. 删除节点:
    delete 3
 
-3. 清空树:
+4. 清空树:
    clear
 
-4. 完整流程:
+5. 完整流程:
    create 10,20,30,40,50
+   search 30
    delete 30
-   delete 10
+   search 30
 
 ═══════════════════════════════════════
 
@@ -296,7 +374,7 @@ def _show_help():
 🎨 颜色含义:
   • 🔴 红节点: 新插入的节点初始为红色
   • ⚫ 黑节点: 平衡后的节点或根节点
-  • 🟢 路径高亮: 搜索路径
+  • 🟢 路径高亮: 搜索路径 / 找到的节点
   • 🟠 操作高亮: 当前操作节点
   • 🔵 删除标记: 即将被删除的节点
 
@@ -315,6 +393,11 @@ def _show_help():
   4. 旋转操作(左旋/右旋)
   5. 最终平衡状态
   
+  查找操作会显示:
+  1. 搜索路径逐步高亮
+  2. 找到时节点变绿高亮
+  3. 未找到时显示提示
+  
   删除操作会显示:
   1. 搜索要删除的节点
   2. 节点淡出消失动画
@@ -324,8 +407,9 @@ def _show_help():
 
 📌 注意事项:
   • create 命令会先清空现有树
+  • search 支持批量查找多个值
   • delete 一次只能删除一个节点
-  • 删除不存在的节点会给出提示
+  • 删除/查找不存在的节点会给出提示
   • 支持逗号或空格分隔数字
   • 只支持整数值
   • 动画执行期间无法进行其他操作

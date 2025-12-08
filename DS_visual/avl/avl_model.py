@@ -222,6 +222,30 @@ class AVLModel:
 
         return new_node, path_nodes, rotations, snapshots
 
+    def search_with_steps(self, val: Any) -> Tuple[Optional[AVLNode], List[AVLNode], bool]:
+        """
+        查找节点并返回详细信息：
+          - found_node: 找到的节点引用，若未找到则为 None
+          - path_nodes: 查找过程中访问的节点（按顺序，便于可视化搜索路径）
+          - found: 是否找到 (True/False)
+        """
+        path_nodes: List[AVLNode] = []
+        
+        cur = self.root
+        while cur:
+            path_nodes.append(cur)
+            cmp = self._compare(val, cur.val)
+            if cmp == 0:
+                # 找到了
+                return cur, path_nodes, True
+            elif cmp < 0:
+                cur = cur.left
+            else:
+                cur = cur.right
+        
+        # 未找到
+        return None, path_nodes, False
+
     def delete_with_steps(self, val: Any) -> Tuple[Optional[AVLNode], List[AVLNode], List[Dict], List[Optional[AVLNode]]]:
         """
         删除并返回丰富信息：

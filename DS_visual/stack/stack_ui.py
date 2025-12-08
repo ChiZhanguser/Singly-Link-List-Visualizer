@@ -45,8 +45,15 @@ def create_heading(self):
           bg="#F8FAFC", fg="#3B82F6", padx=12, pady=6).pack()
 
 def create_buttons(self):
-    # 主控制面板
-    control_panel = Frame(self.window, bg="#FFFFFF", relief=RIDGE, bd=1)
+    # 主控制面板（浅色卡片，避免整块色块过深）
+    control_panel = Frame(
+        self.window,
+        bg="#F8FAFC",
+        relief=RIDGE,
+        bd=1,
+        highlightbackground="#E5E7EB",
+        highlightthickness=1
+    )
     control_panel.place(x=50, y=540, width=1250, height=180)
     
     # 操作按钮区域
